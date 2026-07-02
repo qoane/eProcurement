@@ -1,0 +1,143 @@
+body {
+  margin: 0;
+  font-family: Inter, system-ui;
+  background: #eef2f7;
+  color: #172033;
+}
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+aside {
+  width: 260px;
+  background: #101d3a;
+  color: white;
+  padding: 28px;
+}
+aside h2 {
+  margin-top: 0;
+}
+nav {
+  display: grid;
+  gap: 10px;
+}
+nav a {
+  padding: 12px;
+  border-radius: 10px;
+  color: #dbe7ff;
+  background: #1a2a52;
+}
+main {
+  flex: 1;
+  padding: 32px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 10px 25px #1b2a4a14;
+}
+h1 {
+  margin: 0.2rem 0 0;
+}
+button {
+  background: #1d4ed8;
+  color: white;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-weight: 700;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin: 24px 0;
+}
+.cards article,
+.panel {
+  background: white;
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: 0 10px 25px #1b2a4a12;
+}
+.cards article {
+  display: grid;
+  gap: 6px;
+}
+.cards b {
+  font-size: 30px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+.wide {
+  grid-row: span 2;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th,
+td {
+  text-align: left;
+  padding: 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.badge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+}
+.underverification {
+  background: #fef3c7;
+  color: #92400e;
+}
+.approved {
+  background: #dcfce7;
+  color: #166534;
+}
+.rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.timeline {
+  list-style: none;
+  padding: 0;
+}
+.timeline li {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0;
+}
+.timeline span {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 999px;
+  width: 24px;
+  height: 24px;
+  text-align: center;
+}
+label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+}
+input,
+select,
+.doc {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 10px;
+  background: white;
+}
+.doc {
+  background: #f8fafc;
+  margin-top: 6px;
+}
