@@ -4,7 +4,7 @@ using Lca.EProcurement.Domain;
 namespace Lca.EProcurement.Application;
 
 public interface IAuditSink { void Record(string type, string entityType, Guid entityId, string reference, string actor, string details); }
-public sealed class InMemoryAuditSink : IAuditSink { public List<AuditEvent> Events { get; } = []; public void Record(string t,string et,Guid id,string r,string a,string d)=>Events.Add(new AuditEvent(t,et,id,r,a,d,DateTimeOffset.UtcNow)); }
+public sealed class InMemoryAuditSink : IAuditSink { public List<AuditEvent> Events { get; } = []; public void Record(string t, string et, Guid id, string r, string a, string d) => Events.Add(new AuditEvent(t, et, id, r, a, d, DateTimeOffset.UtcNow)); }
 
 public sealed record RuleResult(string RuleCode, bool Passed, string Message);
 public sealed class BusinessRulesEngine(List<BusinessRuleDefinition> definitions, List<BusinessRuleExecutionLog> logs, IAuditSink audit)

@@ -23,8 +23,8 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
 public static class DatabaseProviderConfiguration
 {
     public const string DemoSqlServerConnectionString = "Server=localhost;Database=LcaEProcurement;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true";
-    public static DbContextOptionsBuilder<EProcurementDbContext> UseConfiguredProvider(this DbContextOptionsBuilder<EProcurementDbContext> builder, string provider, string? connectionString = null)
-        => provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase)
-            ? builder.UseSqlite(connectionString ?? "DataSource=:memory:")
-            : builder.UseSqlServer(connectionString ?? DemoSqlServerConnectionString);
+    public static DbContextOptionsBuilder UseConfiguredProvider(this DbContextOptionsBuilder builder, string provider, string? connectionString = null)
+        => provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase)
+            ? builder.UseSqlServer(connectionString ?? DemoSqlServerConnectionString)
+            : throw new NotSupportedException($"Database provider '{provider}' is not configured. SQL Server is the application database provider.");
 }
