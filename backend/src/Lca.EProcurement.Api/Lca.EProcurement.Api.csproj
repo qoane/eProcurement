@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk.Web"><ItemGroup><ProjectReference Include="..\Lca.EProcurement.Application\Lca.EProcurement.Application.csproj" /><ProjectReference Include="..\Lca.EProcurement.EntityFrameworkCore\Lca.EProcurement.EntityFrameworkCore.csproj" /></ItemGroup></Project>

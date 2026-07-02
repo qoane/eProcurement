@@ -1,0 +1,12 @@
+# build outputs
+bin/
+obj/
+frontend/dist/
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
+
+# local env
+.env
+*.user
+.vs/
+.idea/
