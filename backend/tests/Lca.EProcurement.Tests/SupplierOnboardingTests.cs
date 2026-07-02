@@ -5,7 +5,8 @@ using Xunit;
 
 public class SupplierOnboardingTests
 {
-    [Fact] public void Supplier_approval_path_uses_workflow_rules_and_audit()
+    [Fact]
+    public void Supplier_approval_path_uses_workflow_rules_and_audit()
     {
         var category = SeedData.Categories()[0];
         var supplier = SeedData.DemoSupplier(category) with { Status = SupplierStatus.Submitted };
