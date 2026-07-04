@@ -16,6 +16,24 @@ IF OBJECT_ID(N'[dbo].[WorkflowTransitions]', N'U') IS NOT NULL AND COL_LENGTH(N'
 IF OBJECT_ID(N'[dbo].[WorkflowTransitions]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[WorkflowTransitions]', N'ActionName') IS NULL ALTER TABLE [dbo].[WorkflowTransitions] ADD [ActionName] nvarchar(256) NOT NULL CONSTRAINT [DF_WorkflowTransitions_ActionName] DEFAULT N'';
 IF OBJECT_ID(N'[dbo].[WorkflowTransitions]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[WorkflowTransitions]', N'ToNodeCode') IS NULL ALTER TABLE [dbo].[WorkflowTransitions] ADD [ToNodeCode] nvarchar(128) NOT NULL CONSTRAINT [DF_WorkflowTransitions_ToNodeCode] DEFAULT N'';
 IF OBJECT_ID(N'[dbo].[WorkflowTransitions]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[WorkflowTransitions]', N'RequiredRuleCode') IS NULL ALTER TABLE [dbo].[WorkflowTransitions] ADD [RequiredRuleCode] nvarchar(128) NULL;
+IF OBJECT_ID(N'[dbo].[WorkflowTransitions]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[WorkflowTransitions]', N'WorkflowDefinitionId') IS NOT NULL
+BEGIN
+    DECLARE @DropWorkflowTransitionDefinitionSql nvarchar(max) = N'';
+    SELECT @DropWorkflowTransitionDefinitionSql = @DropWorkflowTransitionDefinitionSql + N'ALTER TABLE [dbo].[WorkflowTransitions] DROP CONSTRAINT [' + fk.name + N'];'
+    FROM sys.foreign_keys fk
+    WHERE fk.parent_object_id = OBJECT_ID(N'[dbo].[WorkflowTransitions]')
+      AND EXISTS (
+          SELECT 1
+          FROM sys.foreign_key_columns fkc
+          WHERE fkc.constraint_object_id = fk.object_id
+            AND fkc.parent_column_id = COLUMNPROPERTY(OBJECT_ID(N'[dbo].[WorkflowTransitions]'), N'WorkflowDefinitionId', 'ColumnId'));
+    SELECT @DropWorkflowTransitionDefinitionSql = @DropWorkflowTransitionDefinitionSql + N'ALTER TABLE [dbo].[WorkflowTransitions] DROP CONSTRAINT [' + dc.name + N'];'
+    FROM sys.default_constraints dc
+    WHERE dc.parent_object_id = OBJECT_ID(N'[dbo].[WorkflowTransitions]')
+      AND dc.parent_column_id = COLUMNPROPERTY(OBJECT_ID(N'[dbo].[WorkflowTransitions]'), N'WorkflowDefinitionId', 'ColumnId');
+    IF @DropWorkflowTransitionDefinitionSql <> N'' EXEC sp_executesql @DropWorkflowTransitionDefinitionSql;
+    ALTER TABLE [dbo].[WorkflowTransitions] DROP COLUMN [WorkflowDefinitionId];
+END;
 IF OBJECT_ID(N'[dbo].[WorkflowTransitionEffects]', N'U') IS NULL CREATE TABLE [dbo].[WorkflowTransitionEffects]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_WorkflowTransitionEffects] PRIMARY KEY,[EntityType] nvarchar(128) NOT NULL,[PropertyName] nvarchar(128) NOT NULL,[ValueExpression] nvarchar(512) NOT NULL,[TriggerTransitionId] uniqueidentifier NOT NULL);
 IF OBJECT_ID(N'[dbo].[FormDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[FormDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_FormDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_FormDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[EntityType] nvarchar(128) NOT NULL,[IsActive] bit NOT NULL,[ActiveVersionId] uniqueidentifier NULL);
 IF OBJECT_ID(N'[dbo].[FormVersions]', N'U') IS NULL CREATE TABLE [dbo].[FormVersions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_FormVersions] PRIMARY KEY,[FormDefinitionId] uniqueidentifier NOT NULL,[VersionNumber] int NOT NULL,[Status] nvarchar(64) NOT NULL,[PublishedAt] datetimeoffset NULL,[PublishedBy] nvarchar(max) NULL,CONSTRAINT [FK_FormVersions_FormDefinitions] FOREIGN KEY([FormDefinitionId]) REFERENCES [dbo].[FormDefinitions]([Id]) ON DELETE CASCADE,CONSTRAINT [UX_FormVersions_Definition_Version] UNIQUE([FormDefinitionId],[VersionNumber]));

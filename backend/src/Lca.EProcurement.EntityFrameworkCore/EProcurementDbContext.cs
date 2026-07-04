@@ -79,6 +79,24 @@ IF OBJECT_ID(N'[dbo].[WorkflowTransitions]', N'U') IS NOT NULL AND COL_LENGTH(N'
 IF OBJECT_ID(N'[dbo].[WorkflowTransitions]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[WorkflowTransitions]', N'ActionName') IS NULL ALTER TABLE [dbo].[WorkflowTransitions] ADD [ActionName] nvarchar(256) NOT NULL CONSTRAINT [DF_WorkflowTransitions_ActionName] DEFAULT N'';
 IF OBJECT_ID(N'[dbo].[WorkflowTransitions]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[WorkflowTransitions]', N'ToNodeCode') IS NULL ALTER TABLE [dbo].[WorkflowTransitions] ADD [ToNodeCode] nvarchar(128) NOT NULL CONSTRAINT [DF_WorkflowTransitions_ToNodeCode] DEFAULT N'';
 IF OBJECT_ID(N'[dbo].[WorkflowTransitions]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[WorkflowTransitions]', N'RequiredRuleCode') IS NULL ALTER TABLE [dbo].[WorkflowTransitions] ADD [RequiredRuleCode] nvarchar(128) NULL;
+IF OBJECT_ID(N'[dbo].[WorkflowTransitions]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[WorkflowTransitions]', N'WorkflowDefinitionId') IS NOT NULL
+BEGIN
+    DECLARE @DropWorkflowTransitionDefinitionSql nvarchar(max) = N'';
+    SELECT @DropWorkflowTransitionDefinitionSql = @DropWorkflowTransitionDefinitionSql + N'ALTER TABLE [dbo].[WorkflowTransitions] DROP CONSTRAINT [' + fk.name + N'];'
+    FROM sys.foreign_keys fk
+    WHERE fk.parent_object_id = OBJECT_ID(N'[dbo].[WorkflowTransitions]')
+      AND EXISTS (
+          SELECT 1
+          FROM sys.foreign_key_columns fkc
+          WHERE fkc.constraint_object_id = fk.object_id
+            AND fkc.parent_column_id = COLUMNPROPERTY(OBJECT_ID(N'[dbo].[WorkflowTransitions]'), N'WorkflowDefinitionId', 'ColumnId'));
+    SELECT @DropWorkflowTransitionDefinitionSql = @DropWorkflowTransitionDefinitionSql + N'ALTER TABLE [dbo].[WorkflowTransitions] DROP CONSTRAINT [' + dc.name + N'];'
+    FROM sys.default_constraints dc
+    WHERE dc.parent_object_id = OBJECT_ID(N'[dbo].[WorkflowTransitions]')
+      AND dc.parent_column_id = COLUMNPROPERTY(OBJECT_ID(N'[dbo].[WorkflowTransitions]'), N'WorkflowDefinitionId', 'ColumnId');
+    IF @DropWorkflowTransitionDefinitionSql <> N'' EXEC sp_executesql @DropWorkflowTransitionDefinitionSql;
+    ALTER TABLE [dbo].[WorkflowTransitions] DROP COLUMN [WorkflowDefinitionId];
+END;
 IF OBJECT_ID(N'[dbo].[WorkflowDefinitions]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[WorkflowDefinitions]', N'EntityType') IS NULL ALTER TABLE [dbo].[WorkflowDefinitions] ADD [EntityType] nvarchar(128) NOT NULL CONSTRAINT [DF_WorkflowDefinitions_EntityType] DEFAULT N'Supplier';
 IF OBJECT_ID(N'[dbo].[WorkflowDefinitions]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[WorkflowDefinitions]', N'IsActive') IS NULL ALTER TABLE [dbo].[WorkflowDefinitions] ADD [IsActive] bit NOT NULL CONSTRAINT [DF_WorkflowDefinitions_IsActive] DEFAULT CONVERT(bit, 1);
 IF OBJECT_ID(N'[dbo].[WorkflowDefinitions]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[WorkflowDefinitions]', N'PublishedVersionId') IS NULL ALTER TABLE [dbo].[WorkflowDefinitions] ADD [PublishedVersionId] uniqueidentifier NULL;
