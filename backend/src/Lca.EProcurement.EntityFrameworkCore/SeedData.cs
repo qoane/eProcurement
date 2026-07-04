@@ -71,11 +71,19 @@ public static class SeedData
             if (!supplierVersion.Nodes.Any(x => x.Code == node.Code)) supplierVersion.Nodes.Add(node with { WorkflowVersionId = supplierVersion.Id });
         foreach (var transition in SupplierOnboardingVersion(supplierWorkflow.Id).Transitions)
             if (!supplierVersion.Transitions.Any(x => x.FromNodeCode == transition.FromNodeCode && x.ActionCode == transition.ActionCode)) supplierVersion.Transitions.Add(transition with { WorkflowVersionId = supplierVersion.Id });
-        db.Entry(supplierWorkflow).CurrentValues[nameof(WorkflowDefinition.PublishedVersionId)] = supplierVersion.Id;
-        db.Entry(supplierVersion).CurrentValues[nameof(WorkflowVersion.Status)] = WorkflowVersionStatus.Published;
-        if (supplierVersion.PublishedAt is null) db.Entry(supplierVersion).CurrentValues[nameof(WorkflowVersion.PublishedAt)] = DateTimeOffset.UtcNow;
-        if (string.IsNullOrWhiteSpace(supplierVersion.PublishedBy)) db.Entry(supplierVersion).CurrentValues[nameof(WorkflowVersion.PublishedBy)] = "system";
         await db.SaveChangesAsync(cancellationToken);
+
+        var publishedAt = supplierVersion.PublishedAt ?? DateTimeOffset.UtcNow;
+        var publishedBy = string.IsNullOrWhiteSpace(supplierVersion.PublishedBy) ? "system" : supplierVersion.PublishedBy;
+        await db.WorkflowDefinitions
+            .Where(x => x.Id == supplierWorkflow.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.PublishedVersionId, supplierVersion.Id), cancellationToken);
+        await db.WorkflowVersions
+            .Where(x => x.Id == supplierVersion.Id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.Status, WorkflowVersionStatus.Published)
+                .SetProperty(x => x.PublishedAt, publishedAt)
+                .SetProperty(x => x.PublishedBy, publishedBy), cancellationToken);
         var configuredEffects = new Dictionary<string, string>
         {
             ["Submit"] = "Submitted",
