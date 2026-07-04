@@ -48,6 +48,12 @@ public static class DatabaseProviderConfiguration
         => provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase)
             ? builder.UseSqlServer(connectionString ?? DemoSqlServerConnectionString)
             : throw new NotSupportedException($"Database provider '{provider}' is not configured. SQL Server is the application database provider.");
+
+    public static DbContextOptionsBuilder<TContext> UseConfiguredProvider<TContext>(this DbContextOptionsBuilder<TContext> builder, string provider, string? connectionString = null)
+        where TContext : DbContext
+        => provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase)
+            ? builder.UseSqlServer(connectionString ?? DemoSqlServerConnectionString)
+            : throw new NotSupportedException($"Database provider '{provider}' is not configured. SQL Server is the application database provider.");
 }
 
 public sealed class EProcurementDbContextFactory : IDesignTimeDbContextFactory<EProcurementDbContext>
