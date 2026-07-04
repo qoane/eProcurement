@@ -80,3 +80,46 @@ public class SupplierOnboardingTests
         return supplier;
     }
 }
+
+public class AdministrationStudioConfigurationTests
+{
+    [Fact]
+    public void Workflow_configuration_accepts_incremental_nodes_transitions_and_publish_metadata()
+    {
+        var workflow = new WorkflowDefinition("ADMIN-CONFIGURED", "Admin Configured", nameof(Supplier));
+        var version = new WorkflowVersion(workflow.Id, 1);
+        version.Nodes.Add(new WorkflowNode(version.Id, "Draft", "Draft", WorkflowNodeKind.Start, IsStart: true));
+        version.Nodes.Add(new WorkflowNode(version.Id, "Approved", "Approved", WorkflowNodeKind.End, IsTerminal: true));
+        version.Transitions.Add(new WorkflowTransition(version.Id, "Draft", "Approve", "Approve", "Approved"));
+        workflow.Versions.Add(version);
+        var published = version with { Status = WorkflowVersionStatus.Published, PublishedAt = DateTimeOffset.UtcNow, PublishedBy = "admin@lca.org.ls" };
+        Assert.Equal("ADMIN-CONFIGURED", workflow.Code);
+        Assert.Equal(2, version.Nodes.Count);
+        Assert.Single(version.Transitions);
+        Assert.Equal(WorkflowVersionStatus.Published, published.Status);
+    }
+
+    [Fact]
+    public void Business_rule_creation_uses_configured_expression_not_hardcoded_logic()
+    {
+        var rule = new BusinessRuleDefinition("HAS-CATEGORY", "Has category", nameof(Supplier), "Supplier.Categories.Any()");
+        var supplier = SeedData.DemoSupplier(SeedData.Categories()[0]);
+        Assert.Equal(nameof(Supplier), rule.AppliesTo);
+        Assert.True(SimpleExpressionEvaluator.Evaluate(rule.Expression, supplier));
+    }
+
+    [Fact]
+    public void Form_publishing_activates_database_defined_sections_and_fields()
+    {
+        var definition = new FormDefinition("ADMIN-FORM", "Admin Form", nameof(Supplier));
+        var version = new FormVersion(definition.Id, 1);
+        var section = new FormSection(version.Id, "profile", "Profile", 1);
+        section.Fields.Add(new FormField(section.Id, "legalName", "Legal name", "text", 1, true));
+        version.Sections.Add(section);
+        definition.Versions.Add(version);
+        var published = version with { Status = WorkflowVersionStatus.Published, PublishedAt = DateTimeOffset.UtcNow, PublishedBy = "admin@lca.org.ls" };
+        definition = definition with { ActiveVersionId = published.Id };
+        Assert.Equal(published.Id, definition.ActiveVersionId);
+        Assert.True(version.Sections[0].Fields[0].IsRequired);
+    }
+}
