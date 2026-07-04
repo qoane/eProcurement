@@ -94,6 +94,15 @@ BEGIN
     FROM sys.default_constraints dc
     WHERE dc.parent_object_id = OBJECT_ID(N'[dbo].[WorkflowTransitions]')
       AND dc.parent_column_id = COLUMNPROPERTY(OBJECT_ID(N'[dbo].[WorkflowTransitions]'), N'WorkflowDefinitionId', 'ColumnId');
+    SELECT @DropWorkflowTransitionDefinitionSql = @DropWorkflowTransitionDefinitionSql + N'DROP INDEX [' + i.name + N'] ON [dbo].[WorkflowTransitions];'
+    FROM sys.indexes i
+    INNER JOIN sys.index_columns ic
+        ON ic.object_id = i.object_id
+       AND ic.index_id = i.index_id
+    WHERE i.object_id = OBJECT_ID(N'[dbo].[WorkflowTransitions]')
+      AND ic.column_id = COLUMNPROPERTY(OBJECT_ID(N'[dbo].[WorkflowTransitions]'), N'WorkflowDefinitionId', 'ColumnId')
+      AND i.is_primary_key = 0
+      AND i.is_unique_constraint = 0;
     IF @DropWorkflowTransitionDefinitionSql <> N'' EXEC sp_executesql @DropWorkflowTransitionDefinitionSql;
     ALTER TABLE [dbo].[WorkflowTransitions] DROP COLUMN [WorkflowDefinitionId];
 END;
