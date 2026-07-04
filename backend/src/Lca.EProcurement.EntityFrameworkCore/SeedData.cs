@@ -9,7 +9,7 @@ public static class SeedData
     public static readonly string[] Users = ["supplier@demo.co.ls", "procurement@lca.org.ls", "evaluator@lca.org.ls", "approver@lca.org.ls", "finance@lca.org.ls", "auditor@lca.org.ls", "admin@lca.org.ls"];
     public static List<SupplierCategory> Categories() => [new("ICT Equipment"), new("Consulting Services"), new("Office Supplies"), new("Telecommunications"), new("Facilities Management")];
     public static Supplier DemoSupplier(SupplierCategory category) => new("SUP-LCA-2026-0001", "Maseru ICT Supplies Pty Ltd", SupplierStatus.Draft) { Categories = [category] };
-    public static List<BusinessRuleDefinition> Rules() => [new("SUP-HAS-REG", "Supplier must have company registration document", "Supplier", "HasDocument:CompanyRegistration"), new("SUP-HAS-TAX", "Supplier must have tax clearance document", "Supplier", "HasDocument:TaxClearance"), new("SUP-HAS-CATEGORY", "Supplier must be assigned at least one category before approval", "Supplier", "HasAtLeastOneCategory")];
+    public static List<BusinessRuleDefinition> Rules() => [new("SUP-HAS-REG", "Supplier must have company registration document", "Supplier", "Supplier.Documents.Any(DocumentType == \"CompanyRegistration\")"), new("SUP-HAS-TAX", "Supplier must have tax clearance document", "Supplier", "Supplier.Documents.Any(DocumentType == \"TaxClearance\")"), new("SUP-HAS-CATEGORY", "Supplier must be assigned at least one category before approval", "Supplier", "Supplier.Categories.Any()")];
     public static WorkflowDefinition SupplierOnboardingWorkflow()
     {
         var wf = new WorkflowDefinition("SUPPLIER-ONBOARDING", "Supplier onboarding", nameof(Supplier));
@@ -24,7 +24,7 @@ public static class SeedData
             new(version.Id, "Rejected", "Rejected", WorkflowNodeKind.End, IsTerminal: true)
         ]);
         version.Transitions.AddRange([
-            new(version.Id, "Submitted", "SubmitForVerification", "Submit for verification", "DocumentCheck"),
+            new(version.Id, "Submitted", "Submit", "Submit for verification", "DocumentCheck"),
             new(version.Id, "DocumentCheck", "DocumentsAccepted", "Documents accepted", "Verification", "SUP-HAS-REG"),
             new(version.Id, "Verification", "TaxVerified", "Tax verified", "Approval", "SUP-HAS-TAX"),
             new(version.Id, "Approval", "Approve", "Approve", "Approved", "SUP-HAS-CATEGORY"),
@@ -50,6 +50,23 @@ public static class SeedData
             if (!await db.BusinessRuleDefinitions.AnyAsync(x => x.Code == rule.Code, cancellationToken)) db.BusinessRuleDefinitions.Add(rule);
 
         if (!await db.WorkflowDefinitions.AnyAsync(x => x.Code == "SUPPLIER-ONBOARDING", cancellationToken)) db.WorkflowDefinitions.Add(SupplierOnboardingWorkflow());
+        await db.SaveChangesAsync(cancellationToken);
+        if (!await db.WorkflowMappings.AnyAsync(x => x.EntityType == nameof(Supplier) && x.ActionCode == "Submit", cancellationToken)) db.WorkflowMappings.Add(new WorkflowMapping(nameof(Supplier), "Submit", "SUPPLIER-ONBOARDING"));
+        var supplierWorkflow = await db.WorkflowDefinitions.Include(x => x.Versions).ThenInclude(x => x.Transitions).SingleAsync(x => x.Code == "SUPPLIER-ONBOARDING", cancellationToken);
+        var supplierVersion = supplierWorkflow.Versions.Single(x => x.Id == supplierWorkflow.PublishedVersionId || x.Status == WorkflowVersionStatus.Published);
+        var configuredEffects = new Dictionary<string, string>
+        {
+            ["Submit"] = "Submitted",
+            ["DocumentsAccepted"] = "UnderVerification",
+            ["TaxVerified"] = "UnderVerification",
+            ["Approve"] = "Approved",
+            ["Reject"] = "Rejected"
+        };
+        foreach (var transition in supplierVersion.Transitions)
+        {
+            if (configuredEffects.TryGetValue(transition.ActionCode, out var status) && !await db.WorkflowTransitionEffects.AnyAsync(x => x.TriggerTransitionId == transition.Id && x.EntityType == nameof(Supplier) && x.PropertyName == nameof(Supplier.Status), cancellationToken))
+                db.WorkflowTransitionEffects.Add(new WorkflowTransitionEffect(nameof(Supplier), nameof(Supplier.Status), status, transition.Id));
+        }
         await db.SaveChangesAsync(cancellationToken);
 
         if (!await db.Suppliers.AnyAsync(x => x.ReferenceNumber == "SUP-LCA-2026-0001", cancellationToken))
