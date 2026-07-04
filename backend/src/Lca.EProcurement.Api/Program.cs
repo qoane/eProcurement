@@ -21,6 +21,7 @@ if (args.Contains("--seed"))
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<EProcurementDbContext>();
     await db.Database.MigrateAsync();
+    await db.EnsureConfigurablePlatformSchemaAsync();
     await SeedData.SeedAsync(db);
     return;
 }
@@ -31,6 +32,7 @@ if (app.Environment.IsDevelopment())
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<EProcurementDbContext>();
     await db.Database.MigrateAsync();
+    await db.EnsureConfigurablePlatformSchemaAsync();
     await SeedData.SeedAsync(db);
 }
 app.UseCors(FrontendCors);
