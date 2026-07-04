@@ -1,28 +1,30 @@
 import { navigate } from "../../app/routes";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
+import { Logo } from "../../components/ui/Logo";
+
 export function LoginPage() {
   return (
-    <div className="container hero">
-      <div>
-        <span className="eyebrow">BeeOnline Enterprise Platform</span>
-        <h1>Secure enterprise access</h1>
+    <main className="login-page">
+      <section className="login-intro">
+        <Logo />
+        <h1>Sign in to ProcuraFlow</h1>
         <p className="muted">
-          Unified procurement operations, configurable workflows, dynamic forms
-          and auditable decisions for Lesotho Communications Authority.
+          Configurable eProcurement Platform for Lesotho Communications
+          Authority.
         </p>
-      </div>
+      </section>
       <form
-        className="panel"
+        className="login-panel"
         onSubmit={(e) => {
           e.preventDefault();
           navigate("/app/dashboard");
         }}
       >
-        <h2>Sign in</h2>
-        <p className="muted">
-          Demo credentials: admin@lca.org.ls · Password: demo
-        </p>
+        <div>
+          <h2>Welcome back</h2>
+          <p className="muted">Use your organisation account to continue.</p>
+        </div>
         <label>
           Email
           <Input type="email" defaultValue="admin@lca.org.ls" required />
@@ -31,14 +33,18 @@ export function LoginPage() {
           Password
           <Input type="password" defaultValue="demo" required />
         </label>
-        <div className="page-header">
-          <label style={{ display: "flex" }}>
+        <div className="login-options">
+          <label className="check-row">
             <input type="checkbox" /> Remember me
           </label>
-          <a>Forgot password</a>
+          <a href="#">Forgot password</a>
         </div>
         <Button>Sign in</Button>
+        <p className="demo-credentials">
+          Demo credentials: <strong>admin@lca.org.ls</strong> /{" "}
+          <strong>demo</strong>
+        </p>
       </form>
-    </div>
+    </main>
   );
 }
