@@ -12,9 +12,25 @@ public static class SeedData
     public static List<BusinessRuleDefinition> Rules() => [new("SUP-HAS-REG", "Supplier must have company registration document", "Supplier", "HasDocument:CompanyRegistration"), new("SUP-HAS-TAX", "Supplier must have tax clearance document", "Supplier", "HasDocument:TaxClearance"), new("SUP-HAS-CATEGORY", "Supplier must be assigned at least one category before approval", "Supplier", "HasAtLeastOneCategory")];
     public static WorkflowDefinition SupplierOnboardingWorkflow()
     {
-        var wf = new WorkflowDefinition("SUPPLIER-ONBOARDING", "Supplier onboarding");
-        wf.Steps.AddRange([new(wf.Id, "Submitted", "Submitted", false), new(wf.Id, "DocumentCheck", "Document Check", true), new(wf.Id, "Verification", "Verification", true), new(wf.Id, "Approval", "Approval", true), new(wf.Id, "Approved", "Approved", false), new(wf.Id, "Rejected", "Rejected", false)]);
-        wf.Transitions.AddRange([new(wf.Id, "Submitted", "SubmitForVerification", "DocumentCheck"), new(wf.Id, "DocumentCheck", "DocumentsAccepted", "Verification", "SUP-HAS-REG"), new(wf.Id, "Verification", "TaxVerified", "Approval", "SUP-HAS-TAX"), new(wf.Id, "Approval", "Approve", "Approved", "SUP-HAS-CATEGORY"), new(wf.Id, "Approval", "Reject", "Rejected")]);
+        var wf = new WorkflowDefinition("SUPPLIER-ONBOARDING", "Supplier onboarding", nameof(Supplier));
+        var version = new WorkflowVersion(wf.Id, 1, WorkflowVersionStatus.Published, DateTimeOffset.UtcNow, "system");
+        wf = wf with { PublishedVersionId = version.Id };
+        version.Nodes.AddRange([
+            new(version.Id, "Submitted", "Submitted", WorkflowNodeKind.Start, IsStart: true),
+            new(version.Id, "DocumentCheck", "Document Check", WorkflowNodeKind.Task, CreatesTask: true, DefaultAssignedRole: "ProcurementOfficer"),
+            new(version.Id, "Verification", "Verification", WorkflowNodeKind.Task, CreatesTask: true, DefaultAssignedRole: "Evaluator"),
+            new(version.Id, "Approval", "Approval", WorkflowNodeKind.Task, CreatesTask: true, DefaultAssignedRole: "Approver"),
+            new(version.Id, "Approved", "Approved", WorkflowNodeKind.End, IsTerminal: true),
+            new(version.Id, "Rejected", "Rejected", WorkflowNodeKind.End, IsTerminal: true)
+        ]);
+        version.Transitions.AddRange([
+            new(version.Id, "Submitted", "SubmitForVerification", "Submit for verification", "DocumentCheck"),
+            new(version.Id, "DocumentCheck", "DocumentsAccepted", "Documents accepted", "Verification", "SUP-HAS-REG"),
+            new(version.Id, "Verification", "TaxVerified", "Tax verified", "Approval", "SUP-HAS-TAX"),
+            new(version.Id, "Approval", "Approve", "Approve", "Approved", "SUP-HAS-CATEGORY"),
+            new(version.Id, "Approval", "Reject", "Reject", "Rejected")
+        ]);
+        wf.Versions.Add(version);
         return wf;
     }
 
