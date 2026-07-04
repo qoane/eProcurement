@@ -45,3 +45,31 @@ public record BusinessRuleDefinition(string Code, string Name, string AppliesTo,
 public record BusinessRuleExecutionLog(string RuleCode, string EntityType, Guid EntityId, string InputJson, RuleOutcome Outcome, string ResultJson, DateTimeOffset ExecutedAt) : Entity(Guid.NewGuid());
 
 public record AuditEvent(string EventType, string EntityType, Guid EntityId, string EntityReference, string Actor, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
+
+public record WorkflowTransitionEffect(string EntityType, string PropertyName, string ValueExpression, Guid TriggerTransitionId) : Entity(Guid.NewGuid());
+public record WorkflowMapping(string EntityType, string ActionCode, string WorkflowCode, bool IsActive = true) : Entity(Guid.NewGuid());
+
+public record FormDefinition(string Code, string Name, string EntityType, bool IsActive = true, Guid? ActiveVersionId = null) : Entity(Guid.NewGuid())
+{
+    public List<FormVersion> Versions { get; init; } = [];
+}
+public record FormVersion(Guid FormDefinitionId, int VersionNumber, WorkflowVersionStatus Status = WorkflowVersionStatus.Draft, DateTimeOffset? PublishedAt = null, string? PublishedBy = null) : Entity(Guid.NewGuid())
+{
+    public List<FormSection> Sections { get; init; } = [];
+}
+public record FormSection(Guid FormVersionId, string Code, string Title, int DisplayOrder) : Entity(Guid.NewGuid())
+{
+    public List<FormField> Fields { get; init; } = [];
+}
+public record FormField(Guid FormSectionId, string Code, string Label, string FieldType, int DisplayOrder, bool IsRequired = false) : Entity(Guid.NewGuid())
+{
+    public List<FormFieldValidation> Validations { get; init; } = [];
+    public List<FormFieldVisibilityRule> VisibilityRules { get; init; } = [];
+}
+public record FormFieldValidation(Guid FormFieldId, string ValidationType, string? ConfigurationJson, string Message) : Entity(Guid.NewGuid());
+public record FormFieldVisibilityRule(Guid FormFieldId, string Expression) : Entity(Guid.NewGuid());
+public record FormSubmission(Guid FormDefinitionId, Guid FormVersionId, string EntityType, Guid EntityId, string SubmittedBy, DateTimeOffset SubmittedAt) : Entity(Guid.NewGuid())
+{
+    public List<FormSubmissionValue> Values { get; init; } = [];
+}
+public record FormSubmissionValue(Guid FormSubmissionId, string FieldCode, string? Value) : Entity(Guid.NewGuid());

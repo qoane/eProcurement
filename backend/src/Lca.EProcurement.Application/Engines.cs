@@ -12,13 +12,7 @@ public sealed class BusinessRulesEngine(List<BusinessRuleDefinition> definitions
     public RuleResult Evaluate(string ruleCode, Supplier supplier, string actor)
     {
         var rule = definitions.Single(r => r.Code == ruleCode && r.IsActive);
-        var passed = rule.Expression switch
-        {
-            "HasDocument:CompanyRegistration" => supplier.Documents.Any(d => d.DocumentType == "CompanyRegistration"),
-            "HasDocument:TaxClearance" => supplier.Documents.Any(d => d.DocumentType == "TaxClearance"),
-            "HasAtLeastOneCategory" => supplier.Categories.Any(),
-            _ => false
-        };
+        var passed = SimpleExpressionEvaluator.Evaluate(rule.Expression, supplier);
         var result = new RuleResult(rule.Code, passed, passed ? "Rule passed" : $"Rule failed: {rule.Name}");
         logs.Add(new BusinessRuleExecutionLog(rule.Code, nameof(Supplier), supplier.Id, JsonSerializer.Serialize(supplier), passed ? RuleOutcome.Passed : RuleOutcome.Failed, JsonSerializer.Serialize(result), DateTimeOffset.UtcNow));
         audit.Record("Rule evaluated", nameof(Supplier), supplier.Id, supplier.ReferenceNumber, actor, result.Message);
