@@ -7,6 +7,8 @@ public enum RuleOutcome { Passed, Failed }
 public interface IEntity { Guid Id { get; init; } }
 public abstract record Entity(Guid Id) : IEntity;
 
+public record SeedMetadata(string Kind, string Code, string Name) : Entity(Guid.NewGuid());
+
 public record Supplier(string ReferenceNumber, string LegalName, SupplierStatus Status) : Entity(Guid.NewGuid())
 {
     public List<SupplierDocument> Documents { get; init; } = [];

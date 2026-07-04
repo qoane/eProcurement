@@ -1,0 +1,34 @@
+using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Lca.EProcurement.EntityFrameworkCore.Migrations;
+
+public partial class InitialCreate : Migration
+{
+    protected override void Up(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.Sql(@"
+IF OBJECT_ID(N'[dbo].[SeedMetadata]', N'U') IS NULL CREATE TABLE [dbo].[SeedMetadata]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_SeedMetadata] PRIMARY KEY,[Kind] nvarchar(64) NOT NULL,[Code] nvarchar(128) NOT NULL,[Name] nvarchar(256) NOT NULL, CONSTRAINT [UX_SeedMetadata_Kind_Code] UNIQUE([Kind],[Code]));
+IF OBJECT_ID(N'[dbo].[SupplierCategories]', N'U') IS NULL CREATE TABLE [dbo].[SupplierCategories]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_SupplierCategories] PRIMARY KEY,[Name] nvarchar(128) NOT NULL CONSTRAINT [UX_SupplierCategories_Name] UNIQUE);
+IF OBJECT_ID(N'[dbo].[Suppliers]', N'U') IS NULL CREATE TABLE [dbo].[Suppliers]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_Suppliers] PRIMARY KEY,[ReferenceNumber] nvarchar(64) NOT NULL CONSTRAINT [UX_Suppliers_ReferenceNumber] UNIQUE,[LegalName] nvarchar(256) NOT NULL,[Status] nvarchar(64) NOT NULL);
+IF OBJECT_ID(N'[dbo].[SupplierCategoryAssignments]', N'U') IS NULL CREATE TABLE [dbo].[SupplierCategoryAssignments]([CategoriesId] uniqueidentifier NOT NULL,[SupplierId] uniqueidentifier NOT NULL,CONSTRAINT [PK_SupplierCategoryAssignments] PRIMARY KEY([CategoriesId],[SupplierId]),CONSTRAINT [FK_SupplierCategoryAssignments_Categories] FOREIGN KEY([CategoriesId]) REFERENCES [dbo].[SupplierCategories]([Id]) ON DELETE CASCADE,CONSTRAINT [FK_SupplierCategoryAssignments_Suppliers] FOREIGN KEY([SupplierId]) REFERENCES [dbo].[Suppliers]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[SupplierDocuments]', N'U') IS NULL CREATE TABLE [dbo].[SupplierDocuments]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_SupplierDocuments] PRIMARY KEY,[SupplierId] uniqueidentifier NOT NULL,[DocumentType] nvarchar(128) NOT NULL,[FileName] nvarchar(256) NOT NULL,[UploadedBy] nvarchar(256) NOT NULL,[UploadedAt] datetimeoffset NOT NULL,CONSTRAINT [FK_SupplierDocuments_Suppliers] FOREIGN KEY([SupplierId]) REFERENCES [dbo].[Suppliers]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[SupplierPerformanceRatings]', N'U') IS NULL CREATE TABLE [dbo].[SupplierPerformanceRatings]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_SupplierPerformanceRatings] PRIMARY KEY,[SupplierId] uniqueidentifier NOT NULL,[Score] int NOT NULL,[Notes] nvarchar(1000) NOT NULL,[RatedAt] datetimeoffset NOT NULL,CONSTRAINT [FK_SupplierPerformanceRatings_Suppliers] FOREIGN KEY([SupplierId]) REFERENCES [dbo].[Suppliers]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[WorkflowDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[WorkflowDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_WorkflowDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_WorkflowDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[IsActive] bit NOT NULL);
+IF OBJECT_ID(N'[dbo].[WorkflowStepDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[WorkflowStepDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_WorkflowStepDefinitions] PRIMARY KEY,[WorkflowDefinitionId] uniqueidentifier NOT NULL,[Code] nvarchar(128) NOT NULL,[Name] nvarchar(256) NOT NULL,[CreatesTask] bit NOT NULL,CONSTRAINT [FK_WorkflowStepDefinitions_WorkflowDefinitions] FOREIGN KEY([WorkflowDefinitionId]) REFERENCES [dbo].[WorkflowDefinitions]([Id]) ON DELETE CASCADE,CONSTRAINT [UX_WorkflowStepDefinitions_Workflow_Code] UNIQUE([WorkflowDefinitionId],[Code]));
+IF OBJECT_ID(N'[dbo].[WorkflowTransitions]', N'U') IS NULL CREATE TABLE [dbo].[WorkflowTransitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_WorkflowTransitions] PRIMARY KEY,[WorkflowDefinitionId] uniqueidentifier NOT NULL,[FromStepCode] nvarchar(128) NOT NULL,[Action] nvarchar(128) NOT NULL,[ToStepCode] nvarchar(128) NOT NULL,[RequiredRuleCode] nvarchar(128) NULL,CONSTRAINT [FK_WorkflowTransitions_WorkflowDefinitions] FOREIGN KEY([WorkflowDefinitionId]) REFERENCES [dbo].[WorkflowDefinitions]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[WorkflowInstances]', N'U') IS NULL CREATE TABLE [dbo].[WorkflowInstances]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_WorkflowInstances] PRIMARY KEY,[WorkflowDefinitionId] uniqueidentifier NOT NULL,[EntityType] nvarchar(128) NOT NULL,[EntityId] uniqueidentifier NOT NULL,[CurrentStepCode] nvarchar(128) NOT NULL,[IsComplete] bit NOT NULL);
+IF OBJECT_ID(N'[dbo].[WorkflowTasks]', N'U') IS NULL CREATE TABLE [dbo].[WorkflowTasks]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_WorkflowTasks] PRIMARY KEY,[WorkflowInstanceId] uniqueidentifier NOT NULL,[StepCode] nvarchar(128) NOT NULL,[AssignedRole] nvarchar(128) NOT NULL,[Status] nvarchar(64) NOT NULL);
+IF OBJECT_ID(N'[dbo].[WorkflowActions]', N'U') IS NULL CREATE TABLE [dbo].[WorkflowActions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_WorkflowActions] PRIMARY KEY,[WorkflowInstanceId] uniqueidentifier NOT NULL,[Action] nvarchar(128) NOT NULL,[FromStepCode] nvarchar(128) NOT NULL,[ToStepCode] nvarchar(128) NOT NULL,[Actor] nvarchar(256) NOT NULL,[ActionedAt] datetimeoffset NOT NULL);
+IF OBJECT_ID(N'[dbo].[BusinessRuleDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[BusinessRuleDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_BusinessRuleDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_BusinessRuleDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[AppliesTo] nvarchar(128) NOT NULL,[Expression] nvarchar(512) NOT NULL,[IsActive] bit NOT NULL);
+IF OBJECT_ID(N'[dbo].[BusinessRuleExecutionLogs]', N'U') IS NULL CREATE TABLE [dbo].[BusinessRuleExecutionLogs]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_BusinessRuleExecutionLogs] PRIMARY KEY,[RuleCode] nvarchar(128) NOT NULL,[EntityType] nvarchar(128) NOT NULL,[EntityId] uniqueidentifier NOT NULL,[InputJson] nvarchar(max) NOT NULL,[Outcome] nvarchar(64) NOT NULL,[ResultJson] nvarchar(max) NOT NULL,[ExecutedAt] datetimeoffset NOT NULL);
+IF OBJECT_ID(N'[dbo].[AuditEvents]', N'U') IS NULL CREATE TABLE [dbo].[AuditEvents]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_AuditEvents] PRIMARY KEY,[EventType] nvarchar(128) NOT NULL,[EntityType] nvarchar(128) NOT NULL,[EntityId] uniqueidentifier NOT NULL,[EntityReference] nvarchar(128) NOT NULL,[Actor] nvarchar(256) NOT NULL,[Details] nvarchar(max) NOT NULL,[OccurredAt] datetimeoffset NOT NULL);
+");
+    }
+
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        foreach (var table in new[] { "AuditEvents", "BusinessRuleExecutionLogs", "BusinessRuleDefinitions", "WorkflowActions", "WorkflowTasks", "WorkflowInstances", "WorkflowTransitions", "WorkflowStepDefinitions", "WorkflowDefinitions", "SupplierPerformanceRatings", "SupplierDocuments", "SupplierCategoryAssignments", "Suppliers", "SupplierCategories", "SeedMetadata" }) migrationBuilder.DropTable(table);
+    }
+}
