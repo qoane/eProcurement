@@ -57,21 +57,35 @@ public static class SeedData
 
         if (!await db.WorkflowDefinitions.AnyAsync(x => x.Code == "SUPPLIER-ONBOARDING", cancellationToken)) db.WorkflowDefinitions.Add(SupplierOnboardingWorkflow());
         await db.SaveChangesAsync(cancellationToken);
+        db.ChangeTracker.Clear();
+
         if (!await db.WorkflowMappings.AnyAsync(x => x.EntityType == nameof(Supplier) && x.ActionCode == "Submit", cancellationToken)) db.WorkflowMappings.Add(new WorkflowMapping(nameof(Supplier), "Submit", "SUPPLIER-ONBOARDING"));
-        var supplierWorkflow = await db.WorkflowDefinitions.Include(x => x.Versions).ThenInclude(x => x.Nodes).Include(x => x.Versions).ThenInclude(x => x.Transitions).SingleAsync(x => x.Code == "SUPPLIER-ONBOARDING", cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        db.ChangeTracker.Clear();
+
+        var supplierWorkflow = await db.WorkflowDefinitions
+            .AsNoTracking()
+            .Include(x => x.Versions).ThenInclude(x => x.Nodes)
+            .Include(x => x.Versions).ThenInclude(x => x.Transitions)
+            .SingleAsync(x => x.Code == "SUPPLIER-ONBOARDING", cancellationToken);
         var supplierVersion = supplierWorkflow.Versions.FirstOrDefault(x => x.Id == supplierWorkflow.PublishedVersionId)
             ?? supplierWorkflow.Versions.FirstOrDefault(x => x.Status == WorkflowVersionStatus.Published)
             ?? supplierWorkflow.Versions.OrderByDescending(x => x.VersionNumber).FirstOrDefault();
         if (supplierVersion is null)
         {
             supplierVersion = SupplierOnboardingVersion(supplierWorkflow.Id);
-            supplierWorkflow.Versions.Add(supplierVersion);
+            db.WorkflowVersions.Add(supplierVersion);
+            await db.SaveChangesAsync(cancellationToken);
+            db.ChangeTracker.Clear();
         }
-        foreach (var node in SupplierOnboardingVersion(supplierWorkflow.Id).Nodes)
-            if (!supplierVersion.Nodes.Any(x => x.Code == node.Code)) supplierVersion.Nodes.Add(node with { WorkflowVersionId = supplierVersion.Id });
-        foreach (var transition in SupplierOnboardingVersion(supplierWorkflow.Id).Transitions)
-            if (!supplierVersion.Transitions.Any(x => x.FromNodeCode == transition.FromNodeCode && x.ActionCode == transition.ActionCode)) supplierVersion.Transitions.Add(transition with { WorkflowVersionId = supplierVersion.Id });
+        var supplierVersionId = supplierVersion.Id;
+        var templateVersion = SupplierOnboardingVersion(supplierWorkflow.Id);
+        foreach (var node in templateVersion.Nodes)
+            if (!supplierVersion.Nodes.Any(x => x.Code == node.Code)) db.WorkflowNodes.Add(node with { WorkflowVersionId = supplierVersionId });
+        foreach (var transition in templateVersion.Transitions)
+            if (!supplierVersion.Transitions.Any(x => x.FromNodeCode == transition.FromNodeCode && x.ActionCode == transition.ActionCode)) db.WorkflowTransitions.Add(transition with { WorkflowVersionId = supplierVersionId });
         await db.SaveChangesAsync(cancellationToken);
+        db.ChangeTracker.Clear();
 
         var publishedAt = supplierVersion.PublishedAt ?? DateTimeOffset.UtcNow;
         var publishedBy = string.IsNullOrWhiteSpace(supplierVersion.PublishedBy) ? "system" : supplierVersion.PublishedBy;
@@ -84,6 +98,7 @@ public static class SeedData
                 .SetProperty(x => x.Status, WorkflowVersionStatus.Published)
                 .SetProperty(x => x.PublishedAt, publishedAt)
                 .SetProperty(x => x.PublishedBy, publishedBy), cancellationToken);
+        var supplierTransitions = await db.WorkflowTransitions.AsNoTracking().Where(x => x.WorkflowVersionId == supplierVersionId).ToListAsync(cancellationToken);
         var configuredEffects = new Dictionary<string, string>
         {
             ["Submit"] = "Submitted",
@@ -92,7 +107,7 @@ public static class SeedData
             ["Approve"] = "Approved",
             ["Reject"] = "Rejected"
         };
-        foreach (var transition in supplierVersion.Transitions)
+        foreach (var transition in supplierTransitions)
         {
             if (configuredEffects.TryGetValue(transition.ActionCode, out var status) && !await db.WorkflowTransitionEffects.AnyAsync(x => x.TriggerTransitionId == transition.Id && x.EntityType == nameof(Supplier) && x.PropertyName == nameof(Supplier.Status), cancellationToken))
                 db.WorkflowTransitionEffects.Add(new WorkflowTransitionEffect(nameof(Supplier), nameof(Supplier.Status), status, transition.Id));
