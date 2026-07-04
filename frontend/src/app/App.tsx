@@ -22,6 +22,23 @@ import { DynamicFormsPage } from "../modules/forms/DynamicFormsPage";
 import { FormDesignerPage } from "../modules/forms/FormDesignerPage";
 import { ConfigurationPage } from "../modules/configuration/ConfigurationPage";
 import { ReportingPage } from "../modules/reporting/ReportingPage";
+import { EmptyState } from "../components/ui/EmptyState";
+import { PageHeader } from "../components/ui/PageHeader";
+function NotConfiguredPage({ title }: { title: string }) {
+  return (
+    <>
+      <PageHeader
+        title={title}
+        description="This procurement module is ready to be connected when the capability is configured."
+      />
+      <EmptyState
+        title="Not configured yet"
+        message={`${title} will appear here after the module is enabled and connected to platform APIs.`}
+      />
+    </>
+  );
+}
+
 function route(p: string) {
   if (p === "/")
     return (
@@ -61,6 +78,20 @@ function route(p: string) {
   else if (p === "/app/forms/designer") page = <FormDesignerPage />;
   else if (p === "/app/configuration") page = <ConfigurationPage />;
   else if (p === "/app/reporting") page = <ReportingPage />;
+  else if (p === "/app/dashboards")
+    page = <NotConfiguredPage title="Dashboards" />;
+  else if (p === "/app/settings") page = <ConfigurationPage />;
+  else if (p === "/app/planning") page = <NotConfiguredPage title="Planning" />;
+  else if (p === "/app/requisitions")
+    page = <NotConfiguredPage title="Requisitions" />;
+  else if (p === "/app/tenders") page = <NotConfiguredPage title="Tenders" />;
+  else if (p === "/app/evaluation")
+    page = <NotConfiguredPage title="Evaluation" />;
+  else if (p === "/app/awards") page = <NotConfiguredPage title="Awards" />;
+  else if (p === "/app/purchase-orders")
+    page = <NotConfiguredPage title="Purchase Orders" />;
+  else if (p === "/app/contracts")
+    page = <NotConfiguredPage title="Contracts" />;
   return <AppShell>{page}</AppShell>;
 }
 export function App() {
