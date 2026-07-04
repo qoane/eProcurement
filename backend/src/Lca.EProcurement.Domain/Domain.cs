@@ -48,6 +48,8 @@ public record AuditEvent(string EventType, string EntityType, Guid EntityId, str
 
 public record WorkflowTransitionEffect(string EntityType, string PropertyName, string ValueExpression, Guid TriggerTransitionId) : Entity(Guid.NewGuid());
 public record WorkflowMapping(string EntityType, string ActionCode, string WorkflowCode, bool IsActive = true) : Entity(Guid.NewGuid());
+public record DocumentTypeRequirement(string EntityType, string DocumentType, string Name, bool IsRequired = true) : Entity(Guid.NewGuid());
+public record LookupValue(string LookupType, string Code, string Name, int DisplayOrder = 0, bool IsActive = true) : Entity(Guid.NewGuid());
 
 public record FormDefinition(string Code, string Name, string EntityType, bool IsActive = true, Guid? ActiveVersionId = null) : Entity(Guid.NewGuid())
 {
