@@ -13,8 +13,15 @@ public static class SeedData
     public static WorkflowDefinition SupplierOnboardingWorkflow()
     {
         var wf = new WorkflowDefinition("SUPPLIER-ONBOARDING", "Supplier onboarding", nameof(Supplier));
-        var version = new WorkflowVersion(wf.Id, 1, WorkflowVersionStatus.Published, DateTimeOffset.UtcNow, "system");
+        var version = SupplierOnboardingVersion(wf.Id);
         wf = wf with { PublishedVersionId = version.Id };
+        wf.Versions.Add(version);
+        return wf;
+    }
+
+    private static WorkflowVersion SupplierOnboardingVersion(Guid workflowDefinitionId)
+    {
+        var version = new WorkflowVersion(workflowDefinitionId, 1, WorkflowVersionStatus.Published, DateTimeOffset.UtcNow, "system");
         version.Nodes.AddRange([
             new(version.Id, "Submitted", "Submitted", WorkflowNodeKind.Start, IsStart: true),
             new(version.Id, "DocumentCheck", "Document Check", WorkflowNodeKind.Task, CreatesTask: true, DefaultAssignedRole: "ProcurementOfficer"),
@@ -30,8 +37,7 @@ public static class SeedData
             new(version.Id, "Approval", "Approve", "Approve", "Approved", "SUP-HAS-CATEGORY"),
             new(version.Id, "Approval", "Reject", "Reject", "Rejected")
         ]);
-        wf.Versions.Add(version);
-        return wf;
+        return version;
     }
 
     public static async Task SeedAsync(EProcurementDbContext db, CancellationToken cancellationToken = default)
@@ -52,8 +58,24 @@ public static class SeedData
         if (!await db.WorkflowDefinitions.AnyAsync(x => x.Code == "SUPPLIER-ONBOARDING", cancellationToken)) db.WorkflowDefinitions.Add(SupplierOnboardingWorkflow());
         await db.SaveChangesAsync(cancellationToken);
         if (!await db.WorkflowMappings.AnyAsync(x => x.EntityType == nameof(Supplier) && x.ActionCode == "Submit", cancellationToken)) db.WorkflowMappings.Add(new WorkflowMapping(nameof(Supplier), "Submit", "SUPPLIER-ONBOARDING"));
-        var supplierWorkflow = await db.WorkflowDefinitions.Include(x => x.Versions).ThenInclude(x => x.Transitions).SingleAsync(x => x.Code == "SUPPLIER-ONBOARDING", cancellationToken);
-        var supplierVersion = supplierWorkflow.Versions.Single(x => x.Id == supplierWorkflow.PublishedVersionId || x.Status == WorkflowVersionStatus.Published);
+        var supplierWorkflow = await db.WorkflowDefinitions.Include(x => x.Versions).ThenInclude(x => x.Nodes).Include(x => x.Versions).ThenInclude(x => x.Transitions).SingleAsync(x => x.Code == "SUPPLIER-ONBOARDING", cancellationToken);
+        var supplierVersion = supplierWorkflow.Versions.FirstOrDefault(x => x.Id == supplierWorkflow.PublishedVersionId)
+            ?? supplierWorkflow.Versions.FirstOrDefault(x => x.Status == WorkflowVersionStatus.Published)
+            ?? supplierWorkflow.Versions.OrderByDescending(x => x.VersionNumber).FirstOrDefault();
+        if (supplierVersion is null)
+        {
+            supplierVersion = SupplierOnboardingVersion(supplierWorkflow.Id);
+            supplierWorkflow.Versions.Add(supplierVersion);
+        }
+        foreach (var node in SupplierOnboardingVersion(supplierWorkflow.Id).Nodes)
+            if (!supplierVersion.Nodes.Any(x => x.Code == node.Code)) supplierVersion.Nodes.Add(node with { WorkflowVersionId = supplierVersion.Id });
+        foreach (var transition in SupplierOnboardingVersion(supplierWorkflow.Id).Transitions)
+            if (!supplierVersion.Transitions.Any(x => x.FromNodeCode == transition.FromNodeCode && x.ActionCode == transition.ActionCode)) supplierVersion.Transitions.Add(transition with { WorkflowVersionId = supplierVersion.Id });
+        db.Entry(supplierWorkflow).CurrentValues[nameof(WorkflowDefinition.PublishedVersionId)] = supplierVersion.Id;
+        db.Entry(supplierVersion).CurrentValues[nameof(WorkflowVersion.Status)] = WorkflowVersionStatus.Published;
+        if (supplierVersion.PublishedAt is null) db.Entry(supplierVersion).CurrentValues[nameof(WorkflowVersion.PublishedAt)] = DateTimeOffset.UtcNow;
+        if (string.IsNullOrWhiteSpace(supplierVersion.PublishedBy)) db.Entry(supplierVersion).CurrentValues[nameof(WorkflowVersion.PublishedBy)] = "system";
+        await db.SaveChangesAsync(cancellationToken);
         var configuredEffects = new Dictionary<string, string>
         {
             ["Submit"] = "Submitted",
