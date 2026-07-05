@@ -22,6 +22,7 @@ import { DynamicFormsPage } from "../modules/forms/DynamicFormsPage";
 import { FormDesignerPage } from "../modules/forms/FormDesignerPage";
 import { ConfigurationPage } from "../modules/configuration/ConfigurationPage";
 import { ReportingPage } from "../modules/reporting/ReportingPage";
+import { StudioModulePage, StudioPage } from "../modules/studio/StudioPage";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
 function NotConfiguredPage({ title }: { title: string }) {
@@ -76,6 +77,11 @@ function route(p: string) {
   else if (p === "/app/rules/designer") page = <RuleDesignerPage />;
   else if (p === "/app/forms") page = <DynamicFormsPage />;
   else if (p === "/app/forms/designer") page = <FormDesignerPage />;
+  else if (p === "/app/studio") page = <StudioPage />;
+  else if (p.startsWith("/app/studio/"))
+    page = (
+      <StudioModulePage slug={decodeURIComponent(p.split("/").pop() || "")} />
+    );
   else if (p === "/app/configuration") page = <ConfigurationPage />;
   else if (p === "/app/reporting") page = <ReportingPage />;
   else if (p === "/app/dashboards")

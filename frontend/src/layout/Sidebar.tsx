@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FileCheck2,
   FileCog,
+  Blocks,
   FileText,
   Gauge,
   History,
@@ -51,6 +52,7 @@ const groups = [
   [
     "Platform Studio",
     [
+      ["ProcuraFlow Studio", "/app/studio", Blocks],
       ["Workflow Designer", "/app/workflows/designer", Workflow],
       ["Business Rules", "/app/rules", ShieldCheck],
       ["Dynamic Forms", "/app/forms", FileText],
