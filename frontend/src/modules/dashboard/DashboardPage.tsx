@@ -8,11 +8,15 @@ import { getSuppliers } from "../../services/suppliersApi";
 import { getTasks } from "../../services/tasksApi";
 import { getAuditEvents } from "../../services/auditApi";
 import { getWorkflows } from "../../services/workflowsApi";
+import { getConfigurationStudio } from "../../services/configurationApi";
+import { getRules } from "../../services/rulesApi";
 import type {
   AuditEvent,
   Supplier,
   WorkflowDefinition,
   WorkflowTask,
+  ConfigurationStudio,
+  Rule,
 } from "../../types/api";
 
 const capabilities = [
@@ -47,31 +51,41 @@ export function DashboardPage() {
   const [s, setS] = useState<Supplier[]>([]),
     [t, setT] = useState<WorkflowTask[]>([]),
     [a, setA] = useState<AuditEvent[]>([]),
-    [w, setW] = useState<WorkflowDefinition[]>([]);
+    [w, setW] = useState<WorkflowDefinition[]>([]),
+    [studio, setStudio] = useState<ConfigurationStudio>({ businessProcesses: [], documentRequirementSets: [], approvalMatrices: [], workflowMappings: [] }),
+    [rules, setRules] = useState<Rule[]>([]);
   useEffect(() => {
     void Promise.all([
       getSuppliers(),
       getTasks(),
       getAuditEvents(),
       getWorkflows(),
-    ]).then(([s, t, a, w]) => {
+      getConfigurationStudio(),
+      getRules(),
+    ]).then(([s, t, a, w, studio, rules]) => {
       setS(s.data);
       setT(t.data);
       setA(a.data);
       setW(w.data);
+      setStudio(studio.data);
+      setRules(rules.data);
     });
   }, []);
   return (
     <>
       <PageHeader
         title="Executive dashboard"
-        description="Operational visibility for configured procurement workflows, suppliers and audit activity."
+        description="Operational visibility for configured business processes, published workflows, published forms, rule sets, approval matrices, suppliers and audit activity."
       />
       <div className="grid cols-4 dashboard-metrics">
         <MetricCard label="Suppliers" value={s.length} />
         <MetricCard label="Workflow Tasks" value={t.length} />
         <MetricCard label="Workflow Definitions" value={w.length} />
         <MetricCard label="Audit Events" value={a.length} />
+        <MetricCard label="Business Processes" value={studio.businessProcesses.length} />
+        <MetricCard label="Published Forms" value={studio.businessProcesses.filter((p) => p.activeFormDefinitionId).length} />
+        <MetricCard label="Rule Sets" value={rules.length} />
+        <MetricCard label="Approval Matrices" value={studio.approvalMatrices.length} />
       </div>
 
       <section className="dashboard-section">

@@ -5,6 +5,21 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Lca.EProcurement.Application;
 
+public interface IConfigurationStudioApplicationService
+{
+    Task<ConfigurationStudioDto> GetStudioAsync(CancellationToken ct = default);
+    Task<BusinessProcessDefinition> CreateBusinessProcessAsync(BusinessProcessDto dto, CancellationToken ct = default);
+    Task<BusinessProcessDefinition?> PublishBusinessProcessAsync(string code, CancellationToken ct = default);
+    Task<DocumentRequirementSet> CreateDocumentRequirementSetAsync(DocumentRequirementSetDto dto, CancellationToken ct = default);
+    Task<ApprovalMatrix> CreateApprovalMatrixAsync(ApprovalMatrixDto dto, CancellationToken ct = default);
+}
+public sealed record BusinessProcessDto(string Code, string Name, string Description, string EntityType, Guid? ActiveWorkflowDefinitionId, Guid? ActiveFormDefinitionId, Guid? ActiveDocumentRequirementSetId, Guid? ActiveApprovalMatrixId, BusinessProcessStatus Status = BusinessProcessStatus.Draft);
+public sealed record DocumentRequirementSetDto(string Name, string Description, string EntityType, List<DocumentRequirementDto> Requirements);
+public sealed record DocumentRequirementDto(string DocumentType, bool Required, int MinimumFiles, int MaximumFiles, string AllowedExtensions, long MaximumFileSize, string? RuleCode = null);
+public sealed record ApprovalMatrixDto(string Name, string Description, string EntityType, List<ApprovalStepDto> Steps);
+public sealed record ApprovalStepDto(string Role, int Sequence, decimal? MinimumAmount = null, decimal? MaximumAmount = null, string? RuleCode = null);
+public sealed record ConfigurationStudioDto(List<BusinessProcessDefinition> BusinessProcesses, List<DocumentRequirementSet> DocumentRequirementSets, List<ApprovalMatrix> ApprovalMatrices, List<WorkflowMapping> WorkflowMappings);
+
 public interface IWorkflowApplicationService
 {
     Task<List<WorkflowDefinition>> GetDefinitionsAsync(CancellationToken ct = default);
@@ -45,7 +60,7 @@ public sealed record FormSectionDto(string Code, string Title, int DisplayOrder,
 public sealed record FormFieldDto(string Code, string Label, string FieldType, int DisplayOrder, bool IsRequired);
 public sealed record SubmitFormDto(string FormCode, string EntityType, Guid EntityId, string SubmittedBy, Dictionary<string, string?> Values);
 public sealed record CreateBusinessRuleDto(string Code, string Name, string AppliesTo, string Expression, bool IsActive = true);
-public sealed record PlatformDashboardDto(int WorkflowsCount, int RulesCount, int FormsCount, int ActiveWorkflowInstances, int PendingTasks);
+public sealed record PlatformDashboardDto(int WorkflowsCount, int RulesCount, int FormsCount, int ActiveWorkflowInstances, int PendingTasks, int BusinessProcessesCount = 0, int ApprovalMatricesCount = 0);
 public sealed record WorkflowMappingDto(string EntityType, string ActionCode, string WorkflowCode, bool IsActive = true);
 public sealed record CreateTransitionEffectDto(Guid TriggerTransitionId, string EntityType, string PropertyName, string ValueExpression);
 public sealed record DocumentTypeRequirementDto(string EntityType, string DocumentType, string Name, bool IsRequired = true);
@@ -97,7 +112,9 @@ public sealed class WorkflowApplicationService(EProcurementDbContext db, IBusine
         await db.BusinessRuleDefinitions.CountAsync(ct),
         await db.FormDefinitions.CountAsync(ct),
         await db.WorkflowInstances.CountAsync(i => i.Status == WorkflowInstanceStatus.Running, ct),
-        await db.WorkflowTasks.CountAsync(t => t.Status == WorkflowTaskStatus.Open || t.Status == WorkflowTaskStatus.Assigned, ct));
+        await db.WorkflowTasks.CountAsync(t => t.Status == WorkflowTaskStatus.Open || t.Status == WorkflowTaskStatus.Assigned, ct),
+        await db.BusinessProcessDefinitions.CountAsync(x => x.Status == BusinessProcessStatus.Published, ct),
+        await db.ApprovalMatrices.CountAsync(ct));
     public async Task<WorkflowDefinition> CreateWorkflowAsync(CreateWorkflowDto request, CancellationToken ct = default)
     {
         var definition = new WorkflowDefinition(request.Code, request.Name, request.EntityType); var version = new WorkflowVersion(definition.Id, 1);
@@ -141,9 +158,10 @@ public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkfl
     public async Task<WorkflowInstance?> SubmitAsync(string referenceNumber, string actor, CancellationToken ct = default)
     {
         var supplier = await db.Suppliers.SingleOrDefaultAsync(s => s.ReferenceNumber == referenceNumber, ct); if (supplier is null) return null;
-        var mapping = await db.WorkflowMappings.SingleAsync(m => m.EntityType == nameof(Supplier) && m.ActionCode == "Submit" && m.IsActive, ct);
+        var process = await db.BusinessProcessDefinitions.SingleAsync(p => p.EntityType == nameof(Supplier) && p.Status == BusinessProcessStatus.Published, ct);
+        var workflow = await db.WorkflowDefinitions.SingleAsync(w => w.Id == process.ActiveWorkflowDefinitionId, ct);
         var running = await db.WorkflowInstances.OrderByDescending(i => i.StartedAt).FirstOrDefaultAsync(i => i.EntityType == nameof(Supplier) && i.EntityId == supplier.Id && i.Status == WorkflowInstanceStatus.Running, ct);
-        var instance = running ?? await workflows.StartAsync(mapping.WorkflowCode, nameof(Supplier), supplier.Id, actor, ct);
+        var instance = running ?? await workflows.StartAsync(workflow.Code, nameof(Supplier), supplier.Id, actor, ct);
         var version = await db.WorkflowVersions.Include(v => v.Transitions).SingleAsync(v => v.Id == instance.WorkflowVersionId, ct);
         var submit = version.Transitions.FirstOrDefault(t => t.FromNodeCode == instance.CurrentNodeCode && t.ActionCode == "Submit");
         if (submit is null) return instance;
@@ -184,6 +202,20 @@ public sealed class DynamicFormApplicationService(EProcurementDbContext db) : ID
     async Task<FormVersion?> DraftFormVersion(string code, CancellationToken ct) => (await db.FormDefinitions.Include(f => f.Versions).SingleOrDefaultAsync(f => f.Code == code && f.IsActive, ct))?.Versions.OrderByDescending(v => v.VersionNumber).FirstOrDefault(v => v.Status == WorkflowVersionStatus.Draft);
 }
 public sealed class AuditApplicationService(EProcurementDbContext db) : IAuditApplicationService { public Task<List<AuditEvent>> GetEventsAsync(CancellationToken ct = default) => db.AuditEvents.AsNoTracking().OrderByDescending(e => e.OccurredAt).Take(100).ToListAsync(ct); }
+
+
+public sealed class ConfigurationStudioApplicationService(EProcurementDbContext db) : IConfigurationStudioApplicationService
+{
+    public async Task<ConfigurationStudioDto> GetStudioAsync(CancellationToken ct = default) => new(
+        await db.BusinessProcessDefinitions.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct),
+        await db.DocumentRequirementSets.AsNoTracking().Include(x => x.Requirements).OrderBy(x => x.Name).ToListAsync(ct),
+        await db.ApprovalMatrices.AsNoTracking().Include(x => x.Steps).OrderBy(x => x.Name).ToListAsync(ct),
+        await db.WorkflowMappings.AsNoTracking().OrderBy(x => x.EntityType).ThenBy(x => x.ActionCode).ToListAsync(ct));
+    public async Task<BusinessProcessDefinition> CreateBusinessProcessAsync(BusinessProcessDto dto, CancellationToken ct = default) { var item = new BusinessProcessDefinition(dto.Code, dto.Name, dto.Description, dto.EntityType, dto.ActiveWorkflowDefinitionId, dto.ActiveFormDefinitionId, dto.ActiveDocumentRequirementSetId, dto.ActiveApprovalMatrixId, dto.Status); db.BusinessProcessDefinitions.Add(item); await db.SaveChangesAsync(ct); return item; }
+    public async Task<BusinessProcessDefinition?> PublishBusinessProcessAsync(string code, CancellationToken ct = default) { var item = await db.BusinessProcessDefinitions.SingleOrDefaultAsync(x => x.Code == code, ct); if (item is null) return null; db.Entry(item).CurrentValues[nameof(BusinessProcessDefinition.Status)] = BusinessProcessStatus.Published; await db.SaveChangesAsync(ct); return item with { Status = BusinessProcessStatus.Published }; }
+    public async Task<DocumentRequirementSet> CreateDocumentRequirementSetAsync(DocumentRequirementSetDto dto, CancellationToken ct = default) { var set = new DocumentRequirementSet(dto.Name, dto.Description, dto.EntityType); set.Requirements.AddRange(dto.Requirements.Select(x => new DocumentRequirement(set.Id, x.DocumentType, x.Required, x.MinimumFiles, x.MaximumFiles, x.AllowedExtensions, x.MaximumFileSize, x.RuleCode))); db.DocumentRequirementSets.Add(set); await db.SaveChangesAsync(ct); return set; }
+    public async Task<ApprovalMatrix> CreateApprovalMatrixAsync(ApprovalMatrixDto dto, CancellationToken ct = default) { var matrix = new ApprovalMatrix(dto.Name, dto.Description, dto.EntityType); matrix.Steps.AddRange(dto.Steps.Select(x => new ApprovalStep(matrix.Id, x.Role, x.Sequence, x.MinimumAmount, x.MaximumAmount, x.RuleCode))); db.ApprovalMatrices.Add(matrix); await db.SaveChangesAsync(ct); return matrix; }
+}
 
 public sealed class PlatformConfigurationApplicationService(EProcurementDbContext db) : IPlatformConfigurationApplicationService
 {

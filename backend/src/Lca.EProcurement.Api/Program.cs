@@ -15,6 +15,7 @@ builder.Services.AddScoped<ISupplierApplicationService, SupplierApplicationServi
 builder.Services.AddScoped<IDynamicFormApplicationService, DynamicFormApplicationService>();
 builder.Services.AddScoped<IAuditApplicationService, AuditApplicationService>();
 builder.Services.AddScoped<IPlatformConfigurationApplicationService, PlatformConfigurationApplicationService>();
+builder.Services.AddScoped<IConfigurationStudioApplicationService, ConfigurationStudioApplicationService>();
 
 var app = builder.Build();
 if (args.Contains("--seed"))
