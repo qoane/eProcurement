@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   BriefcaseBusiness,
@@ -70,15 +70,44 @@ const groups = [
 const storageKey = "procuraflow.sidebar.groups";
 const compactKey = "procuraflow.sidebar.compact";
 
-export function Sidebar() {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+function getDefaultExpandedGroups() {
+  return Object.fromEntries(groups.map(([group]) => [group, true]));
+}
+
+function getStoredExpandedGroups() {
+  const defaults = getDefaultExpandedGroups();
+  try {
     const saved = localStorage.getItem(storageKey);
-    return saved
-      ? JSON.parse(saved)
-      : Object.fromEntries(groups.map(([g]) => [g, true]));
-  });
+    return saved ? { ...defaults, ...JSON.parse(saved) } : defaults;
+  } catch {
+    return defaults;
+  }
+}
+
+function isActiveRoute(currentPath: string, href: string) {
+  if (href === "/app/dashboard")
+    return currentPath === href || currentPath === "/app";
+  return currentPath === href || currentPath.startsWith(`${href}/`);
+}
+
+export function Sidebar() {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(
+    getStoredExpandedGroups,
+  );
   const [compact, setCompact] = useState(
     () => localStorage.getItem(compactKey) === "true",
+  );
+  const currentPath = location.pathname;
+
+  const activeGroups = useMemo(
+    () =>
+      Object.fromEntries(
+        groups.map(([group, links]) => [
+          group,
+          links.some(([, href]) => isActiveRoute(currentPath, href)),
+        ]),
+      ),
+    [currentPath],
   );
 
   useEffect(
@@ -92,47 +121,72 @@ export function Sidebar() {
       <div className="sidebar-head">
         <Logo compact={compact} />
         <button
-          className="icon-button"
+          className="icon-button sidebar-mode-toggle"
           onClick={() => setCompact((x) => !x)}
-          aria-label="Collapse sidebar"
+          aria-label={compact ? "Expand sidebar" : "Use compact sidebar"}
+          title={compact ? "Expand sidebar" : "Compact sidebar"}
         >
           {compact ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
         </button>
       </div>
-      <nav>
-        {groups.map(([g, links]) => (
-          <div className="navgroup" key={g}>
-            <button
-              className="navgroup-toggle"
-              onClick={() => setExpanded((x) => ({ ...x, [g]: !x[g] }))}
-              title={g}
+      <nav className="sidebar-nav" aria-label="Primary navigation">
+        {groups.map(([group, links]) => {
+          const isExpanded = expanded[group];
+          const groupId = `sidebar-group-${group.replace(/\W+/g, "-").toLowerCase()}`;
+
+          return (
+            <div
+              className={`navgroup ${activeGroups[group] ? "has-active" : ""}`}
+              key={group}
             >
-              {!compact && <span>{g}</span>}
-              {!compact && (
+              <button
+                className="navgroup-toggle"
+                onClick={() =>
+                  setExpanded((current) => ({
+                    ...current,
+                    [group]: !current[group],
+                  }))
+                }
+                aria-expanded={isExpanded}
+                aria-controls={groupId}
+                title={group}
+              >
+                <span className="navgroup-rail" aria-hidden="true" />
+                {!compact && <span className="navgroup-label">{group}</span>}
                 <ChevronDown
-                  className={expanded[g] ? "" : "collapsed"}
-                  size={15}
+                  className={`navgroup-chevron ${isExpanded ? "" : "collapsed"}`}
+                  size={16}
+                  aria-hidden="true"
                 />
+              </button>
+              {isExpanded && (
+                <div className="navgroup-links" id={groupId}>
+                  {links.map(([label, href, Icon]) => {
+                    const active = isActiveRoute(currentPath, href);
+
+                    return (
+                      <a
+                        className={`navlink ${active ? "active" : ""}`}
+                        href={href}
+                        aria-current={active ? "page" : undefined}
+                        data-tooltip={label}
+                        title={compact ? label : undefined}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigate(href);
+                        }}
+                        key={label}
+                      >
+                        <Icon size={18} aria-hidden="true" />
+                        {!compact && <span>{label}</span>}
+                      </a>
+                    );
+                  })}
+                </div>
               )}
-            </button>
-            {(expanded[g] || compact) &&
-              links.map(([l, h, I]) => (
-                <a
-                  className={`navlink ${location.pathname === h ? "active" : ""}`}
-                  href={h}
-                  title={l}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    navigate(h);
-                  }}
-                  key={l}
-                >
-                  <I size={18} />
-                  {!compact && <span>{l}</span>}
-                </a>
-              ))}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </nav>
     </aside>
   );
