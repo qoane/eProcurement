@@ -94,3 +94,5 @@ export type DocumentRequirementSet = { id?: string; name: string; description: s
 export type ApprovalStep = { role: string; sequence: number; minimumAmount?: number; maximumAmount?: number; ruleCode?: string };
 export type ApprovalMatrix = { id?: string; name: string; description: string; entityType: string; steps?: ApprovalStep[] };
 export type ConfigurationStudio = { businessProcesses: BusinessProcessDefinition[]; documentRequirementSets: DocumentRequirementSet[]; approvalMatrices: ApprovalMatrix[]; workflowMappings: unknown[] };
+
+export type ApplicationDesigner = { id?: string; code: string; name: string; icon: string; theme: string; description: string; defaultLandingPage: string; navigationRoot: string; modules: string[]; status?: string; version?: number };
