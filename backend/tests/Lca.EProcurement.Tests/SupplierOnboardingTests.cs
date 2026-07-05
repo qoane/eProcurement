@@ -123,3 +123,74 @@ public class AdministrationStudioConfigurationTests
         Assert.True(version.Sections[0].Fields[0].IsRequired);
     }
 }
+
+public class SupplierRegistrationEndToEndConfigurationTests
+{
+    [Fact]
+    public void Supplier_registration_business_process_links_active_configuration_parts()
+    {
+        var workflow = SeedData.SupplierOnboardingWorkflow();
+        var form = new FormDefinition("SUPPLIER-REGISTRATION-FORM", "Supplier Registration Form", nameof(Supplier));
+        var docs = new DocumentRequirementSet("Registration Documents", "Required from configuration", nameof(Supplier));
+        docs.Requirements.Add(new DocumentRequirement(docs.Id, "CompanyRegistration", true, 1, 1, ".pdf", 10_485_760));
+        docs.Requirements.Add(new DocumentRequirement(docs.Id, "TaxClearance", true, 1, 1, ".pdf", 10_485_760));
+        var matrix = new ApprovalMatrix("Supplier Approval", "Configured chain", nameof(Supplier));
+        matrix.Steps.Add(new ApprovalStep(matrix.Id, "ProcurementOfficer", 1));
+        matrix.Steps.Add(new ApprovalStep(matrix.Id, "Approver", 2));
+        var process = new BusinessProcessDefinition("SUPPLIER-REGISTRATION", "Supplier Registration", "Configured onboarding", nameof(Supplier), workflow.Id, form.Id, docs.Id, matrix.Id, BusinessProcessStatus.Published);
+        Assert.Equal(BusinessProcessStatus.Published, process.Status);
+        Assert.Equal(workflow.Id, process.ActiveWorkflowDefinitionId);
+        Assert.Equal(form.Id, process.ActiveFormDefinitionId);
+        Assert.Equal(docs.Id, process.ActiveDocumentRequirementSetId);
+        Assert.Equal(matrix.Id, process.ActiveApprovalMatrixId);
+    }
+
+    [Fact]
+    public void Supplier_form_renders_from_dynamic_form_configuration_without_hardcoded_fields()
+    {
+        var form = new FormDefinition("SUPPLIER-REGISTRATION-FORM", "Supplier Registration Form", nameof(Supplier));
+        var version = new FormVersion(form.Id, 1, WorkflowVersionStatus.Published, DateTimeOffset.UtcNow, "admin");
+        var section = new FormSection(version.Id, "company", "Company", 1);
+        section.Fields.Add(new FormField(section.Id, "legalName", "Legal name", "text", 1, true));
+        section.Fields.Add(new FormField(section.Id, "contactEmail", "Contact email", "email", 2, true));
+        version.Sections.Add(section);
+        form = form with { ActiveVersionId = version.Id };
+        form.Versions.Add(version);
+        var renderedFields = form.Versions.Single(v => v.Id == form.ActiveVersionId).Sections.SelectMany(s => s.Fields).OrderBy(f => f.DisplayOrder).Select(f => f.Code).ToList();
+        Assert.Equal(["legalName", "contactEmail"], renderedFields);
+    }
+
+    [Fact]
+    public void Supplier_submission_starts_workflow_creates_verification_tasks_updates_status_and_audit()
+    {
+        var supplier = SupplierWithConfiguredDocuments();
+        var audit = new InMemoryAuditSink();
+        var rules = new BusinessRulesEngine(SeedData.Rules(), [], audit);
+        var workflow = SeedData.SupplierOnboardingWorkflow();
+        var approved = workflow.Versions[0].Transitions.Single(t => t.ActionCode == "Approve");
+        var effects = new List<WorkflowTransitionEffect> { new(nameof(Supplier), nameof(Supplier.Status), "Approved", approved.Id) };
+        var tasks = new List<WorkflowTask>();
+        var actions = new List<WorkflowAction>();
+        var history = new List<WorkflowHistory>();
+        var engine = new WorkflowEngine([workflow], [], tasks, actions, history, rules, audit);
+        var instance = engine.Start(workflow.Code, supplier, "supplier@demo.co.ls");
+        instance = engine.ExecuteAction(instance, supplier, "Submit", "supplier@demo.co.ls");
+        Assert.Contains(tasks, t => t.NodeCode == "DocumentCheck" && t.Status == WorkflowTaskStatus.Open);
+        instance = engine.ExecuteAction(instance, supplier, "DocumentsAccepted", "procurement@lca.org.ls");
+        instance = engine.ExecuteAction(instance, supplier, "TaxVerified", "procurement@lca.org.ls");
+        instance = engine.ExecuteAction(instance, supplier, "Approve", "approver@lca.org.ls");
+        var approvalEffect = effects.Single(e => e.TriggerTransitionId == approved.Id && e.PropertyName == nameof(Supplier.Status));
+        supplier = supplier with { Status = Enum.Parse<SupplierStatus>(approvalEffect.ValueExpression) };
+        Assert.Equal(WorkflowInstanceStatus.Completed, instance.Status);
+        Assert.Equal(SupplierStatus.Approved, supplier.Status);
+        Assert.NotEmpty(audit.Events);
+    }
+
+    private static Supplier SupplierWithConfiguredDocuments()
+    {
+        var supplier = SeedData.DemoSupplier(SeedData.Categories()[0]) with { Status = SupplierStatus.Draft };
+        supplier.Documents.Add(new SupplierDocument(supplier.Id, "CompanyRegistration", "registration.pdf", "supplier@demo.co.ls", DateTimeOffset.UtcNow));
+        supplier.Documents.Add(new SupplierDocument(supplier.Id, "TaxClearance", "tax.pdf", "supplier@demo.co.ls", DateTimeOffset.UtcNow));
+        return supplier;
+    }
+}

@@ -64,7 +64,7 @@ function route(p: string) {
       />
     );
   else if (p === "/app/tasks") page = <WorkflowTaskInboxPage />;
-  else if (p.startsWith("/app/tasks/")) page = <WorkflowTaskDetailPage />;
+  else if (p.startsWith("/app/tasks/")) page = <WorkflowTaskDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/audit") page = <AuditExplorerPage />;
   else if (p === "/app/workflows") page = <WorkflowListPage />;
   else if (p === "/app/workflows/designer") page = <WorkflowDesignerPage />;

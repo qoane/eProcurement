@@ -46,6 +46,8 @@ export type WorkflowTask = {
   workflowInstanceId?: string;
   createdAt?: string;
   completedAt?: string;
+  nodeCode?: string;
+  assignedRole?: string;
 };
 export type AuditEvent = {
   id?: string;
