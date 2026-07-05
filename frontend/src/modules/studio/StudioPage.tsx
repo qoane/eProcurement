@@ -30,6 +30,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { ApplicationDesignerPage } from "./ApplicationDesignerPage";
 
 type StudioModule = {
   title: string;
@@ -320,6 +321,7 @@ export function StudioModulePage({ slug }: { slug: string }) {
         />
       </>
     );
+  if (slug === "applications") return <ApplicationDesignerPage />;
   const Icon = module.icon;
   return (
     <div className="studio-page">
