@@ -96,3 +96,8 @@ export type ApprovalMatrix = { id?: string; name: string; description: string; e
 export type ConfigurationStudio = { businessProcesses: BusinessProcessDefinition[]; documentRequirementSets: DocumentRequirementSet[]; approvalMatrices: ApprovalMatrix[]; workflowMappings: unknown[] };
 
 export type ApplicationDesigner = { id?: string; code: string; name: string; icon: string; theme: string; description: string; defaultLandingPage: string; navigationRoot: string; modules: string[]; status?: string; version?: number };
+
+export type EntityProperty = { code: string; name: string; dataType: string; required?: boolean; searchable?: boolean; defaultValue?: string };
+export type EntityRelationship = { code: string; name: string; targetEntity: string; cardinality: string; required?: boolean };
+export type EntityValidation = { code: string; name: string; expression: string; message: string };
+export type EntityDesigner = { id?: string; code: string; name: string; description: string; displayName: string; pluralName: string; defaultSearchField: string; properties: EntityProperty[]; relationships: EntityRelationship[]; validations: EntityValidation[]; status?: string; version?: number };
