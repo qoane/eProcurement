@@ -83,3 +83,12 @@ export type FormDefinition = {
   entityType: string;
   versions?: { status?: string; sections?: FormSection[] }[];
 };
+export type BusinessProcessDefinition = {
+  code: string; name: string; description: string; entityType: string; status: string;
+  activeWorkflowDefinitionId?: string; activeFormDefinitionId?: string; activeDocumentRequirementSetId?: string; activeApprovalMatrixId?: string;
+};
+export type DocumentRequirement = { documentType: string; required: boolean; minimumFiles: number; maximumFiles: number; allowedExtensions: string; maximumFileSize: number; ruleCode?: string };
+export type DocumentRequirementSet = { id?: string; name: string; description: string; entityType: string; requirements?: DocumentRequirement[] };
+export type ApprovalStep = { role: string; sequence: number; minimumAmount?: number; maximumAmount?: number; ruleCode?: string };
+export type ApprovalMatrix = { id?: string; name: string; description: string; entityType: string; steps?: ApprovalStep[] };
+export type ConfigurationStudio = { businessProcesses: BusinessProcessDefinition[]; documentRequirementSets: DocumentRequirementSet[]; approvalMatrices: ApprovalMatrix[]; workflowMappings: unknown[] };

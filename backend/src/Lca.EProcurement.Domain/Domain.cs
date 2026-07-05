@@ -7,6 +7,7 @@ public enum WorkflowVersionStatus { Draft, Published, Archived }
 public enum WorkflowNodeKind { Start, Task, Automatic, End }
 public enum WorkflowActionKind { Transition, TaskAssignment, TaskCompletion, Cancellation }
 public enum RuleOutcome { Passed, Failed }
+public enum BusinessProcessStatus { Draft, Published, Archived }
 
 public interface IEntity { Guid Id { get; init; } }
 public abstract record Entity(Guid Id) : IEntity;
@@ -45,6 +46,19 @@ public record BusinessRuleDefinition(string Code, string Name, string AppliesTo,
 public record BusinessRuleExecutionLog(string RuleCode, string EntityType, Guid EntityId, string InputJson, RuleOutcome Outcome, string ResultJson, DateTimeOffset ExecutedAt) : Entity(Guid.NewGuid());
 
 public record AuditEvent(string EventType, string EntityType, Guid EntityId, string EntityReference, string Actor, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
+
+
+public record BusinessProcessDefinition(string Code, string Name, string Description, string EntityType, Guid? ActiveWorkflowDefinitionId = null, Guid? ActiveFormDefinitionId = null, Guid? ActiveDocumentRequirementSetId = null, Guid? ActiveApprovalMatrixId = null, BusinessProcessStatus Status = BusinessProcessStatus.Draft) : Entity(Guid.NewGuid());
+public record DocumentRequirementSet(string Name, string Description, string EntityType) : Entity(Guid.NewGuid())
+{
+    public List<DocumentRequirement> Requirements { get; init; } = [];
+}
+public record DocumentRequirement(Guid DocumentRequirementSetId, string DocumentType, bool Required, int MinimumFiles, int MaximumFiles, string AllowedExtensions, long MaximumFileSize, string? RuleCode = null) : Entity(Guid.NewGuid());
+public record ApprovalMatrix(string Name, string Description, string EntityType) : Entity(Guid.NewGuid())
+{
+    public List<ApprovalStep> Steps { get; init; } = [];
+}
+public record ApprovalStep(Guid ApprovalMatrixId, string Role, int Sequence, decimal? MinimumAmount = null, decimal? MaximumAmount = null, string? RuleCode = null) : Entity(Guid.NewGuid());
 
 public record WorkflowTransitionEffect(string EntityType, string PropertyName, string ValueExpression, Guid TriggerTransitionId) : Entity(Guid.NewGuid());
 public record WorkflowMapping(string EntityType, string ActionCode, string WorkflowCode, bool IsActive = true) : Entity(Guid.NewGuid());

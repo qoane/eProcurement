@@ -54,7 +54,7 @@ const groups = [
       ["Workflow Designer", "/app/workflows/designer", Workflow],
       ["Business Rules", "/app/rules", ShieldCheck],
       ["Dynamic Forms", "/app/forms", FileText],
-      ["Configuration", "/app/configuration", FileCog],
+      ["Administration Studio", "/app/configuration", FileCog],
     ],
   ],
   [

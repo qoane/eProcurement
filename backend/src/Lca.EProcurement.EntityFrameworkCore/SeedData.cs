@@ -63,6 +63,24 @@ public static class SeedData
         await db.SaveChangesAsync(cancellationToken);
         db.ChangeTracker.Clear();
 
+        if (!await db.DocumentRequirementSets.AnyAsync(x => x.Name == "Supplier Documents", cancellationToken))
+        {
+            var set = new DocumentRequirementSet("Supplier Documents", "Configuration-driven document requirements for supplier registration.", nameof(Supplier));
+            set.Requirements.Add(new DocumentRequirement(set.Id, "CompanyRegistration", true, 1, 1, ".pdf,.png,.jpg", 10_485_760, "SUP-HAS-REG"));
+            set.Requirements.Add(new DocumentRequirement(set.Id, "TaxClearance", true, 1, 1, ".pdf,.png,.jpg", 10_485_760, "SUP-HAS-TAX"));
+            db.DocumentRequirementSets.Add(set);
+        }
+        if (!await db.ApprovalMatrices.AnyAsync(x => x.Name == "Standard Supplier Approval", cancellationToken))
+        {
+            var matrix = new ApprovalMatrix("Standard Supplier Approval", "Reusable approval chain for supplier onboarding.", nameof(Supplier));
+            matrix.Steps.Add(new ApprovalStep(matrix.Id, "ProcurementOfficer", 1));
+            matrix.Steps.Add(new ApprovalStep(matrix.Id, "Evaluator", 2));
+            matrix.Steps.Add(new ApprovalStep(matrix.Id, "Approver", 3, RuleCode: "SUP-HAS-CATEGORY"));
+            db.ApprovalMatrices.Add(matrix);
+        }
+        await db.SaveChangesAsync(cancellationToken);
+        db.ChangeTracker.Clear();
+
         var supplierWorkflow = await db.WorkflowDefinitions
             .AsNoTracking()
             .Include(x => x.Versions).ThenInclude(x => x.Nodes)
@@ -98,6 +116,31 @@ public static class SeedData
                 .SetProperty(x => x.Status, WorkflowVersionStatus.Published)
                 .SetProperty(x => x.PublishedAt, publishedAt)
                 .SetProperty(x => x.PublishedBy, publishedBy), cancellationToken);
+        if (!await db.FormDefinitions.AnyAsync(x => x.Code == "SUPPLIER-REGISTRATION-FORM", cancellationToken))
+        {
+            var form = new FormDefinition("SUPPLIER-REGISTRATION-FORM", "Supplier Registration", nameof(Supplier));
+            var version = new FormVersion(form.Id, 1, WorkflowVersionStatus.Published, DateTimeOffset.UtcNow, "system");
+            var profile = new FormSection(version.Id, "profile", "Organisation profile", 1);
+            profile.Fields.Add(new FormField(profile.Id, "legalName", "Legal name", "text", 1, true));
+            profile.Fields.Add(new FormField(profile.Id, "registrationNumber", "Registration number", "text", 2, true));
+            var contact = new FormSection(version.Id, "contact", "Primary contact", 2);
+            contact.Fields.Add(new FormField(contact.Id, "contactEmail", "Contact email", "email", 1, true));
+            contact.Fields.Add(new FormField(contact.Id, "contactPhone", "Contact phone", "text", 2, true));
+            version.Sections.AddRange([profile, contact]);
+            form = form with { ActiveVersionId = version.Id };
+            form.Versions.Add(version);
+            db.FormDefinitions.Add(form);
+            await db.SaveChangesAsync(cancellationToken);
+            db.ChangeTracker.Clear();
+        }
+        var activeWorkflowId = await db.WorkflowDefinitions.Where(x => x.Code == "SUPPLIER-ONBOARDING").Select(x => x.Id).SingleAsync(cancellationToken);
+        var activeFormId = await db.FormDefinitions.Where(x => x.Code == "SUPPLIER-REGISTRATION-FORM").Select(x => x.Id).SingleAsync(cancellationToken);
+        var documentSetId = await db.DocumentRequirementSets.Where(x => x.Name == "Supplier Documents").Select(x => x.Id).SingleAsync(cancellationToken);
+        var approvalMatrixId = await db.ApprovalMatrices.Where(x => x.Name == "Standard Supplier Approval").Select(x => x.Id).SingleAsync(cancellationToken);
+        if (!await db.BusinessProcessDefinitions.AnyAsync(x => x.Code == "SUPPLIER-REGISTRATION", cancellationToken))
+            db.BusinessProcessDefinitions.Add(new BusinessProcessDefinition("SUPPLIER-REGISTRATION", "Supplier Registration", "End-to-end supplier onboarding assembled from workflow, form, document, rule, and approval configuration.", nameof(Supplier), activeWorkflowId, activeFormId, documentSetId, approvalMatrixId, BusinessProcessStatus.Published));
+        await db.SaveChangesAsync(cancellationToken);
+
         var supplierTransitions = await db.WorkflowTransitions.AsNoTracking().Where(x => x.WorkflowVersionId == supplierVersionId).ToListAsync(cancellationToken);
         var configuredEffects = new Dictionary<string, string>
         {
