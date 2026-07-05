@@ -35,7 +35,16 @@ public interface IWorkflowApplicationService
     Task<WorkflowTask?> CompleteTaskAsync(Guid id, string actor, CancellationToken ct = default);
 }
 public interface IBusinessRuleApplicationService { Task<List<BusinessRuleDefinition>> GetRulesAsync(CancellationToken ct = default); Task<BusinessRuleDefinition> CreateRuleAsync(CreateBusinessRuleDto dto, CancellationToken ct = default); Task<RuleResult> EvaluateAsync(string ruleCode, string entityType, Guid entityId, string actor, CancellationToken ct = default); }
-public interface ISupplierApplicationService { Task<List<object>> GetSuppliersAsync(CancellationToken ct = default); Task<WorkflowInstance?> SubmitAsync(string referenceNumber, string actor, CancellationToken ct = default); }
+public interface ISupplierApplicationService
+{
+    Task<List<object>> GetSuppliersAsync(CancellationToken ct = default);
+    Task<SupplierRegistrationConfigurationDto?> GetRegistrationConfigurationAsync(CancellationToken ct = default);
+    Task<SupplierDetailDto?> GetSupplierDetailAsync(string referenceNumber, CancellationToken ct = default);
+    Task<SupplierRegistrationResultDto?> RegisterAsync(RegisterSupplierDto dto, CancellationToken ct = default);
+    Task<WorkflowTaskDetailDto?> GetTaskDetailAsync(Guid taskId, CancellationToken ct = default);
+    Task<WorkflowActionResultDto?> ExecuteTaskActionAsync(Guid taskId, ExecuteWorkflowTaskActionDto dto, CancellationToken ct = default);
+    Task<WorkflowInstance?> SubmitAsync(string referenceNumber, string actor, CancellationToken ct = default);
+}
 public interface IDynamicFormApplicationService { Task<List<FormDefinition>> GetDefinitionsAsync(CancellationToken ct = default); Task<FormDefinition> CreateDefinitionAsync(CreateFormDefinitionDto dto, CancellationToken ct = default); Task<FormSection?> AddSectionAsync(string formCode, FormSectionDto dto, CancellationToken ct = default); Task<FormField?> AddFieldAsync(string formCode, string sectionCode, FormFieldDto dto, CancellationToken ct = default); Task<FormDefinition?> PublishVersionAsync(string code, string actor, CancellationToken ct = default); Task<FormDefinition?> GetActiveByCodeAsync(string code, CancellationToken ct = default); Task<FormSubmission> SubmitAsync(SubmitFormDto dto, CancellationToken ct = default); Task<List<FormSubmission>> GetSubmissionsAsync(string entityType, Guid entityId, CancellationToken ct = default); }
 public interface IAuditApplicationService { Task<List<AuditEvent>> GetEventsAsync(CancellationToken ct = default); }
 public interface IPlatformConfigurationApplicationService
@@ -66,6 +75,16 @@ public sealed record CreateTransitionEffectDto(Guid TriggerTransitionId, string 
 public sealed record DocumentTypeRequirementDto(string EntityType, string DocumentType, string Name, bool IsRequired = true);
 public sealed record LookupValueDto(string LookupType, string Code, string Name, int DisplayOrder = 0, bool IsActive = true);
 public sealed record SupplierCategoryDto(string Name);
+public sealed record SupplierDocumentUploadDto(string DocumentType, string FileName);
+public sealed record RegisterSupplierDto(string ReferenceNumber, string Actor, Dictionary<string, string?> Values, List<SupplierDocumentUploadDto> Documents);
+public sealed record SupplierRegistrationConfigurationDto(BusinessProcessDefinition Process, FormDefinition Form, DocumentRequirementSet DocumentRequirements, ApprovalMatrix? ApprovalMatrix, WorkflowDefinition Workflow);
+public sealed record SupplierRegistrationResultDto(string ReferenceNumber, Guid SupplierId, Guid FormSubmissionId, Guid WorkflowInstanceId, string CurrentNodeCode, string Status);
+public sealed record SupplierDetailDto(Supplier Supplier, WorkflowInstance? WorkflowInstance, string? ActiveWorkflowStage, List<SupplierDocument> Documents, List<FormSubmission> FormSubmissions, List<AuditEvent> AuditTimeline, List<WorkflowTransition> AvailableActions);
+public sealed record WorkflowTaskSummaryDto(Guid Id, Guid WorkflowInstanceId, string NodeCode, string? AssignedRole, string? AssignedTo, string Status, DateTimeOffset CreatedAt, string? EntityType, Guid? EntityId, string? EntityReference, string? EntityName);
+public sealed record WorkflowTaskDetailDto(WorkflowTask Task, SupplierDetailDto? Supplier, List<WorkflowHistory> History, List<WorkflowAction> Actions, List<WorkflowTransition> AvailableActions);
+public sealed record ExecuteWorkflowTaskActionDto(string ActionCode, string Actor);
+public sealed record WorkflowActionResultDto(WorkflowInstance Instance, WorkflowTaskDetailDto? NextTask);
+
 
 public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : IBusinessRuleApplicationService
 {
@@ -140,7 +159,7 @@ public sealed class WorkflowApplicationService(EProcurementDbContext db, IBusine
     }
     public async Task<WorkflowDefinition?> PublishAsync(string code, string actor, CancellationToken ct = default) { var d = await db.WorkflowDefinitions.Include(x => x.Versions).SingleOrDefaultAsync(x => x.Code == code, ct); var v = d?.Versions.OrderByDescending(x => x.VersionNumber).FirstOrDefault(x => x.Status == WorkflowVersionStatus.Draft); if (d is null || v is null) return null; db.Entry(v).CurrentValues[nameof(WorkflowVersion.Status)] = WorkflowVersionStatus.Published; db.Entry(v).CurrentValues[nameof(WorkflowVersion.PublishedAt)] = DateTimeOffset.UtcNow; db.Entry(v).CurrentValues[nameof(WorkflowVersion.PublishedBy)] = actor; db.Entry(d).CurrentValues[nameof(WorkflowDefinition.PublishedVersionId)] = v.Id; await db.SaveChangesAsync(ct); return d; }
     public async Task<WorkflowInstance> StartAsync(string workflowCode, string entityType, Guid entityId, string actor, CancellationToken ct = default) { var d = await Load(workflowCode, ct); var v = Published(d); var start = v.Nodes.Single(n => n.IsStart); var i = new WorkflowInstance(d.Id, v.Id, entityType, entityId, start.Code, StartedAt: DateTimeOffset.UtcNow); db.WorkflowInstances.Add(i); db.WorkflowHistories.Add(new WorkflowHistory(i.Id,"WorkflowStarted",start.Code,actor,workflowCode,DateTimeOffset.UtcNow)); db.AuditEvents.Add(new AuditEvent("Workflow started", entityType, entityId, await Reference(entityType, entityId, ct), actor, workflowCode, DateTimeOffset.UtcNow)); await CreateTask(v, i, actor, ct); await db.SaveChangesAsync(ct); return i; }
-    public async Task<WorkflowInstance?> ExecuteActionAsync(Guid instanceId, string actionCode, string actor, CancellationToken ct = default) { var i = await db.WorkflowInstances.SingleOrDefaultAsync(x => x.Id == instanceId, ct); if (i is null) return null; var v = await db.WorkflowVersions.Include(x => x.Nodes).Include(x => x.Transitions).SingleAsync(x => x.Id == i.WorkflowVersionId, ct); var t = v.Transitions.Single(x => x.FromNodeCode == i.CurrentNodeCode && x.ActionCode == actionCode); if (t.RequiredRuleCode is not null && !(await rules.EvaluateAsync(t.RequiredRuleCode, i.EntityType, i.EntityId, actor, ct)).Passed) throw new InvalidOperationException($"Workflow action '{actionCode}' blocked by rule '{t.RequiredRuleCode}'."); foreach (var task in await db.WorkflowTasks.Where(x => x.WorkflowInstanceId == i.Id && x.NodeCode == i.CurrentNodeCode && (x.Status == WorkflowTaskStatus.Open || x.Status == WorkflowTaskStatus.Assigned)).ToListAsync(ct)) { db.Entry(task).CurrentValues[nameof(WorkflowTask.Status)] = WorkflowTaskStatus.Completed; db.Entry(task).CurrentValues[nameof(WorkflowTask.CompletedAt)] = DateTimeOffset.UtcNow; } var target = v.Nodes.Single(n => n.Code == t.ToNodeCode); db.Entry(i).CurrentValues[nameof(WorkflowInstance.CurrentNodeCode)] = target.Code; db.Entry(i).CurrentValues[nameof(WorkflowInstance.Status)] = target.IsTerminal ? WorkflowInstanceStatus.Completed : WorkflowInstanceStatus.Running; db.WorkflowActions.Add(new WorkflowAction(i.Id, actionCode, t.ActionName, WorkflowActionKind.Transition, t.FromNodeCode, t.ToNodeCode, actor, DateTimeOffset.UtcNow)); await ApplyEffects(t.Id, i.EntityType, i.EntityId, ct); db.AuditEvents.Add(new AuditEvent("Workflow action executed", i.EntityType, i.EntityId, await Reference(i.EntityType, i.EntityId, ct), actor, $"{t.FromNodeCode} -> {t.ToNodeCode}", DateTimeOffset.UtcNow)); await CreateTask(v, i with { CurrentNodeCode = target.Code }, actor, ct); await db.SaveChangesAsync(ct); return i with { CurrentNodeCode = target.Code, Status = target.IsTerminal ? WorkflowInstanceStatus.Completed : WorkflowInstanceStatus.Running }; }
+    public async Task<WorkflowInstance?> ExecuteActionAsync(Guid instanceId, string actionCode, string actor, CancellationToken ct = default) { var i = await db.WorkflowInstances.SingleOrDefaultAsync(x => x.Id == instanceId, ct); if (i is null) return null; var v = await db.WorkflowVersions.Include(x => x.Nodes).Include(x => x.Transitions).SingleAsync(x => x.Id == i.WorkflowVersionId, ct); var t = v.Transitions.Single(x => x.FromNodeCode == i.CurrentNodeCode && x.ActionCode == actionCode); if (t.RequiredRuleCode is not null && !(await rules.EvaluateAsync(t.RequiredRuleCode, i.EntityType, i.EntityId, actor, ct)).Passed) throw new InvalidOperationException($"Workflow action '{actionCode}' blocked by rule '{t.RequiredRuleCode}'."); foreach (var task in await db.WorkflowTasks.Where(x => x.WorkflowInstanceId == i.Id && x.NodeCode == i.CurrentNodeCode && (x.Status == WorkflowTaskStatus.Open || x.Status == WorkflowTaskStatus.Assigned)).ToListAsync(ct)) { db.Entry(task).CurrentValues[nameof(WorkflowTask.Status)] = WorkflowTaskStatus.Completed; db.Entry(task).CurrentValues[nameof(WorkflowTask.CompletedAt)] = DateTimeOffset.UtcNow; } var target = v.Nodes.Single(n => n.Code == t.ToNodeCode); db.Entry(i).CurrentValues[nameof(WorkflowInstance.CurrentNodeCode)] = target.Code; db.Entry(i).CurrentValues[nameof(WorkflowInstance.Status)] = target.IsTerminal ? WorkflowInstanceStatus.Completed : WorkflowInstanceStatus.Running; db.WorkflowActions.Add(new WorkflowAction(i.Id, actionCode, t.ActionName, WorkflowActionKind.Transition, t.FromNodeCode, t.ToNodeCode, actor, DateTimeOffset.UtcNow)); db.WorkflowHistories.Add(new WorkflowHistory(i.Id, "WorkflowActionExecuted", t.ToNodeCode, actor, t.ActionName, DateTimeOffset.UtcNow)); await ApplyEffects(t.Id, i.EntityType, i.EntityId, ct); db.AuditEvents.Add(new AuditEvent("Workflow action executed", i.EntityType, i.EntityId, await Reference(i.EntityType, i.EntityId, ct), actor, $"{t.FromNodeCode} -> {t.ToNodeCode}", DateTimeOffset.UtcNow)); await CreateTask(v, i with { CurrentNodeCode = target.Code }, actor, ct); await db.SaveChangesAsync(ct); return i with { CurrentNodeCode = target.Code, Status = target.IsTerminal ? WorkflowInstanceStatus.Completed : WorkflowInstanceStatus.Running }; }
     public Task<List<WorkflowTask>> GetTasksAsync(CancellationToken ct = default) => db.WorkflowTasks.AsNoTracking().OrderBy(x => x.CreatedAt).ToListAsync(ct);
     public async Task<WorkflowTask?> AssignTaskAsync(Guid id, string assignedTo, string actor, CancellationToken ct = default) { var t = await db.WorkflowTasks.SingleOrDefaultAsync(x => x.Id == id, ct); if (t is null) return null; db.Entry(t).CurrentValues[nameof(WorkflowTask.AssignedTo)] = assignedTo; db.Entry(t).CurrentValues[nameof(WorkflowTask.Status)] = WorkflowTaskStatus.Assigned; await db.SaveChangesAsync(ct); return t with { AssignedTo = assignedTo, Status = WorkflowTaskStatus.Assigned }; }
     public async Task<WorkflowTask?> CompleteTaskAsync(Guid id, string actor, CancellationToken ct = default) { var t = await db.WorkflowTasks.SingleOrDefaultAsync(x => x.Id == id, ct); if (t is null) return null; db.Entry(t).CurrentValues[nameof(WorkflowTask.Status)] = WorkflowTaskStatus.Completed; await db.SaveChangesAsync(ct); return t with { Status = WorkflowTaskStatus.Completed }; }
@@ -152,22 +171,74 @@ public sealed class WorkflowApplicationService(EProcurementDbContext db, IBusine
     async Task<string> Reference(string entityType, Guid entityId, CancellationToken ct) => entityType == nameof(Supplier) ? (await db.Suppliers.SingleAsync(s => s.Id == entityId, ct)).ReferenceNumber : entityId.ToString();
 }
 
-public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkflowApplicationService workflows) : ISupplierApplicationService
+public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkflowApplicationService workflows, IDynamicFormApplicationService forms) : ISupplierApplicationService
 {
-    public async Task<List<object>> GetSuppliersAsync(CancellationToken ct = default) => await db.Suppliers.AsNoTracking().Include(s => s.Categories).OrderBy(s => s.ReferenceNumber).Select(s => new { s.ReferenceNumber, s.LegalName, Status = s.Status.ToString(), Categories = s.Categories.Select(c => c.Name) }).Cast<object>().ToListAsync(ct);
+    public async Task<List<object>> GetSuppliersAsync(CancellationToken ct = default) => await db.Suppliers.AsNoTracking().Include(s => s.Documents).Include(s => s.Categories).OrderBy(s => s.ReferenceNumber).Select(s => new { s.Id, s.ReferenceNumber, s.LegalName, Status = s.Status.ToString(), Documents = s.Documents, Categories = s.Categories.Select(c => c.Name) }).Cast<object>().ToListAsync(ct);
+
+    public async Task<SupplierRegistrationConfigurationDto?> GetRegistrationConfigurationAsync(CancellationToken ct = default)
+    {
+        var process = await ActiveSupplierProcess(ct);
+        if (process?.ActiveFormDefinitionId is null || process.ActiveWorkflowDefinitionId is null || process.ActiveDocumentRequirementSetId is null) return null;
+        var form = await db.FormDefinitions.AsNoTracking().Include(x => x.Versions.Where(v => v.Id == x.ActiveVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).SingleAsync(x => x.Id == process.ActiveFormDefinitionId, ct);
+        var docs = await db.DocumentRequirementSets.AsNoTracking().Include(x => x.Requirements).SingleAsync(x => x.Id == process.ActiveDocumentRequirementSetId, ct);
+        var matrix = process.ActiveApprovalMatrixId is null ? null : await db.ApprovalMatrices.AsNoTracking().Include(x => x.Steps).SingleAsync(x => x.Id == process.ActiveApprovalMatrixId, ct);
+        var workflow = await db.WorkflowDefinitions.AsNoTracking().Include(x => x.Versions.Where(v => v.Id == x.PublishedVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Nodes).Include(x => x.Versions.Where(v => v.Id == x.PublishedVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Transitions).SingleAsync(x => x.Id == process.ActiveWorkflowDefinitionId, ct);
+        return new(process, form, docs, matrix, workflow);
+    }
+
+    public async Task<SupplierRegistrationResultDto?> RegisterAsync(RegisterSupplierDto dto, CancellationToken ct = default)
+    {
+        var config = await GetRegistrationConfigurationAsync(ct); if (config is null) return null;
+        var legalName = dto.Values.TryGetValue("legalName", out var name) && !string.IsNullOrWhiteSpace(name) ? name! : dto.ReferenceNumber;
+        var supplier = await db.Suppliers.Include(x => x.Documents).SingleOrDefaultAsync(x => x.ReferenceNumber == dto.ReferenceNumber, ct);
+        if (supplier is null) { supplier = new Supplier(dto.ReferenceNumber, legalName, SupplierStatus.Draft); db.Suppliers.Add(supplier); await db.SaveChangesAsync(ct); }
+        else db.Entry(supplier).CurrentValues[nameof(Supplier.LegalName)] = legalName;
+        foreach (var doc in dto.Documents) if (!supplier.Documents.Any(x => x.DocumentType == doc.DocumentType && x.FileName == doc.FileName)) db.SupplierDocuments.Add(new SupplierDocument(supplier.Id, doc.DocumentType, doc.FileName, dto.Actor, DateTimeOffset.UtcNow));
+        db.AuditEvents.Add(new AuditEvent("Supplier registration submitted", nameof(Supplier), supplier.Id, supplier.ReferenceNumber, dto.Actor, config.Process.Code, DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync(ct);
+        var submission = await forms.SubmitAsync(new SubmitFormDto(config.Form.Code, nameof(Supplier), supplier.Id, dto.Actor, dto.Values), ct);
+        var instance = await workflows.StartAsync(config.Workflow.Code, nameof(Supplier), supplier.Id, dto.Actor, ct);
+        var version = config.Workflow.Versions.Single(v => v.Id == config.Workflow.PublishedVersionId || v.Status == WorkflowVersionStatus.Published);
+        var transition = version.Transitions.FirstOrDefault(t => t.FromNodeCode == instance.CurrentNodeCode);
+        if (transition is not null) instance = await workflows.ExecuteActionAsync(instance.Id, transition.ActionCode, dto.Actor, ct) ?? instance;
+        return new SupplierRegistrationResultDto(supplier.ReferenceNumber, supplier.Id, submission.Id, instance.Id, instance.CurrentNodeCode, instance.Status.ToString());
+    }
+
+    public async Task<SupplierDetailDto?> GetSupplierDetailAsync(string referenceNumber, CancellationToken ct = default)
+    {
+        var supplier = await db.Suppliers.AsNoTracking().Include(x => x.Documents).Include(x => x.Categories).SingleOrDefaultAsync(x => x.ReferenceNumber == referenceNumber, ct); if (supplier is null) return null;
+        return await BuildSupplierDetail(supplier, ct);
+    }
+
+    public async Task<WorkflowTaskDetailDto?> GetTaskDetailAsync(Guid taskId, CancellationToken ct = default)
+    {
+        var task = await db.WorkflowTasks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == taskId, ct); if (task is null) return null;
+        var instance = await db.WorkflowInstances.AsNoTracking().SingleAsync(x => x.Id == task.WorkflowInstanceId, ct);
+        SupplierDetailDto? supplier = null;
+        if (instance.EntityType == nameof(Supplier)) { var s = await db.Suppliers.AsNoTracking().Include(x => x.Documents).Include(x => x.Categories).SingleAsync(x => x.Id == instance.EntityId, ct); supplier = await BuildSupplierDetail(s, ct); }
+        return new(task, supplier, await db.WorkflowHistories.AsNoTracking().Where(x => x.WorkflowInstanceId == task.WorkflowInstanceId).OrderBy(x => x.OccurredAt).ToListAsync(ct), await db.WorkflowActions.AsNoTracking().Where(x => x.WorkflowInstanceId == task.WorkflowInstanceId).OrderBy(x => x.ActionedAt).ToListAsync(ct), await AvailableActions(instance, ct));
+    }
+
+    public async Task<WorkflowActionResultDto?> ExecuteTaskActionAsync(Guid taskId, ExecuteWorkflowTaskActionDto dto, CancellationToken ct = default)
+    {
+        var task = await db.WorkflowTasks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == taskId, ct); if (task is null) return null;
+        var instance = await workflows.ExecuteActionAsync(task.WorkflowInstanceId, dto.ActionCode, dto.Actor, ct); if (instance is null) return null;
+        var nextTask = await db.WorkflowTasks.AsNoTracking().Where(x => x.WorkflowInstanceId == instance.Id && (x.Status == WorkflowTaskStatus.Open || x.Status == WorkflowTaskStatus.Assigned)).OrderByDescending(x => x.CreatedAt).FirstOrDefaultAsync(ct);
+        return new(instance, nextTask is null ? null : await GetTaskDetailAsync(nextTask.Id, ct));
+    }
+
     public async Task<WorkflowInstance?> SubmitAsync(string referenceNumber, string actor, CancellationToken ct = default)
     {
         var supplier = await db.Suppliers.SingleOrDefaultAsync(s => s.ReferenceNumber == referenceNumber, ct); if (supplier is null) return null;
-        var process = await db.BusinessProcessDefinitions.SingleAsync(p => p.EntityType == nameof(Supplier) && p.Status == BusinessProcessStatus.Published, ct);
-        var workflow = await db.WorkflowDefinitions.SingleAsync(w => w.Id == process.ActiveWorkflowDefinitionId, ct);
-        var running = await db.WorkflowInstances.OrderByDescending(i => i.StartedAt).FirstOrDefaultAsync(i => i.EntityType == nameof(Supplier) && i.EntityId == supplier.Id && i.Status == WorkflowInstanceStatus.Running, ct);
-        var instance = running ?? await workflows.StartAsync(workflow.Code, nameof(Supplier), supplier.Id, actor, ct);
-        var version = await db.WorkflowVersions.Include(v => v.Transitions).SingleAsync(v => v.Id == instance.WorkflowVersionId, ct);
-        var submit = version.Transitions.FirstOrDefault(t => t.FromNodeCode == instance.CurrentNodeCode && t.ActionCode == "Submit");
-        if (submit is null) return instance;
-        return await workflows.ExecuteActionAsync(instance.Id, "Submit", actor, ct);
+        var config = await GetRegistrationConfigurationAsync(ct); if (config is null) return null;
+        return await workflows.StartAsync(config.Workflow.Code, nameof(Supplier), supplier.Id, actor, ct);
     }
+
+    async Task<BusinessProcessDefinition?> ActiveSupplierProcess(CancellationToken ct) => await db.BusinessProcessDefinitions.AsNoTracking().OrderBy(x => x.Code).FirstOrDefaultAsync(p => p.EntityType == nameof(Supplier) && p.Status == BusinessProcessStatus.Published, ct);
+    async Task<SupplierDetailDto> BuildSupplierDetail(Supplier supplier, CancellationToken ct) { var instance = await db.WorkflowInstances.AsNoTracking().Where(x => x.EntityType == nameof(Supplier) && x.EntityId == supplier.Id).OrderByDescending(x => x.StartedAt).FirstOrDefaultAsync(ct); return new(supplier, instance, instance?.CurrentNodeCode, supplier.Documents, await db.FormSubmissions.AsNoTracking().Include(x => x.Values).Where(x => x.EntityType == nameof(Supplier) && x.EntityId == supplier.Id).OrderByDescending(x => x.SubmittedAt).ToListAsync(ct), await db.AuditEvents.AsNoTracking().Where(x => x.EntityType == nameof(Supplier) && x.EntityId == supplier.Id).OrderBy(x => x.OccurredAt).ToListAsync(ct), instance is null ? [] : await AvailableActions(instance, ct)); }
+    async Task<List<WorkflowTransition>> AvailableActions(WorkflowInstance instance, CancellationToken ct) => instance.Status == WorkflowInstanceStatus.Running ? await db.WorkflowTransitions.AsNoTracking().Where(x => x.WorkflowVersionId == instance.WorkflowVersionId && x.FromNodeCode == instance.CurrentNodeCode).OrderBy(x => x.ActionName).ToListAsync(ct) : [];
 }
+
 
 public sealed class DynamicFormApplicationService(EProcurementDbContext db) : IDynamicFormApplicationService
 {
