@@ -300,3 +300,91 @@ public sealed class PlatformConfigurationApplicationService(EProcurementDbContex
     public async Task<LookupValue> CreateLookupValueAsync(LookupValueDto dto, CancellationToken ct = default) { var item = new LookupValue(dto.LookupType, dto.Code, dto.Name, dto.DisplayOrder, dto.IsActive); db.LookupValues.Add(item); await db.SaveChangesAsync(ct); return item; }
     public async Task<SupplierCategory> CreateSupplierCategoryAsync(SupplierCategoryDto dto, CancellationToken ct = default) { var item = new SupplierCategory(dto.Name); db.SupplierCategories.Add(item); await db.SaveChangesAsync(ct); return item; }
 }
+
+
+public sealed record MetadataDefinitionDto(string Code, string Name, string Description, int Version = 1, MetadataStatus Status = MetadataStatus.Draft, string CreatedBy = "system", string? ModifiedBy = null);
+public sealed record MetadataDefinitionUpdateDto(string Code, string Name, string Description, int Version, MetadataStatus Status, string? ModifiedBy = null);
+
+public interface IMetadataRepository<TEntity> where TEntity : MetadataEntity
+{
+    Task<List<TEntity>> ListAsync(CancellationToken ct = default);
+    Task<TEntity?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<TEntity> AddAsync(TEntity entity, CancellationToken ct = default);
+    Task<TEntity?> UpdateAsync(Guid id, MetadataDefinitionUpdateDto dto, CancellationToken ct = default);
+    Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
+}
+
+public sealed class MetadataRepository<TEntity>(EProcurementDbContext db) : IMetadataRepository<TEntity> where TEntity : MetadataEntity
+{
+    public Task<List<TEntity>> ListAsync(CancellationToken ct = default) => db.Set<TEntity>().AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
+    public Task<TEntity?> GetAsync(Guid id, CancellationToken ct = default) => db.Set<TEntity>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+    public async Task<TEntity> AddAsync(TEntity entity, CancellationToken ct = default) { db.Set<TEntity>().Add(entity); await db.SaveChangesAsync(ct); return entity; }
+    public async Task<TEntity?> UpdateAsync(Guid id, MetadataDefinitionUpdateDto dto, CancellationToken ct = default)
+    {
+        var entity = await db.Set<TEntity>().SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null) return null;
+        db.Entry(entity).CurrentValues[nameof(MetadataEntity.Code)] = dto.Code;
+        db.Entry(entity).CurrentValues[nameof(MetadataEntity.Name)] = dto.Name;
+        db.Entry(entity).CurrentValues[nameof(MetadataEntity.Description)] = dto.Description;
+        db.Entry(entity).CurrentValues[nameof(MetadataEntity.Version)] = dto.Version;
+        db.Entry(entity).CurrentValues[nameof(MetadataEntity.Status)] = dto.Status;
+        db.Entry(entity).CurrentValues[nameof(MetadataEntity.Modified)] = DateTimeOffset.UtcNow;
+        db.Entry(entity).CurrentValues[nameof(MetadataEntity.ModifiedBy)] = dto.ModifiedBy;
+        await db.SaveChangesAsync(ct);
+        return await GetAsync(id, ct);
+    }
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default) { var entity = await db.Set<TEntity>().SingleOrDefaultAsync(x => x.Id == id, ct); if (entity is null) return false; db.Remove(entity); await db.SaveChangesAsync(ct); return true; }
+}
+
+public interface IMetadataApplicationService
+{
+    Task<List<MetadataEntity>> ListAsync(string type, CancellationToken ct = default);
+    Task<MetadataEntity?> GetAsync(string type, Guid id, CancellationToken ct = default);
+    Task<MetadataEntity> CreateAsync(string type, MetadataDefinitionDto dto, CancellationToken ct = default);
+    Task<MetadataEntity?> UpdateAsync(string type, Guid id, MetadataDefinitionUpdateDto dto, CancellationToken ct = default);
+    Task<bool> DeleteAsync(string type, Guid id, CancellationToken ct = default);
+}
+
+public sealed class MetadataApplicationService(EProcurementDbContext db) : IMetadataApplicationService
+{
+    public async Task<List<MetadataEntity>> ListAsync(string type, CancellationToken ct = default) => Canonical(type) switch
+    {
+        "applications" => (await Repo<Lca.EProcurement.Domain.Application>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "business-processes" => (await Repo<BusinessProcess>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "entity-definitions" => (await Repo<EntityDefinition>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "page-definitions" => (await Repo<PageDefinition>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "layout-definitions" => (await Repo<LayoutDefinition>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "component-definitions" => (await Repo<ComponentDefinition>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "navigation-definitions" => (await Repo<NavigationDefinition>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "menu-definitions" => (await Repo<MenuDefinition>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "dashboard-definitions" => (await Repo<DashboardDefinition>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "report-definitions" => (await Repo<ReportDefinition>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "theme-definitions" => (await Repo<ThemeDefinition>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "lookup-definitions" => (await Repo<LookupDefinition>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "document-type-definitions" => (await Repo<DocumentTypeDefinition>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        "system-settings" => (await Repo<SystemSetting>().ListAsync(ct)).Cast<MetadataEntity>().ToList(),
+        _ => throw Unsupported(type)
+    };
+    public Task<MetadataEntity?> GetAsync(string type, Guid id, CancellationToken ct = default) => Canonical(type) switch
+    {
+        "applications" => Get<Lca.EProcurement.Domain.Application>(id, ct), "business-processes" => Get<BusinessProcess>(id, ct), "entity-definitions" => Get<EntityDefinition>(id, ct), "page-definitions" => Get<PageDefinition>(id, ct), "layout-definitions" => Get<LayoutDefinition>(id, ct), "component-definitions" => Get<ComponentDefinition>(id, ct), "navigation-definitions" => Get<NavigationDefinition>(id, ct), "menu-definitions" => Get<MenuDefinition>(id, ct), "dashboard-definitions" => Get<DashboardDefinition>(id, ct), "report-definitions" => Get<ReportDefinition>(id, ct), "theme-definitions" => Get<ThemeDefinition>(id, ct), "lookup-definitions" => Get<LookupDefinition>(id, ct), "document-type-definitions" => Get<DocumentTypeDefinition>(id, ct), "system-settings" => Get<SystemSetting>(id, ct), _ => throw Unsupported(type)
+    };
+    public async Task<MetadataEntity> CreateAsync(string type, MetadataDefinitionDto dto, CancellationToken ct = default) { var entity = Create(type, dto); db.Add(entity); await db.SaveChangesAsync(ct); return entity; }
+    public Task<MetadataEntity?> UpdateAsync(string type, Guid id, MetadataDefinitionUpdateDto dto, CancellationToken ct = default) => Canonical(type) switch
+    {
+        "applications" => Update<Lca.EProcurement.Domain.Application>(id, dto, ct), "business-processes" => Update<BusinessProcess>(id, dto, ct), "entity-definitions" => Update<EntityDefinition>(id, dto, ct), "page-definitions" => Update<PageDefinition>(id, dto, ct), "layout-definitions" => Update<LayoutDefinition>(id, dto, ct), "component-definitions" => Update<ComponentDefinition>(id, dto, ct), "navigation-definitions" => Update<NavigationDefinition>(id, dto, ct), "menu-definitions" => Update<MenuDefinition>(id, dto, ct), "dashboard-definitions" => Update<DashboardDefinition>(id, dto, ct), "report-definitions" => Update<ReportDefinition>(id, dto, ct), "theme-definitions" => Update<ThemeDefinition>(id, dto, ct), "lookup-definitions" => Update<LookupDefinition>(id, dto, ct), "document-type-definitions" => Update<DocumentTypeDefinition>(id, dto, ct), "system-settings" => Update<SystemSetting>(id, dto, ct), _ => throw Unsupported(type)
+    };
+    public Task<bool> DeleteAsync(string type, Guid id, CancellationToken ct = default) => Canonical(type) switch
+    {
+        "applications" => Repo<Lca.EProcurement.Domain.Application>().DeleteAsync(id, ct), "business-processes" => Repo<BusinessProcess>().DeleteAsync(id, ct), "entity-definitions" => Repo<EntityDefinition>().DeleteAsync(id, ct), "page-definitions" => Repo<PageDefinition>().DeleteAsync(id, ct), "layout-definitions" => Repo<LayoutDefinition>().DeleteAsync(id, ct), "component-definitions" => Repo<ComponentDefinition>().DeleteAsync(id, ct), "navigation-definitions" => Repo<NavigationDefinition>().DeleteAsync(id, ct), "menu-definitions" => Repo<MenuDefinition>().DeleteAsync(id, ct), "dashboard-definitions" => Repo<DashboardDefinition>().DeleteAsync(id, ct), "report-definitions" => Repo<ReportDefinition>().DeleteAsync(id, ct), "theme-definitions" => Repo<ThemeDefinition>().DeleteAsync(id, ct), "lookup-definitions" => Repo<LookupDefinition>().DeleteAsync(id, ct), "document-type-definitions" => Repo<DocumentTypeDefinition>().DeleteAsync(id, ct), "system-settings" => Repo<SystemSetting>().DeleteAsync(id, ct), _ => throw Unsupported(type)
+    };
+    MetadataRepository<TEntity> Repo<TEntity>() where TEntity : MetadataEntity => new(db);
+    async Task<MetadataEntity?> Get<TEntity>(Guid id, CancellationToken ct) where TEntity : MetadataEntity => await Repo<TEntity>().GetAsync(id, ct);
+    async Task<MetadataEntity?> Update<TEntity>(Guid id, MetadataDefinitionUpdateDto dto, CancellationToken ct) where TEntity : MetadataEntity => await Repo<TEntity>().UpdateAsync(id, dto, ct);
+    static string Canonical(string type) => type.Trim().ToLowerInvariant();
+    static NotSupportedException Unsupported(string type) => new($"Metadata type '{type}' is not supported.");
+    static MetadataEntity Create(string type, MetadataDefinitionDto d) => Canonical(type) switch
+    {
+        "applications" => new Lca.EProcurement.Domain.Application(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "business-processes" => new BusinessProcess(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "entity-definitions" => new EntityDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "page-definitions" => new PageDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "layout-definitions" => new LayoutDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "component-definitions" => new ComponentDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "navigation-definitions" => new NavigationDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "menu-definitions" => new MenuDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "dashboard-definitions" => new DashboardDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "report-definitions" => new ReportDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "theme-definitions" => new ThemeDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "lookup-definitions" => new LookupDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "document-type-definitions" => new DocumentTypeDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "system-settings" => new SystemSetting(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), _ => throw Unsupported(type)
+    };
+}

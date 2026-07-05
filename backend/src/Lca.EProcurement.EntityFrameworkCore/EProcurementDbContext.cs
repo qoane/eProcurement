@@ -40,6 +40,20 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
     public DbSet<FormFieldVisibilityRule> FormFieldVisibilityRules => Set<FormFieldVisibilityRule>();
     public DbSet<FormSubmission> FormSubmissions => Set<FormSubmission>();
     public DbSet<FormSubmissionValue> FormSubmissionValues => Set<FormSubmissionValue>();
+    public DbSet<Application> Applications => Set<Application>();
+    public DbSet<BusinessProcess> BusinessProcesses => Set<BusinessProcess>();
+    public DbSet<EntityDefinition> EntityDefinitions => Set<EntityDefinition>();
+    public DbSet<PageDefinition> PageDefinitions => Set<PageDefinition>();
+    public DbSet<LayoutDefinition> LayoutDefinitions => Set<LayoutDefinition>();
+    public DbSet<ComponentDefinition> ComponentDefinitions => Set<ComponentDefinition>();
+    public DbSet<NavigationDefinition> NavigationDefinitions => Set<NavigationDefinition>();
+    public DbSet<MenuDefinition> MenuDefinitions => Set<MenuDefinition>();
+    public DbSet<DashboardDefinition> DashboardDefinitions => Set<DashboardDefinition>();
+    public DbSet<ReportDefinition> ReportDefinitions => Set<ReportDefinition>();
+    public DbSet<ThemeDefinition> ThemeDefinitions => Set<ThemeDefinition>();
+    public DbSet<LookupDefinition> LookupDefinitions => Set<LookupDefinition>();
+    public DbSet<DocumentTypeDefinition> DocumentTypeDefinitions => Set<DocumentTypeDefinition>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -77,6 +91,32 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
         modelBuilder.Entity<FormFieldVisibilityRule>(b => { b.HasKey(x => x.Id); b.Property(x => x.Expression).HasMaxLength(512); });
         modelBuilder.Entity<FormSubmission>(b => { b.HasKey(x => x.Id); b.Property(x => x.EntityType).HasMaxLength(128); b.Property(x => x.SubmittedBy).HasMaxLength(256); b.HasMany(x => x.Values).WithOne().HasForeignKey(x => x.FormSubmissionId); });
         modelBuilder.Entity<FormSubmissionValue>(b => { b.HasKey(x => x.Id); b.Property(x => x.FieldCode).HasMaxLength(128); });
+
+        static void ConfigureMetadata<TEntity>(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<TEntity> b) where TEntity : MetadataEntity
+        {
+            b.HasKey(x => x.Id);
+            b.HasIndex(x => x.Code).IsUnique();
+            b.Property(x => x.Code).HasMaxLength(128);
+            b.Property(x => x.Name).HasMaxLength(256);
+            b.Property(x => x.Description).HasMaxLength(1000);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(64);
+            b.Property(x => x.CreatedBy).HasMaxLength(256);
+            b.Property(x => x.ModifiedBy).HasMaxLength(256);
+        }
+        modelBuilder.Entity<Application>(ConfigureMetadata);
+        modelBuilder.Entity<BusinessProcess>(ConfigureMetadata);
+        modelBuilder.Entity<EntityDefinition>(ConfigureMetadata);
+        modelBuilder.Entity<PageDefinition>(ConfigureMetadata);
+        modelBuilder.Entity<LayoutDefinition>(ConfigureMetadata);
+        modelBuilder.Entity<ComponentDefinition>(ConfigureMetadata);
+        modelBuilder.Entity<NavigationDefinition>(ConfigureMetadata);
+        modelBuilder.Entity<MenuDefinition>(ConfigureMetadata);
+        modelBuilder.Entity<DashboardDefinition>(ConfigureMetadata);
+        modelBuilder.Entity<ReportDefinition>(ConfigureMetadata);
+        modelBuilder.Entity<ThemeDefinition>(ConfigureMetadata);
+        modelBuilder.Entity<LookupDefinition>(ConfigureMetadata);
+        modelBuilder.Entity<DocumentTypeDefinition>(ConfigureMetadata);
+        modelBuilder.Entity<SystemSetting>(ConfigureMetadata);
     }
 }
 
@@ -143,6 +183,21 @@ IF OBJECT_ID(N'[dbo].[FormFields]', N'U') IS NULL CREATE TABLE [dbo].[FormFields
 IF OBJECT_ID(N'[dbo].[FormFieldValidations]', N'U') IS NULL CREATE TABLE [dbo].[FormFieldValidations]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_FormFieldValidations] PRIMARY KEY,[FormFieldId] uniqueidentifier NOT NULL,[ValidationType] nvarchar(128) NOT NULL,[ConfigurationJson] nvarchar(max) NULL,[Message] nvarchar(512) NOT NULL,CONSTRAINT [FK_FormFieldValidations_FormFields] FOREIGN KEY([FormFieldId]) REFERENCES [dbo].[FormFields]([Id]) ON DELETE CASCADE);
 IF OBJECT_ID(N'[dbo].[FormFieldVisibilityRules]', N'U') IS NULL CREATE TABLE [dbo].[FormFieldVisibilityRules]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_FormFieldVisibilityRules] PRIMARY KEY,[FormFieldId] uniqueidentifier NOT NULL,[Expression] nvarchar(512) NOT NULL,CONSTRAINT [FK_FormFieldVisibilityRules_FormFields] FOREIGN KEY([FormFieldId]) REFERENCES [dbo].[FormFields]([Id]) ON DELETE CASCADE);
 IF OBJECT_ID(N'[dbo].[FormSubmissions]', N'U') IS NULL CREATE TABLE [dbo].[FormSubmissions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_FormSubmissions] PRIMARY KEY,[FormDefinitionId] uniqueidentifier NOT NULL,[FormVersionId] uniqueidentifier NOT NULL,[EntityType] nvarchar(128) NOT NULL,[EntityId] uniqueidentifier NOT NULL,[SubmittedBy] nvarchar(256) NOT NULL,[SubmittedAt] datetimeoffset NOT NULL);
+
+IF OBJECT_ID(N'[dbo].[Applications]', N'U') IS NULL CREATE TABLE [dbo].[Applications]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_Applications] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_Applications_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[BusinessProcesses]', N'U') IS NULL CREATE TABLE [dbo].[BusinessProcesses]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_BusinessProcesses] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_BusinessProcesses_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[EntityDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[EntityDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_EntityDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_EntityDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[PageDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[PageDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_PageDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_PageDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[LayoutDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[LayoutDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_LayoutDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_LayoutDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[ComponentDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[ComponentDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ComponentDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_ComponentDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[NavigationDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[NavigationDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_NavigationDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_NavigationDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[MenuDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[MenuDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_MenuDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_MenuDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[DashboardDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[DashboardDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_DashboardDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_DashboardDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[ReportDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[ReportDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ReportDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_ReportDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[ThemeDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[ThemeDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ThemeDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_ThemeDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[LookupDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[LookupDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_LookupDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_LookupDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[DocumentTypeDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[DocumentTypeDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_DocumentTypeDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_DocumentTypeDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
+IF OBJECT_ID(N'[dbo].[SystemSettings]', N'U') IS NULL CREATE TABLE [dbo].[SystemSettings]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_SystemSettings] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_SystemSettings_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
 IF OBJECT_ID(N'[dbo].[FormSubmissionValues]', N'U') IS NULL CREATE TABLE [dbo].[FormSubmissionValues]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_FormSubmissionValues] PRIMARY KEY,[FormSubmissionId] uniqueidentifier NOT NULL,[FieldCode] nvarchar(128) NOT NULL,[Value] nvarchar(max) NULL,CONSTRAINT [FK_FormSubmissionValues_FormSubmissions] FOREIGN KEY([FormSubmissionId]) REFERENCES [dbo].[FormSubmissions]([Id]) ON DELETE CASCADE);
 ", cancellationToken);
 
