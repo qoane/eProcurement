@@ -40,6 +40,54 @@ public static class SeedData
         return version;
     }
 
+
+    public static List<ComponentDefinition> ComponentLibrary()
+    {
+        static ComponentDefinition Component(string code, string name, string category, string renderer, string properties, string icon, string tags) => new(
+            code,
+            name,
+            $"Reusable {name.ToLowerInvariant()} component with governed configuration metadata.",
+            category,
+            renderer,
+            properties,
+            @"[{""code"":""change"",""name"":""Value changed"",""description"":""Raised when the component value or state changes.""}]",
+            @"[{""code"":""required"",""name"":""Required"",""expression"":""value != null && value != ''"",""message"":""A value is required.""}]",
+            $@"{{""icon"":""{icon}"",""supportsBinding"":true,""supportsResponsiveLayout"":true,""allowedRegions"":[""main"",""sidebar"",""modal""],""tags"":{tags}}}",
+            Status: MetadataStatus.Active,
+            CreatedBy: "system");
+        const string textProps = @"[{""code"":""label"",""name"":""Label"",""dataType"":""string"",""required"":true},{""code"":""placeholder"",""name"":""Placeholder"",""dataType"":""string""},{""code"":""helpText"",""name"":""Help text"",""dataType"":""string""},{""code"":""required"",""name"":""Required"",""dataType"":""boolean"",""defaultValue"":""false""}]";
+        const string choiceProps = @"[{""code"":""label"",""name"":""Label"",""dataType"":""string"",""required"":true},{""code"":""options"",""name"":""Options"",""dataType"":""array"",""required"":true},{""code"":""defaultValue"",""name"":""Default value"",""dataType"":""string""}]";
+        const string containerProps = @"[{""code"":""title"",""name"":""Title"",""dataType"":""string""},{""code"":""collapsible"",""name"":""Collapsible"",""dataType"":""boolean"",""defaultValue"":""false""},{""code"":""components"",""name"":""Child components"",""dataType"":""array""}]";
+        return [
+            Component("TEXTBOX", "Textbox", "Inputs", "Textbox", textProps, "TextCursorInput", @"[""form"",""text""]"),
+            Component("TEXTAREA", "Textarea", "Inputs", "Textarea", textProps, "AlignLeft", @"[""form"",""long-text""]"),
+            Component("DROPDOWN", "Dropdown", "Choices", "Dropdown", choiceProps, "ListFilter", @"[""form"",""choice""]"),
+            Component("LOOKUP", "Lookup", "Choices", "Lookup", choiceProps, "Search", @"[""form"",""reference-data""]"),
+            Component("AUTOCOMPLETE", "Autocomplete", "Choices", "Autocomplete", choiceProps, "ListPlus", @"[""form"",""search""]"),
+            Component("CHECKBOX", "Checkbox", "Choices", "Checkbox", choiceProps, "SquareCheck", @"[""form"",""boolean""]"),
+            Component("RADIO", "Radio", "Choices", "Radio", choiceProps, "CircleDot", @"[""form"",""choice""]"),
+            Component("DATE", "Date", "Date & Time", "Date", textProps, "Calendar", @"[""form"",""date""]"),
+            Component("DATETIME", "DateTime", "Date & Time", "DateTime", textProps, "CalendarClock", @"[""form"",""date-time""]"),
+            Component("MONEY", "Money", "Numeric", "Money", textProps, "BadgeDollarSign", @"[""form"",""currency""]"),
+            Component("PERCENTAGE", "Percentage", "Numeric", "Percentage", textProps, "Percent", @"[""form"",""numeric""]"),
+            Component("PHONE", "Phone", "Inputs", "Phone", textProps, "Phone", @"[""form"",""contact""]"),
+            Component("EMAIL", "Email", "Inputs", "Email", textProps, "Mail", @"[""form"",""contact""]"),
+            Component("FILE-UPLOAD", "File Upload", "Content", "FileUpload", @"[{""code"":""allowedExtensions"",""name"":""Allowed extensions"",""dataType"":""string""},{""code"":""maximumFileSize"",""name"":""Maximum file size"",""dataType"":""number""},{""code"":""multiple"",""name"":""Allow multiple files"",""dataType"":""boolean""}]", "Upload", @"[""document"",""evidence""]"),
+            Component("RICH-TEXT", "Rich Text", "Content", "RichText", textProps, "Pilcrow", @"[""content"",""formatted-text""]"),
+            Component("DATA-GRID", "Data Grid", "Data Display", "DataGrid", @"[{""code"":""datasource"",""name"":""Datasource"",""dataType"":""object"",""required"":true},{""code"":""columns"",""name"":""Columns"",""dataType"":""array"",""required"":true},{""code"":""pageSize"",""name"":""Page size"",""dataType"":""number"",""defaultValue"":""10""}]", "Table", @"[""table"",""records""]"),
+            Component("TIMELINE", "Timeline", "Data Display", "Timeline", @"[{""code"":""items"",""name"":""Items"",""dataType"":""array""},{""code"":""orientation"",""name"":""Orientation"",""dataType"":""string"",""defaultValue"":""vertical""}]", "Milestone", @"[""history"",""events""]"),
+            Component("CHART", "Chart", "Analytics", "Chart", @"[{""code"":""chartType"",""name"":""Chart type"",""dataType"":""string"",""required"":true},{""code"":""dataset"",""name"":""Dataset"",""dataType"":""object"",""required"":true}]", "ChartNoAxesCombined", @"[""analytics"",""visualization""]"),
+            Component("TABS", "Tabs", "Layout", "Tabs", containerProps, "PanelTop", @"[""layout"",""container""]"),
+            Component("ACCORDION", "Accordion", "Layout", "Accordion", containerProps, "ListCollapse", @"[""layout"",""container""]"),
+            Component("CARD", "Card", "Layout", "Card", containerProps, "PanelTopOpen", @"[""layout"",""surface""]"),
+            Component("BUTTON", "Button", "Actions", "Button", @"[{""code"":""label"",""name"":""Label"",""dataType"":""string"",""required"":true},{""code"":""variant"",""name"":""Variant"",""dataType"":""string"",""defaultValue"":""primary""},{""code"":""actionCode"",""name"":""Action code"",""dataType"":""string""}]", "MousePointerClick", @"[""action"",""command""]"),
+            Component("WORKFLOW-STATUS", "Workflow Status", "Workflow", "WorkflowStatus", @"[{""code"":""workflowCode"",""name"":""Workflow code"",""dataType"":""string""},{""code"":""statusField"",""name"":""Status field"",""dataType"":""string""}]", "Workflow", @"[""workflow"",""status""]"),
+            Component("AUDIT-TIMELINE", "Audit Timeline", "Audit", "AuditTimeline", @"[{""code"":""entityType"",""name"":""Entity type"",""dataType"":""string""},{""code"":""entityId"",""name"":""Entity id binding"",""dataType"":""string""}]", "History", @"[""audit"",""timeline""]"),
+            Component("SIGNATURE", "Signature", "Content", "Signature", @"[{""code"":""signerRole"",""name"":""Signer role"",""dataType"":""string""},{""code"":""requireTimestamp"",""name"":""Require timestamp"",""dataType"":""boolean"",""defaultValue"":""true""}]", "Signature", @"[""approval"",""signature""]"),
+            Component("COMMENTS", "Comments", "Collaboration", "Comments", @"[{""code"":""threadKey"",""name"":""Thread key"",""dataType"":""string""},{""code"":""allowAttachments"",""name"":""Allow attachments"",""dataType"":""boolean"",""defaultValue"":""false""}]", "MessagesSquare", @"[""collaboration"",""comments""]")
+        ];
+    }
+
     public static async Task SeedAsync(EProcurementDbContext db, CancellationToken cancellationToken = default)
     {
         foreach (var role in Roles)
@@ -144,6 +192,11 @@ public static class SeedData
             db.Applications.Add(new Application("PROCUREMENT", "Procurement", "Procurement workspace containing governed source-to-contract modules.", "Briefcase", "LCA Indigo", "/app/suppliers", "/app", @"[""Supplier Management"",""Requisitions"",""Tenders"",""Evaluation"",""Contracts"",""Reports"",""Studio""]", Status: MetadataStatus.Active, CreatedBy: "system"));
         await db.SaveChangesAsync(cancellationToken);
 
+
+
+        foreach (var component in ComponentLibrary())
+            if (!await db.ComponentDefinitions.AnyAsync(x => x.Code == component.Code, cancellationToken)) db.ComponentDefinitions.Add(component);
+        await db.SaveChangesAsync(cancellationToken);
 
         if (!await db.NavigationDefinitions.AnyAsync(x => x.Code == "MAIN", cancellationToken))
         {

@@ -268,3 +268,46 @@ export type PageDesigner = {
   status?: string;
   version?: number;
 };
+
+export type ComponentProperty = {
+  code: string;
+  name: string;
+  dataType: string;
+  required?: boolean;
+  defaultValue?: string;
+  helpText?: string;
+  options?: unknown;
+};
+export type ComponentEvent = {
+  code: string;
+  name: string;
+  description: string;
+  payloadSchema?: unknown;
+};
+export type ComponentValidation = {
+  code: string;
+  name: string;
+  expression: string;
+  message: string;
+};
+export type ComponentDesignMetadata = {
+  icon: string;
+  supportsBinding?: boolean;
+  supportsResponsiveLayout?: boolean;
+  allowedRegions?: string[];
+  tags?: string[];
+};
+export type ComponentDefinition = {
+  id?: string;
+  code: string;
+  name: string;
+  description: string;
+  category: string;
+  rendererKey: string;
+  properties: ComponentProperty[];
+  events: ComponentEvent[];
+  validations: ComponentValidation[];
+  designMetadata: ComponentDesignMetadata;
+  status?: string;
+  version?: number;
+};
