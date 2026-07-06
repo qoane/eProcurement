@@ -249,12 +249,25 @@ export function DashboardPage() {
           {t.length ? (
             <DataTable
               rows={t.slice(0, 5)}
+              searchable
+              pageSize={5}
+              striped
+              compact
               columns={[
-                { header: "Task", cell: (r) => r.title || r.name || r.id },
-                { header: "Status", cell: (r) => r.status || "Open" },
+                {
+                  header: "Task",
+                  cell: (r) => r.title || r.name || r.id,
+                  sortable: true,
+                },
+                {
+                  header: "Status",
+                  cell: (r) => r.status || "Open",
+                  sortable: true,
+                },
                 {
                   header: "Assigned",
                   cell: (r) => r.assignedTo || r.assignedRole || "—",
+                  sortable: true,
                 },
               ]}
             />
@@ -274,13 +287,39 @@ export function DashboardPage() {
           {a.length ? (
             <DataTable
               rows={a.slice(0, 5)}
+              searchable
+              pageSize={5}
+              striped
+              compact
+              toolbarActions={
+                <button
+                  className="btn secondary"
+                  type="button"
+                  onClick={() => window.print()}
+                >
+                  Print
+                </button>
+              }
               columns={[
-                { header: "Event", cell: (r) => r.eventType || "Activity" },
-                { header: "Entity", cell: (r) => r.entityType || "—" },
-                { header: "Actor", cell: (r) => r.actor || "System" },
+                {
+                  header: "Event",
+                  cell: (r) => r.eventType || "Activity",
+                  sortable: true,
+                },
+                {
+                  header: "Entity",
+                  cell: (r) => r.entityType || "—",
+                  sortable: true,
+                },
+                {
+                  header: "Actor",
+                  cell: (r) => r.actor || "System",
+                  sortable: true,
+                },
                 {
                   header: "Date",
                   cell: (r) => r.createdAt || r.occurredAt || "—",
+                  sortable: true,
                 },
               ]}
             />

@@ -24,10 +24,23 @@ export function DynamicFormsPage() {
       <section className="panel">
         <DataTable
           rows={f}
+          searchable
+          pageSize={8}
+          striped
+          compact
           columns={[
-            { header: "Code", cell: (x) => x.code },
-            { header: "Name", cell: (x) => x.name },
-            { header: "Entity type", cell: (x) => x.entityType },
+            {
+              header: "Code",
+              cell: (x) => x.code,
+              sortable: true,
+              width: "120px",
+            },
+            { header: "Name", cell: (x) => x.name, sortable: true },
+            {
+              header: "Entity type",
+              cell: (x) => x.entityType,
+              sortable: true,
+            },
             { header: "Versions", cell: (x) => x.versions?.length || 0 },
           ]}
           empty="No dynamic forms are configured yet."

@@ -25,10 +25,23 @@ export function WorkflowListPage() {
       <section className="panel">
         <DataTable
           rows={w}
+          searchable
+          pageSize={8}
+          striped
+          compact
           columns={[
-            { header: "Code", cell: (r) => r.code },
-            { header: "Name", cell: (r) => r.name },
-            { header: "Entity type", cell: (r) => r.entityType },
+            {
+              header: "Code",
+              cell: (r) => r.code,
+              sortable: true,
+              width: "120px",
+            },
+            { header: "Name", cell: (r) => r.name, sortable: true },
+            {
+              header: "Entity type",
+              cell: (r) => r.entityType,
+              sortable: true,
+            },
             { header: "Versions", cell: (r) => r.versions?.length || 0 },
             {
               header: "Status",
