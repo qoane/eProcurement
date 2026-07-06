@@ -42,6 +42,46 @@ const layouts = [
   { template: "Dashboard", regions: ["hero", "metrics", "main"] },
   { template: "Wizard", regions: ["steps", "main", "actions"] },
 ];
+type PagePurpose =
+  | "data-input-form"
+  | "read-only-list"
+  | "editable-list"
+  | "deletable-list"
+  | "detail-edit-page";
+
+const pagePurposeTemplates: {
+  code: PagePurpose;
+  label: string;
+  description: string;
+}[] = [
+  {
+    code: "data-input-form",
+    label: "Data input form",
+    description: "Create or update records through a guided form region.",
+  },
+  {
+    code: "read-only-list",
+    label: "Read-only list",
+    description: "Browse rows with a safe view/open action only.",
+  },
+  {
+    code: "editable-list",
+    label: "Editable list",
+    description: "List rows with edit action and update endpoint metadata.",
+  },
+  {
+    code: "deletable-list",
+    label: "List with delete",
+    description:
+      "List rows with delete action, confirmation, and endpoint metadata.",
+  },
+  {
+    code: "detail-edit-page",
+    label: "Detail/edit page",
+    description: "Open one record with a detail form and save command.",
+  },
+];
+
 const toolbox = [
   "Page Header",
   "Card",
@@ -170,6 +210,46 @@ function slug(value: string) {
 function configOf(component: PageComponent) {
   return (component.configuration || {}) as Record<string, string>;
 }
+function endpointFrom(
+  source: PageDataSourceOption | undefined,
+  kind: "list" | "get" | "create" | "update" | "delete",
+  fallback: string | undefined,
+) {
+  if (kind === "list") return source?.listEndpoint || fallback || "";
+  if (kind === "get") return source?.getEndpoint || `${fallback || ""}/{id}`;
+  if (kind === "create") return source?.createEndpoint || fallback || "";
+  if (kind === "update")
+    return source?.updateEndpoint || `${fallback || ""}/{id}`;
+  return source?.deleteEndpoint || `${fallback || ""}/{id}`;
+}
+function defaultColumns(entity: string) {
+  const label = entity || "Record";
+  return [
+    {
+      code: "reference",
+      label: "Reference",
+      field: "referenceNumber",
+      displayOrder: 1,
+      sortable: true,
+      searchable: true,
+    },
+    {
+      code: "name",
+      label: `${label} name`,
+      field: "name",
+      displayOrder: 2,
+      sortable: true,
+      searchable: true,
+    },
+    {
+      code: "status",
+      label: "Status",
+      field: "status",
+      displayOrder: 3,
+      sortable: true,
+    },
+  ];
+}
 
 export function PageDesignerPage() {
   const [pages, setPages] = useState<PageDesigner[]>([]);
@@ -289,6 +369,138 @@ export function PageDesignerPage() {
     };
     setForm({ ...form, components: [...components, component] });
     setSelectedCode(code);
+  }
+
+  function selectedPurpose() {
+    return (components
+      .map((component) => configOf(component).pagePurpose)
+      .find(Boolean) || "") as PagePurpose | "";
+  }
+  function applyPagePurpose(purpose: PagePurpose) {
+    const source = selectedDataSource;
+    const entity = form.datasource.entity || source?.entity || "Record";
+    const listEndpoint = endpointFrom(source, "list", form.datasource.endpoint);
+    const getEndpoint = endpointFrom(source, "get", listEndpoint);
+    const createEndpoint = endpointFrom(source, "create", listEndpoint);
+    const updateEndpoint = endpointFrom(source, "update", listEndpoint);
+    const deleteEndpoint = endpointFrom(source, "delete", listEndpoint);
+    const baseConfiguration = {
+      datasource: entity,
+      pagePurpose: purpose,
+      keyField: form.datasource.keyField || source?.keyField || "id",
+      listEndpoint,
+      getEndpoint,
+    };
+    const header = {
+      code: "page-header",
+      name: `${entity} workspace`,
+      componentType: "PageHeader",
+      region: "main",
+      displayOrder: 1,
+      configuration: { ...baseConfiguration, title: `${entity} workspace` },
+    };
+    const table = {
+      code: `${slug(entity).toLowerCase()}-table`,
+      name: `${entity} list`,
+      componentType: "DataTable",
+      region: "main",
+      displayOrder: 2,
+      configuration: { ...baseConfiguration, title: `${entity} list` },
+    };
+    const formRegion = {
+      code: `${slug(entity).toLowerCase()}-form`,
+      name: `${entity} form`,
+      componentType: "FormField",
+      region: "main",
+      displayOrder: 2,
+      configuration: {
+        ...baseConfiguration,
+        title: `${entity} form`,
+        createEndpoint,
+        updateEndpoint,
+      },
+    };
+    const canEdit =
+      purpose === "editable-list" || purpose === "detail-edit-page";
+    const canDelete = purpose === "deletable-list";
+    setForm({
+      ...form,
+      pageType:
+        purpose === "data-input-form"
+          ? "Form"
+          : purpose === "detail-edit-page"
+            ? "DetailPage"
+            : "DataGrid",
+      datasource: {
+        ...form.datasource,
+        entity,
+        endpoint: listEndpoint || form.datasource.endpoint,
+        keyField: form.datasource.keyField || source?.keyField || "id",
+      },
+      layout: { ...form.layout, template: "Single Column", regions: ["main"] },
+      toolbar:
+        purpose === "read-only-list" ||
+        purpose === "deletable-list" ||
+        purpose === "editable-list"
+          ? []
+          : [
+              {
+                code: "save",
+                label: "Save",
+                kind: "Button",
+                actionCode: "save",
+              },
+            ],
+      actions: [
+        { code: "open", label: "Open", kind: "Row", target: getEndpoint },
+        ...(canEdit
+          ? [
+              {
+                code: "edit",
+                label: "Edit",
+                kind: "Row",
+                target: updateEndpoint,
+              },
+            ]
+          : []),
+        ...(canDelete
+          ? [
+              {
+                code: "delete",
+                label: "Delete",
+                kind: "Row",
+                target: deleteEndpoint,
+                confirmation: `Delete this ${entity.toLowerCase()}? This action cannot be undone.`,
+              },
+            ]
+          : []),
+      ],
+      columns:
+        purpose === "data-input-form" || purpose === "detail-edit-page"
+          ? []
+          : defaultColumns(entity),
+      components:
+        purpose === "data-input-form" || purpose === "detail-edit-page"
+          ? [header, formRegion]
+          : [header, table],
+      permissions: [
+        {
+          role: "ProcurementOfficer",
+          access:
+            canEdit || canDelete || purpose === "data-input-form"
+              ? "Manage"
+              : "View",
+        },
+      ],
+    });
+    setSelectedCode(
+      purpose === "data-input-form" || purpose === "detail-edit-page"
+        ? formRegion.code
+        : table.code,
+    );
+    setMessage(
+      `${pagePurposeTemplates.find((x) => x.code === purpose)?.label} template applied.`,
+    );
   }
   function patchComponent(
     patch: Partial<PageComponent>,
@@ -598,6 +810,35 @@ export function PageDesignerPage() {
                   }
                 />
               </label>
+            </section>
+
+            <section className="designer-layout-picker">
+              <h3>Page purpose</h3>
+              <p className="muted">
+                Start from a guided template to pre-populate page type,
+                components, toolbar, actions, columns, permissions, and endpoint
+                metadata.
+              </p>
+              <div>
+                {pagePurposeTemplates.map((template) => (
+                  <Button
+                    key={template.code}
+                    variant={
+                      selectedPurpose() === template.code
+                        ? "primary"
+                        : "secondary"
+                    }
+                    onClick={() => applyPagePurpose(template.code)}
+                  >
+                    {template.label}
+                  </Button>
+                ))}
+              </div>
+              <small className="muted">
+                {pagePurposeTemplates.find((x) => x.code === selectedPurpose())
+                  ?.description ||
+                  "Choose the scenario that best describes how users should use this page."}
+              </small>
             </section>
             <section className="designer-layout-picker">
               <h3>Layout</h3>
