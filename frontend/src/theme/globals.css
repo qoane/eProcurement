@@ -840,7 +840,11 @@ textarea {
 .admin-shell.shell {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-rows: minmax(100vh, auto);
+  align-items: stretch;
+  justify-items: stretch;
   min-height: 100vh;
+  width: 100%;
   background: var(--app-bg);
   transition: grid-template-columns 180ms ease;
 }
@@ -848,10 +852,24 @@ textarea {
   grid-template-columns: var(--sidebar-compact-width) minmax(0, 1fr);
 }
 .app-main {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: stretch;
+  justify-self: stretch;
+  display: block;
+  width: 100%;
+  max-width: none;
   min-width: 0;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
   background: var(--app-bg);
+  overflow: visible;
 }
 .sidebar {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -996,7 +1014,10 @@ textarea {
   position: sticky;
   top: 0;
   z-index: 4;
+  width: 100%;
+  max-width: none;
   height: var(--topbar-height);
+  margin: 0;
   padding: 0 16px;
   gap: 14px;
   background: #ffffff;
@@ -1078,6 +1099,9 @@ textarea {
   font-weight: 800;
 }
 .breadcrumb-bar {
+  width: 100%;
+  max-width: none;
+  margin: 0;
   min-height: 74px;
   display: flex;
   align-items: center;
@@ -1112,6 +1136,9 @@ textarea {
   font-weight: 700;
 }
 .app-content.content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
   padding: 24px;
 }
 .app-content > * {
