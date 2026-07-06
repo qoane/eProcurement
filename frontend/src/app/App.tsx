@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap-icons/font/bootstrap-icons.css";
-import "overlayscrollbars/styles/overlayscrollbars.css";
+import "overlayscrollbars/overlayscrollbars.css";
 import "admin-lte/dist/css/adminlte.min.css";
 import "simple-datatables/dist/style.css";
 import "../theme/globals.css";
