@@ -607,3 +607,101 @@ public sealed class MetadataApplicationService(EProcurementDbContext db) : IMeta
         "applications" => new Lca.EProcurement.Domain.Application(d.Code, d.Name, d.Description, Version: d.Version, Status: d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "business-processes" => new BusinessProcess(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "entity-definitions" => new EntityDefinition(d.Code, d.Name, d.Description, d.Name, d.Name, string.Empty, Version: d.Version, Status: d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "page-definitions" => new PageDefinition(d.Code, d.Name, d.Description, null, PageType.Dashboard, $"/app/{d.Code.ToLowerInvariant()}", "FileText", Version: d.Version, Status: d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "layout-definitions" => new LayoutDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "component-definitions" => new ComponentDefinition(d.Code, d.Name, d.Description, Version: d.Version, Status: d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "navigation-definitions" => new NavigationDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "menu-definitions" => new MenuDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "dashboard-definitions" => new DashboardDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "report-definitions" => new ReportDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "theme-definitions" => new ThemeDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "lookup-definitions" => new LookupDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "document-type-definitions" => new DocumentTypeDefinition(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), "system-settings" => new SystemSetting(d.Code, d.Name, d.Description, d.Version, d.Status, CreatedBy: d.CreatedBy, ModifiedBy: d.ModifiedBy), _ => throw Unsupported(type)
     };
 }
+
+public sealed record EntityRecordDto(Guid Id, string EntityCode, Dictionary<string, JsonElement> Values, DateTimeOffset Created, DateTimeOffset? Modified);
+public sealed record EntityRecordMutationDto(Dictionary<string, JsonElement> Values, string? Actor = null, List<string>? Roles = null, string? PageCode = null);
+public sealed record EntityRecordValidationError(string Field, string Message);
+public sealed class EntityRecordValidationException(List<EntityRecordValidationError> errors) : InvalidOperationException("Entity record validation failed.") { public List<EntityRecordValidationError> Errors { get; } = errors; }
+public sealed class EntityRecordPermissionException(string operation, string entityCode) : UnauthorizedAccessException($"The current user cannot {operation} records for entity '{entityCode}'.");
+
+public interface IEntityRecordApplicationService
+{
+    Task<EntityDefinition?> ResolveDefinitionAsync(string entityCode, CancellationToken ct = default);
+    Task<List<EntityRecordDto>?> ListAsync(string entityCode, CancellationToken ct = default);
+    Task<EntityRecordDto?> GetAsync(string entityCode, Guid id, CancellationToken ct = default);
+    Task<EntityRecordDto?> CreateAsync(string entityCode, EntityRecordMutationDto dto, CancellationToken ct = default);
+    Task<EntityRecordDto?> UpdateAsync(string entityCode, Guid id, EntityRecordMutationDto dto, CancellationToken ct = default);
+    Task<bool?> DeleteAsync(string entityCode, Guid id, EntityRecordMutationDto dto, CancellationToken ct = default);
+}
+
+public sealed class EntityRecordApplicationService(EProcurementDbContext db) : IEntityRecordApplicationService
+{
+    static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    public Task<EntityDefinition?> ResolveDefinitionAsync(string entityCode, CancellationToken ct = default) { var code = Normalize(entityCode); return db.EntityDefinitions.AsNoTracking().SingleOrDefaultAsync(x => x.Code == code || x.Code.ToUpper() == code, ct); }
+    public async Task<List<EntityRecordDto>?> ListAsync(string entityCode, CancellationToken ct = default)
+    {
+        var definition = await ResolveDefinitionAsync(entityCode, ct); if (definition is null) return null;
+        return (await db.DynamicEntityRecords.AsNoTracking().Where(x => x.EntityDefinitionId == definition.Id).OrderByDescending(x => x.Created).ToListAsync(ct)).Select(ToDto).ToList();
+    }
+    public async Task<EntityRecordDto?> GetAsync(string entityCode, Guid id, CancellationToken ct = default)
+    {
+        var definition = await ResolveDefinitionAsync(entityCode, ct); if (definition is null) return null;
+        return await db.DynamicEntityRecords.AsNoTracking().SingleOrDefaultAsync(x => x.EntityDefinitionId == definition.Id && x.Id == id, ct) is { } record ? ToDto(record) : null;
+    }
+    public async Task<EntityRecordDto?> CreateAsync(string entityCode, EntityRecordMutationDto dto, CancellationToken ct = default)
+    {
+        var definition = await ResolveDefinitionAsync(entityCode, ct); if (definition is null) return null; EnsureCanMutate(definition, "create", dto);
+        var values = NormalizePayload(definition, dto.Values, requireAllRequired: true);
+        var record = new DynamicEntityRecord(definition.Id, definition.Code, JsonSerializer.Serialize(values, JsonOptions), CreatedBy: dto.Actor ?? "api");
+        db.DynamicEntityRecords.Add(record); await db.SaveChangesAsync(ct); return ToDto(record);
+    }
+    public async Task<EntityRecordDto?> UpdateAsync(string entityCode, Guid id, EntityRecordMutationDto dto, CancellationToken ct = default)
+    {
+        var definition = await ResolveDefinitionAsync(entityCode, ct); if (definition is null) return null; EnsureCanMutate(definition, "update", dto);
+        var record = await db.DynamicEntityRecords.SingleOrDefaultAsync(x => x.EntityDefinitionId == definition.Id && x.Id == id, ct); if (record is null) return null;
+        var values = NormalizePayload(definition, dto.Values, requireAllRequired: true);
+        db.Entry(record).CurrentValues[nameof(DynamicEntityRecord.DataJson)] = JsonSerializer.Serialize(values, JsonOptions);
+        db.Entry(record).CurrentValues[nameof(DynamicEntityRecord.Modified)] = DateTimeOffset.UtcNow;
+        db.Entry(record).CurrentValues[nameof(DynamicEntityRecord.ModifiedBy)] = dto.Actor ?? "api";
+        await db.SaveChangesAsync(ct); return ToDto(await db.DynamicEntityRecords.AsNoTracking().SingleAsync(x => x.Id == id, ct));
+    }
+    public async Task<bool?> DeleteAsync(string entityCode, Guid id, EntityRecordMutationDto dto, CancellationToken ct = default)
+    {
+        var definition = await ResolveDefinitionAsync(entityCode, ct); if (definition is null) return null; EnsureCanMutate(definition, "delete", dto);
+        var record = await db.DynamicEntityRecords.SingleOrDefaultAsync(x => x.EntityDefinitionId == definition.Id && x.Id == id, ct); if (record is null) return false;
+        db.DynamicEntityRecords.Remove(record); await db.SaveChangesAsync(ct); return true;
+    }
+    void EnsureCanMutate(EntityDefinition definition, string operation, EntityRecordMutationDto dto)
+    {
+        var roles = dto.Roles ?? [];
+        var pages = db.PageDefinitions.AsNoTracking().ToList().Where(p => PageTargetsEntity(p, definition.Code) && (string.IsNullOrWhiteSpace(dto.PageCode) || p.Code.Equals(dto.PageCode, StringComparison.OrdinalIgnoreCase))).ToList();
+        var permissions = pages.SelectMany(p => DeserializeList<PagePermissionMetadata>(p.PermissionsJson)).ToList();
+        if (permissions.Count == 0) return;
+        if (!permissions.Any(p => roles.Contains(p.Role, StringComparer.OrdinalIgnoreCase) && (p.Access.Equals("Admin", StringComparison.OrdinalIgnoreCase) || p.Access.Equals("Edit", StringComparison.OrdinalIgnoreCase) || p.Access.Equals(operation, StringComparison.OrdinalIgnoreCase)))) throw new EntityRecordPermissionException(operation, definition.Code);
+    }
+    static bool PageTargetsEntity(PageDefinition page, string entityCode)
+    {
+        var datasource = Deserialize(page.DatasourceJson, new PageDatasourceMetadata(""));
+        return datasource.Entity.Equals(entityCode, StringComparison.OrdinalIgnoreCase) || datasource.Entity.Equals(Normalize(entityCode), StringComparison.OrdinalIgnoreCase);
+    }
+    static Dictionary<string, JsonElement> NormalizePayload(EntityDefinition definition, Dictionary<string, JsonElement>? values, bool requireAllRequired)
+    {
+        var supplied = values ?? []; var errors = new List<EntityRecordValidationError>(); var result = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+        var properties = DeserializeList<EntityPropertyMetadata>(definition.PropertiesJson);
+        foreach (var property in properties)
+        {
+            if (!supplied.TryGetValue(property.Code, out var value))
+            {
+                if (property.Required && requireAllRequired) errors.Add(new(property.Code, $"{property.Name} is required."));
+                continue;
+            }
+            if (IsBlank(value) && property.Required) errors.Add(new(property.Code, $"{property.Name} is required."));
+            if (!IsBlank(value) && !MatchesType(value, property.DataType)) errors.Add(new(property.Code, $"{property.Name} must be a {property.DataType} value."));
+            result[property.Code] = value;
+        }
+        foreach (var validation in DeserializeList<EntityValidationMetadata>(definition.ValidationsJson))
+            if (validation.Expression.StartsWith("required:", StringComparison.OrdinalIgnoreCase) && !result.ContainsKey(validation.Expression[9..])) errors.Add(new(validation.Expression[9..], validation.Message));
+        if (errors.Count > 0) throw new EntityRecordValidationException(errors);
+        return result;
+    }
+    static bool IsBlank(JsonElement value) => value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined || (value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.GetString()));
+    static bool MatchesType(JsonElement value, string dataType) => dataType.ToLowerInvariant() switch { "string" or "text" or "email" => value.ValueKind == JsonValueKind.String, "number" or "decimal" => value.ValueKind == JsonValueKind.Number, "integer" or "int" => value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out _), "boolean" or "bool" => value.ValueKind is JsonValueKind.True or JsonValueKind.False, "date" or "datetime" => value.ValueKind == JsonValueKind.String && DateTimeOffset.TryParse(value.GetString(), out _), _ => true };
+    static EntityRecordDto ToDto(DynamicEntityRecord r) => new(r.Id, r.EntityCode, Deserialize(r.DataJson, new Dictionary<string, JsonElement>()), r.Created, r.Modified);
+    static string Normalize(string code) => code.Trim().ToUpperInvariant();
+    static T Deserialize<T>(string json, T fallback) => string.IsNullOrWhiteSpace(json) ? fallback : JsonSerializer.Deserialize<T>(json, JsonOptions) ?? fallback;
+    static List<T> DeserializeList<T>(string json) => string.IsNullOrWhiteSpace(json) ? [] : JsonSerializer.Deserialize<List<T>>(json, JsonOptions) ?? [];
+    sealed record EntityPropertyMetadata(string Code, string Name, string DataType, bool Required = false, bool Searchable = false, string? DefaultValue = null);
+    sealed record EntityValidationMetadata(string Code, string Name, string Expression, string Message);
+    sealed record PageDatasourceMetadata(string Entity, string Mode = "Metadata", string? Endpoint = null, string? KeyField = null);
+    sealed record PagePermissionMetadata(string Role, string Access = "View");
+}
