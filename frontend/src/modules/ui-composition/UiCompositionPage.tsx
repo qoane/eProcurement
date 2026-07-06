@@ -6,7 +6,7 @@ import { getPageDefinitions } from "../../services/pageDefinitionsApi";
 import type { ComponentDefinition, PageDesigner } from "../../types/api";
 import { PageRenderer } from "./PageRenderer";
 
-export function UiCompositionPage({ route }: { route: string }) {
+export function UiCompositionPage({ route, pageCode }: { route: string; pageCode?: string }) {
   const [pages, setPages] = useState<PageDesigner[]>([]);
   const [components, setComponents] = useState<ComponentDefinition[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,14 +24,20 @@ export function UiCompositionPage({ route }: { route: string }) {
     );
   }, []);
 
-  const page = useMemo(
-    () =>
-      pages.find((item) => {
-        const configuredRoute = item.navigation?.route || item.route;
-        return configuredRoute === route && item.status !== "Archived";
-      }),
-    [pages, route],
-  );
+  const page = useMemo(() => {
+    const activePages = pages.filter((item) => item.status !== "Archived");
+    const normalizedPageCode = pageCode?.toUpperCase();
+    if (normalizedPageCode) {
+      const byCode = activePages.find(
+        (item) => item.code.toUpperCase() === normalizedPageCode,
+      );
+      if (byCode) return byCode;
+    }
+    return activePages.find((item) => {
+      const configuredRoute = item.navigation?.route || item.route;
+      return configuredRoute === route;
+    });
+  }, [pageCode, pages, route]);
 
   if (loading) return <LoadingState />;
   if (!page)

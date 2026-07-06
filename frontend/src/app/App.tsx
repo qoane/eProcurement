@@ -22,6 +22,7 @@ import { DynamicFormsPage } from "../modules/forms/DynamicFormsPage";
 import { FormDesignerPage } from "../modules/forms/FormDesignerPage";
 import { ConfigurationPage } from "../modules/configuration/ConfigurationPage";
 import { ReportingPage } from "../modules/reporting/ReportingPage";
+import { TendersPage } from "../modules/tenders/TendersPage";
 import { StudioModulePage, StudioPage } from "../modules/studio/StudioPage";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -90,7 +91,7 @@ function route(p: string) {
   else if (p === "/app/planning") page = <NotConfiguredPage title="Planning" />;
   else if (p === "/app/requisitions")
     page = <NotConfiguredPage title="Requisitions" />;
-  else if (p === "/app/tenders") page = <NotConfiguredPage title="Tenders" />;
+  else if (p === "/app/tenders") page = <TendersPage />;
   else if (p === "/app/evaluation")
     page = <NotConfiguredPage title="Evaluation" />;
   else if (p === "/app/awards") page = <NotConfiguredPage title="Awards" />;
