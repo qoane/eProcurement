@@ -315,6 +315,33 @@ export function PageDesignerPage() {
     : "";
   const isFormInputPage =
     form.pageType === "Form" || selectedPurpose() === "data-input-form";
+
+  function validateDatasource() {
+    const datasource = form.datasource;
+    const mode = (datasource.mode || "Metadata").toLowerCase();
+    const endpoint = datasource.endpoint?.trim();
+    const entity = datasource.entity?.trim();
+    const keyField = datasource.keyField?.trim();
+
+    if (!entity) return "Datasource entity is required.";
+    if (!keyField)
+      return "Datasource key field is required for row actions and route tokens.";
+    if (mode === "customapi" && !endpoint) {
+      return "Custom API datasources require a list endpoint before save or publish.";
+    }
+    if (endpoint && !endpoint.startsWith("/api/")) {
+      return "Datasource endpoint must be an application API path that starts with /api/.";
+    }
+    if (
+      mode === "generatedcrud" &&
+      endpoint &&
+      !endpoint.includes("/records")
+    ) {
+      return "Generated CRUD datasources should use the generated /api/entities/{entity}/records endpoint.";
+    }
+    return undefined;
+  }
+
   function applyDataSource(code: string) {
     const source = dataSources.find((item) => item.code === code);
     if (!source) return;
@@ -333,6 +360,11 @@ export function PageDesignerPage() {
     });
   }
   async function save() {
+    const validationError = validateDatasource();
+    if (validationError) {
+      setMessage(`Unable to save page definition: ${validationError}`);
+      return undefined;
+    }
     const latestPages = form.id ? pages : (await getPageDefinitions()).data;
     const existing = form.id
       ? undefined
@@ -353,6 +385,11 @@ export function PageDesignerPage() {
     return saved.data;
   }
   async function publish() {
+    const validationError = validateDatasource();
+    if (validationError) {
+      setMessage(`Unable to publish page definition: ${validationError}`);
+      return;
+    }
     const current = form.id ? form : await save();
     const id =
       current?.id ||
@@ -867,6 +904,30 @@ export function PageDesignerPage() {
             {selectedDataSource?.description ||
               "Choose generated metadata when the platform owns the schema, or Custom / manual for a page backed by a custom API contract."}
           </FieldHint>
+          <label>
+            Mode
+            <FieldHint>
+              Generated CRUD uses platform-created entity record APIs; Custom
+              API uses your configured endpoint; Metadata reads metadata
+              resources without supplier-specific assumptions.
+            </FieldHint>
+            <Select
+              value={form.datasource.mode || "Metadata"}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  datasource: {
+                    ...form.datasource,
+                    mode: e.target.value,
+                  },
+                })
+              }
+            >
+              <option value="GeneratedCrud">Generated CRUD API</option>
+              <option value="CustomApi">Custom API endpoint</option>
+              <option value="Metadata">Metadata endpoint</option>
+            </Select>
+          </label>
           <label>
             Endpoint
             <FieldHint>
