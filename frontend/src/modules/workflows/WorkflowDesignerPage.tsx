@@ -8,6 +8,22 @@ import type { WorkflowDefinition, WorkflowNode, WorkflowTransition } from "../..
 
 type Selection = { type: "node"; code: string } | { type: "transition"; code: string };
 const roles = ["Supplier", "ProcurementOfficer", "Evaluator", "Approver", "FinanceUser", "Auditor", "Administrator"];
+const workflowNodeKindByValue: Record<number, string> = {
+  0: "Start",
+  1: "Task",
+  2: "Automatic",
+  3: "End",
+};
+const workflowNodeKindToValue: Record<string, number> = {
+  start: 0,
+  task: 1,
+  automatic: 2,
+  end: 3,
+};
+const nodeKindLabel = (kind: WorkflowNode["kind"]) =>
+  typeof kind === "number" ? workflowNodeKindByValue[kind] ?? String(kind) : kind || "Task";
+const nodeKindClassName = (kind: WorkflowNode["kind"]) => nodeKindLabel(kind).toLowerCase();
+const nodeKindValue = (kind: WorkflowNode["kind"]) => workflowNodeKindToValue[nodeKindLabel(kind).toLowerCase()] ?? 1;
 const starterNodes: WorkflowNode[] = [
   { code: "Submitted", name: "Submitted", kind: "Start", isStart: true, positionX: 80, positionY: 170 },
   { code: "DocumentCheck", name: "Document Check", kind: "Task", createsTask: true, defaultAssignedRole: "ProcurementOfficer", positionX: 310, positionY: 120, assignedRolesJson: '["ProcurementOfficer"]' },
@@ -49,7 +65,7 @@ export function WorkflowDesignerPage() {
   const findNode = (nodeCode: string) => nodes.find((n) => n.code === nodeCode) ?? nodes[0];
 
   async function save() {
-    await saveWorkflowDesigner({ code, name: selectedWorkflow?.name ?? "Supplier onboarding", entityType: "Supplier", versionNumber: selectedVersion?.versionNumber, nodes, transitions });
+    await saveWorkflowDesigner({ code, name: selectedWorkflow?.name ?? "Supplier onboarding", entityType: "Supplier", versionNumber: selectedVersion?.versionNumber, nodes: nodes.map((n) => ({ ...n, kind: nodeKindValue(n.kind) })), transitions });
     setMessage("Designer graph saved to SQL Server workflow tables.");
     const refreshed = await getWorkflows(); setDefinitions(refreshed.data);
   }
@@ -63,10 +79,10 @@ export function WorkflowDesignerPage() {
     <div className="toolbar"><select className="select" style={{ maxWidth: 300 }} value={code} onChange={(e) => setCode(e.target.value)}>{definitions.map((d) => <option key={d.code}>{d.code}</option>)}<option>SUPPLIER-ONBOARDING</option></select><Button onClick={() => addNode("Task")}>Add task</Button><Button variant="secondary" onClick={() => addNode("Automatic")}>Add automation</Button><Button variant="secondary" onClick={connect}>Connect transition</Button><Button onClick={save}>Save graph</Button><Button variant="secondary" onClick={publish}>Publish version</Button><Button variant="secondary" onClick={archive}>Archive version</Button></div>
     {message && <p className="badge success">{message}</p>}
     <div className="workflow-designer-shell">
-      <Panel title="Nodes"><div className="workflow-node-list">{nodes.map((n) => <button key={n.code} className={`workflow-node-row ${selection.type === "node" && selection.code === n.code ? "active" : ""}`} onClick={() => setSelection({ type: "node", code: n.code })}><strong>{n.name}</strong><span>{n.kind} · {n.defaultAssignedRole || "No role"}</span></button>)}</div></Panel>
+      <Panel title="Nodes"><div className="workflow-node-list">{nodes.map((n) => <button key={n.code} className={`workflow-node-row ${selection.type === "node" && selection.code === n.code ? "active" : ""}`} onClick={() => setSelection({ type: "node", code: n.code })}><strong>{n.name}</strong><span>{nodeKindLabel(n.kind)} · {n.defaultAssignedRole || "No role"}</span></button>)}</div></Panel>
       <section className="workflow-canvas" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { const nodeCode = e.dataTransfer.getData("node"); const rect = e.currentTarget.getBoundingClientRect(); setNodes((items) => items.map((n) => n.code === nodeCode ? { ...n, positionX: Math.round(e.clientX - rect.left - 90), positionY: Math.round(e.clientY - rect.top - 34) } : n)); }}>
         <svg className="workflow-links">{transitions.map((t) => { const a = findNode(t.fromNodeCode); const b = findNode(t.toNodeCode); return <g key={t.actionCode} onClick={() => setSelection({ type: "transition", code: t.actionCode })}><line x1={(a.positionX ?? 0) + 180} y1={(a.positionY ?? 0) + 34} x2={b.positionX ?? 0} y2={(b.positionY ?? 0) + 34} /><text x={((a.positionX ?? 0) + (b.positionX ?? 0)) / 2 + 80} y={((a.positionY ?? 0) + (b.positionY ?? 0)) / 2 + 20}>{t.actionName}</text></g>; })}</svg>
-        {nodes.map((n) => <div key={n.code} draggable onDragStart={(e) => e.dataTransfer.setData("node", n.code)} onClick={() => setSelection({ type: "node", code: n.code })} className={`workflow-node-card ${n.kind?.toLowerCase()} ${selection.type === "node" && selection.code === n.code ? "selected" : ""}`} style={{ left: n.positionX, top: n.positionY }}><strong>{n.name}</strong><span>{n.code}</span><small>{n.createsTask ? `Task · ${n.defaultAssignedRole}` : n.kind}</small></div>)}
+        {nodes.map((n) => <div key={n.code} draggable onDragStart={(e) => e.dataTransfer.setData("node", n.code)} onClick={() => setSelection({ type: "node", code: n.code })} className={`workflow-node-card ${nodeKindClassName(n.kind)} ${selection.type === "node" && selection.code === n.code ? "selected" : ""}`} style={{ left: n.positionX, top: n.positionY }}><strong>{n.name}</strong><span>{n.code}</span><small>{n.createsTask ? `Task · ${n.defaultAssignedRole}` : nodeKindLabel(n.kind)}</small></div>)}
       </section>
       <Panel title="Properties">{selectedNode && <div className="form-grid one"><label>Name<input className="input" value={selectedNode.name} onChange={(e) => updateNode({ name: e.target.value })} /></label><label>Role<select className="select" value={selectedNode.defaultAssignedRole ?? ""} onChange={(e) => updateNode({ defaultAssignedRole: e.target.value, assignedRolesJson: JSON.stringify([e.target.value].filter(Boolean)) })}><option value="">No assignment</option>{roles.map((r) => <option key={r}>{r}</option>)}</select></label><label>Actions JSON<textarea className="input" value={selectedNode.actionConfigurationJson ?? "{}"} onChange={(e) => updateNode({ actionConfigurationJson: e.target.value })} /></label><label>Conditions JSON<textarea className="input" value={selectedNode.conditionConfigurationJson ?? "{}"} onChange={(e) => updateNode({ conditionConfigurationJson: e.target.value })} /></label><label>Business rules JSON<input className="input" value={selectedNode.businessRuleCodesJson ?? "[]"} onChange={(e) => updateNode({ businessRuleCodesJson: e.target.value })} /></label></div>}{selectedTransition && <div className="form-grid one"><label>Action name<input className="input" value={selectedTransition.actionName} onChange={(e) => updateTransition({ actionName: e.target.value })} /></label><label>From<select className="select" value={selectedTransition.fromNodeCode} onChange={(e) => updateTransition({ fromNodeCode: e.target.value })}>{nodes.map((n) => <option key={n.code}>{n.code}</option>)}</select></label><label>To<select className="select" value={selectedTransition.toNodeCode} onChange={(e) => updateTransition({ toNodeCode: e.target.value })}>{nodes.map((n) => <option key={n.code}>{n.code}</option>)}</select></label><label>Condition<input className="input" value={selectedTransition.conditionExpression ?? ""} onChange={(e) => updateTransition({ conditionExpression: e.target.value })} /></label><label>Required rule<input className="input" value={selectedTransition.requiredRuleCode ?? ""} onChange={(e) => updateTransition({ requiredRuleCode: e.target.value })} /></label><label>Action JSON<textarea className="input" value={selectedTransition.actionConfigurationJson ?? "{}"} onChange={(e) => updateTransition({ actionConfigurationJson: e.target.value })} /></label></div>}</Panel>
     </div>
