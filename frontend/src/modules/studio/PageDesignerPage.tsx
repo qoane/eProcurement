@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -7,7 +7,7 @@ import { Input } from "../../components/ui/Input";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Select } from "../../components/ui/Select";
 import { PageRenderer } from "../ui-composition/PageRenderer";
-import { archivePageDefinition, createPageDefinition, deletePageDefinition, getPageDefinitions, publishPageDefinition, updatePageDefinition } from "../../services/pageDefinitionsApi";
+import { archivePageDefinition, createPageDefinition, getPageDefinitions, publishPageDefinition, updatePageDefinition } from "../../services/pageDefinitionsApi";
 import type { PageComponent, PageDesigner, PageType } from "../../types/api";
 
 const pageTypes: PageType[] = ["Dashboard", "DataGrid", "DetailPage", "Form", "Wizard", "Report", "Timeline", "Kanban", "Calendar", "MasterDetail", "SplitView"];
@@ -39,10 +39,27 @@ export function PageDesignerPage() {
   const [pages, setPages] = useState<PageDesigner[]>([]); const [form, setForm] = useState<PageDesigner>(blank); const [selectedCode, setSelectedCode] = useState("page-header"); const [message, setMessage] = useState(""); const [preview, setPreview] = useState(false);
   const components = form.components ?? [];
   const selectedComponent = components.find((x) => x.code === selectedCode) || components[0];
-  async function load() { setPages((await getPageDefinitions()).data); }
+  async function load() {
+    const loaded = (await getPageDefinitions()).data;
+    setPages(loaded);
+    setForm((current) => {
+      if (current.id) return current;
+      const existing = loaded.find((page) => page.code === current.code);
+      return existing || current;
+    });
+  }
   useEffect(() => { void load(); }, []);
   const regions = form.layout.regions?.length ? form.layout.regions : ["main"];
-  async function save() { const saved = form.id ? await updatePageDefinition(form.id, form) : await createPageDefinition(form); if (saved.error) { setMessage(`Unable to save page definition: ${saved.error}`); return undefined; } setForm(saved.data); setMessage(`${saved.data.name} saved as SQL Server PageDefinition metadata.`); await load(); return saved.data; }
+  async function save() {
+    const latestPages = form.id ? pages : (await getPageDefinitions()).data;
+    const existing = form.id ? undefined : latestPages.find((page) => page.code === form.code);
+    const pageId = form.id || existing?.id;
+    const saved = pageId
+      ? await updatePageDefinition(pageId, { ...form, id: pageId })
+      : await createPageDefinition(form);
+    if (saved.error) { setMessage(`Unable to save page definition: ${saved.error}`); return undefined; }
+    setForm(saved.data); setMessage(`${saved.data.name} saved as SQL Server PageDefinition metadata.`); await load(); return saved.data;
+  }
   async function publish() { const current = form.id ? form : await save(); const id = current?.id || (await getPageDefinitions()).data.find((x) => x.code === form.code)?.id; if (id) { const res = await publishPageDefinition(id); if (res.error) { setMessage(`Unable to publish page definition: ${res.error}`); return; } setForm(res.data); setMessage(`${res.data.name} published for runtime rendering.`); await load(); } }
   async function archive() { if (form.id) { const res = await archivePageDefinition(form.id); if (res.error) { setMessage(`Unable to archive page definition: ${res.error}`); return; } setForm(res.data); setMessage(`${res.data.name} archived.`); await load(); } }
   function addComponent(type: string, region = regions[0]) { const code = slug(`${type}-${components.length + 1}`).toLowerCase(); const component = { code, name: type, componentType: rendererKey[type] || type.replace(/ /g, ""), region, displayOrder: components.length + 1, configuration: { title: type, datasource: form.datasource.entity, visibilityRule: "", width: "12", height: "auto", cssClass: "", permissions: "ProcurementOfficer", expressions: "" } }; setForm({ ...form, components: [...components, component] }); setSelectedCode(code); }
