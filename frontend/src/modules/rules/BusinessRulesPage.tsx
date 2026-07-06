@@ -10,8 +10,13 @@ export function BusinessRulesPage() {
   useEffect(() => {
     void load();
   }, []);
-  async function load() { setR((await getRules()).data); }
-  async function publish(code: string) { await publishRule(code); await load(); }
+  async function load() {
+    setR((await getRules()).data);
+  }
+  async function publish(code: string) {
+    await publishRule(code);
+    await load();
+  }
   return (
     <>
       <PageHeader
@@ -26,14 +31,34 @@ export function BusinessRulesPage() {
       <section className="panel">
         <DataTable
           rows={r}
+          searchable
+          pageSize={10}
+          striped
+          compact
           columns={[
-            { header: "Code", cell: (x) => x.code },
-            { header: "Name", cell: (x) => x.name },
-            { header: "Category", cell: (x) => x.category ?? "General" },
+            {
+              header: "Code",
+              cell: (x) => x.code,
+              sortable: true,
+              width: "120px",
+            },
+            { header: "Name", cell: (x) => x.name, sortable: true },
+            {
+              header: "Category",
+              cell: (x) => x.category ?? "General",
+              sortable: true,
+            },
             { header: "Applies to", cell: (x) => x.appliesTo },
             { header: "Status", cell: (x) => x.status ?? "Draft" },
             { header: "Expression", cell: (x) => x.expression },
-            { header: "Publishing", cell: (x) => <Button onClick={() => publish(x.code)}>Publish</Button> },
+            {
+              header: "Publishing",
+              cell: (x) => (
+                <Button onClick={() => publish(x.code)}>Publish</Button>
+              ),
+              filterable: false,
+              className: "table-actions",
+            },
           ]}
           empty="No business rules are configured yet."
         />
