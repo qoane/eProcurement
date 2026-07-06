@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { navigate } from "../../app/routes";
 import { Badge } from "../../components/ui/Badge";
-import { Card } from "../../components/ui/Card";
+import { AdminCard } from "../../components/ui/AdminCard";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { ApplicationDesignerPage } from "./ApplicationDesignerPage";
@@ -257,17 +257,16 @@ export function StudioPage() {
   return (
     <div className="studio-page">
       <PageHeader
-        title="ProcuraFlow Studio"
-        description="Configure enterprise applications from one low-code command center. Supplier Management is the first application built on this platform foundation."
+        title="LCA eProcurement Studio"
+        description="Configure Lesotho Communications Authority eProcurement applications from one low-code command center. Supplier Management is the first application built on this platform foundation."
         actions={<Badge tone="info">Studio Preview</Badge>}
       />
-      <section className="studio-hero card">
+      <AdminCard
+        title="Low-code configuration platform"
+        subtitle="Design applications, processes, experiences, automation, and governance without leaving the LCA eProcurement platform."
+        className="studio-hero"
+      >
         <div>
-          <span className="studio-kicker">Low-code configuration platform</span>
-          <h2>
-            Design applications, processes, experiences, automation, and
-            governance without leaving the platform.
-          </h2>
           <p>
             Studio organizes the core configuration areas used to build
             enterprise-grade applications: data models, pages, workflows, rules,
@@ -283,7 +282,7 @@ export function StudioPage() {
           <span>Automation & Governance</span>
           <span>Operations & Insights</span>
         </div>
-      </section>
+      </AdminCard>
       {groups.map((group) => {
         const Icon = groupIcons[group];
         return (
@@ -326,7 +325,7 @@ export function StudioModulePage({ slug }: { slug: string }) {
       <>
         <PageHeader
           title="Studio module not found"
-          description="Select an available configuration module from ProcuraFlow Studio."
+          description="Select an available configuration module from LCA eProcurement Studio."
         />
         <EmptyState
           title="Module unavailable"
@@ -353,7 +352,11 @@ export function StudioModulePage({ slug }: { slug: string }) {
           </button>
         }
       />
-      <Card className="studio-module-shell">
+      <AdminCard
+        title={`${module.title} workspace`}
+        subtitle={module.group}
+        className="studio-module-shell"
+      >
         <div className="studio-module-icon">
           <Icon size={30} aria-hidden="true" />
         </div>
@@ -362,13 +365,13 @@ export function StudioModulePage({ slug }: { slug: string }) {
           <h2>{module.title} configuration</h2>
           <p className="muted">
             This shell establishes the workspace for managing{" "}
-            {module.title.toLowerCase()} as ProcuraFlow Studio expands.
+            {module.title.toLowerCase()} as LCA eProcurement Studio expands.
           </p>
         </div>
-      </Card>
+      </AdminCard>
       <EmptyState
         title={module.emptyState}
-        message="Use ProcuraFlow Studio to create governed configuration records when this module is enabled."
+        message="Use LCA eProcurement Studio to create governed configuration records when this module is enabled."
       />
     </div>
   );

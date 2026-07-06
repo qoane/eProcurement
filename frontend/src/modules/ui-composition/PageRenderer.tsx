@@ -4,7 +4,8 @@ import { DataTable } from "../../components/ui/DataTable";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Input } from "../../components/ui/Input";
 import { LoadingState } from "../../components/ui/LoadingState";
-import { MetricCard } from "../../components/ui/MetricCard";
+import { AdminCard } from "../../components/ui/AdminCard";
+import { InfoBox } from "../../components/ui/InfoBox";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { StatusBadge } from "../../components/ui/Badge";
 import { FieldRenderer } from "../../components/forms/FieldRenderer";
@@ -159,10 +160,11 @@ function renderComponent(
 ) {
   if (component.componentType === "Metric")
     return (
-      <MetricCard
+      <InfoBox
         label={component.name}
         value={rows.length}
-        meta="Loaded from metadata data source"
+        trend="Loaded from metadata data source"
+        variant="primary"
       />
     );
   if (component.componentType === "FormField")
@@ -297,7 +299,11 @@ export function PageRenderer({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <section className="panel" style={{ marginTop: 16 }}>
+          <AdminCard
+            title={`${page.name} records`}
+            subtitle="Data is loaded from the configured page datasource."
+            className="dashboard-section"
+          >
             <DataTable
               rows={filtered}
               columns={[
@@ -338,7 +344,7 @@ export function PageRenderer({
                   : []),
               ]}
             />
-          </section>
+          </AdminCard>
         </>
       )}
       {page.pageType === "Dashboard" && (
