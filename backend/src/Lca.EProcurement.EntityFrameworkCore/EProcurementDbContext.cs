@@ -1,6 +1,8 @@
+using System.Data;
 using Lca.EProcurement.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 
 namespace Lca.EProcurement.EntityFrameworkCore;
@@ -122,8 +124,9 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
 
 public static class DatabaseProviderConfiguration
 {
-    public static Task EnsureConfigurablePlatformSchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
-        => db.Database.ExecuteSqlRawAsync(@"
+    public static async Task EnsureConfigurablePlatformSchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
 IF OBJECT_ID(N'[dbo].[BusinessProcessDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[BusinessProcessDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_BusinessProcessDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_BusinessProcessDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[EntityType] nvarchar(128) NOT NULL,[ActiveWorkflowDefinitionId] uniqueidentifier NULL,[ActiveFormDefinitionId] uniqueidentifier NULL,[ActiveDocumentRequirementSetId] uniqueidentifier NULL,[ActiveApprovalMatrixId] uniqueidentifier NULL,[Status] nvarchar(64) NOT NULL);
 IF OBJECT_ID(N'[dbo].[DocumentRequirementSets]', N'U') IS NULL CREATE TABLE [dbo].[DocumentRequirementSets]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_DocumentRequirementSets] PRIMARY KEY,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[EntityType] nvarchar(128) NOT NULL);
 IF OBJECT_ID(N'[dbo].[DocumentRequirements]', N'U') IS NULL CREATE TABLE [dbo].[DocumentRequirements]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_DocumentRequirements] PRIMARY KEY,[DocumentRequirementSetId] uniqueidentifier NOT NULL,[DocumentType] nvarchar(128) NOT NULL,[Required] bit NOT NULL,[MinimumFiles] int NOT NULL,[MaximumFiles] int NOT NULL,[AllowedExtensions] nvarchar(256) NOT NULL,[MaximumFileSize] bigint NOT NULL,[RuleCode] nvarchar(128) NULL,CONSTRAINT [FK_DocumentRequirements_Sets] FOREIGN KEY([DocumentRequirementSetId]) REFERENCES [dbo].[DocumentRequirementSets]([Id]) ON DELETE CASCADE);
@@ -210,7 +213,36 @@ IF OBJECT_ID(N'[dbo].[LookupDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[Loo
 IF OBJECT_ID(N'[dbo].[DocumentTypeDefinitions]', N'U') IS NULL CREATE TABLE [dbo].[DocumentTypeDefinitions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_DocumentTypeDefinitions] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_DocumentTypeDefinitions_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
 IF OBJECT_ID(N'[dbo].[SystemSettings]', N'U') IS NULL CREATE TABLE [dbo].[SystemSettings]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_SystemSettings] PRIMARY KEY,[Code] nvarchar(128) NOT NULL CONSTRAINT [UX_SystemSettings_Code] UNIQUE,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Version] int NOT NULL,[Status] nvarchar(64) NOT NULL,[Created] datetimeoffset NOT NULL,[Modified] datetimeoffset NULL,[CreatedBy] nvarchar(256) NOT NULL,[ModifiedBy] nvarchar(256) NULL);
 IF OBJECT_ID(N'[dbo].[FormSubmissionValues]', N'U') IS NULL CREATE TABLE [dbo].[FormSubmissionValues]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_FormSubmissionValues] PRIMARY KEY,[FormSubmissionId] uniqueidentifier NOT NULL,[FieldCode] nvarchar(128) NOT NULL,[Value] nvarchar(max) NULL,CONSTRAINT [FK_FormSubmissionValues_FormSubmissions] FOREIGN KEY([FormSubmissionId]) REFERENCES [dbo].[FormSubmissions]([Id]) ON DELETE CASCADE);
-", cancellationToken);
+";
+
+        var connection = db.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State == ConnectionState.Closed;
+
+        if (shouldCloseConnection)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (db.Database.CurrentTransaction is not null)
+            {
+                command.Transaction = db.Database.CurrentTransaction.GetDbTransaction();
+            }
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            if (shouldCloseConnection)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
 
     public const string DemoSqlServerConnectionString = "Server=(localdb)\\MSSQLLocalDB;Database=LcaEProcurement;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true";
     public static DbContextOptionsBuilder UseConfiguredProvider(this DbContextOptionsBuilder builder, string provider, string? connectionString = null)
