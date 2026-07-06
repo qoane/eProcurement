@@ -349,10 +349,37 @@ public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkfl
     {
         var process = await ActiveSupplierProcess(ct);
         if (process?.ActiveFormDefinitionId is null || process.ActiveWorkflowDefinitionId is null || process.ActiveDocumentRequirementSetId is null) return null;
-        var form = await db.FormDefinitions.AsNoTracking().Include(x => x.Versions.Where(v => v.Id == x.ActiveVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).ThenInclude(f => f.Validations).Include(x => x.Versions.Where(v => v.Id == x.ActiveVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).ThenInclude(f => f.VisibilityRules).SingleAsync(x => x.Id == process.ActiveFormDefinitionId, ct);
+        var activeFormVersionId = await db.FormDefinitions
+            .AsNoTracking()
+            .Where(x => x.Id == process.ActiveFormDefinitionId)
+            .Select(x => x.ActiveVersionId)
+            .SingleAsync(ct);
+        var publishedWorkflowVersionId = await db.WorkflowDefinitions
+            .AsNoTracking()
+            .Where(x => x.Id == process.ActiveWorkflowDefinitionId)
+            .Select(x => x.PublishedVersionId)
+            .SingleAsync(ct);
+
+        var form = await db.FormDefinitions
+            .AsNoTracking()
+            .Include(x => x.Versions.Where(v => (activeFormVersionId != null && v.Id == activeFormVersionId) || (activeFormVersionId == null && v.Status == WorkflowVersionStatus.Published)))
+            .ThenInclude(v => v.Sections)
+            .ThenInclude(s => s.Fields)
+            .ThenInclude(f => f.Validations)
+            .Include(x => x.Versions.Where(v => (activeFormVersionId != null && v.Id == activeFormVersionId) || (activeFormVersionId == null && v.Status == WorkflowVersionStatus.Published)))
+            .ThenInclude(v => v.Sections)
+            .ThenInclude(s => s.Fields)
+            .ThenInclude(f => f.VisibilityRules)
+            .SingleAsync(x => x.Id == process.ActiveFormDefinitionId, ct);
         var docs = await db.DocumentRequirementSets.AsNoTracking().Include(x => x.Requirements).SingleAsync(x => x.Id == process.ActiveDocumentRequirementSetId, ct);
         var matrix = process.ActiveApprovalMatrixId is null ? null : await db.ApprovalMatrices.AsNoTracking().Include(x => x.Steps).SingleAsync(x => x.Id == process.ActiveApprovalMatrixId, ct);
-        var workflow = await db.WorkflowDefinitions.AsNoTracking().Include(x => x.Versions.Where(v => v.Id == x.PublishedVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Nodes).Include(x => x.Versions.Where(v => v.Id == x.PublishedVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Transitions).SingleAsync(x => x.Id == process.ActiveWorkflowDefinitionId, ct);
+        var workflow = await db.WorkflowDefinitions
+            .AsNoTracking()
+            .Include(x => x.Versions.Where(v => (publishedWorkflowVersionId != null && v.Id == publishedWorkflowVersionId) || (publishedWorkflowVersionId == null && v.Status == WorkflowVersionStatus.Published)))
+            .ThenInclude(v => v.Nodes)
+            .Include(x => x.Versions.Where(v => (publishedWorkflowVersionId != null && v.Id == publishedWorkflowVersionId) || (publishedWorkflowVersionId == null && v.Status == WorkflowVersionStatus.Published)))
+            .ThenInclude(v => v.Transitions)
+            .SingleAsync(x => x.Id == process.ActiveWorkflowDefinitionId, ct);
         return new(process, form, docs, matrix, workflow);
     }
 
