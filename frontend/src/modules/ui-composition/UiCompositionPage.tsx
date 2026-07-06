@@ -26,10 +26,10 @@ export function UiCompositionPage({ route }: { route: string }) {
 
   const page = useMemo(
     () =>
-      pages.find(
-        (item) =>
-          item.navigation?.route === route && item.status !== "Archived",
-      ),
+      pages.find((item) => {
+        const configuredRoute = item.navigation?.route || item.route;
+        return configuredRoute === route && item.status !== "Archived";
+      }),
     [pages, route],
   );
 
