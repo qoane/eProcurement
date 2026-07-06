@@ -2,44 +2,58 @@
   --color-bg: #f5f7fa;
   --color-surface: #ffffff;
   --color-surface-soft: #f8fafc;
-  --color-border: #e5e7eb;
-  --color-border-strong: #cbd5e1;
+  --color-border: #dee2e6;
+  --color-border-strong: rgba(0, 0, 0, 0.125);
   --color-primary: #1e3a8a;
   --color-primary-hover: #1d4ed8;
   --color-accent: #2563eb;
-  --color-success: #16a34a;
-  --color-warning: #f59e0b;
-  --color-danger: #dc2626;
-  --color-info: #0284c7;
+  --color-success: #198754;
+  --color-warning: #ffc107;
+  --color-danger: #dc3545;
+  --color-info: #0dcaf0;
+  --bs-primary: var(--color-primary);
+  --bs-secondary: #6c757d;
+  --bs-success: var(--color-success);
+  --bs-info: var(--color-info);
+  --bs-warning: var(--color-warning);
+  --bs-danger: var(--color-danger);
+  --bs-light: #f8f9fa;
+  --bs-dark: #343a40;
   --color-text: #0f172a;
   --color-text-muted: #64748b;
   --color-muted: #64748b;
   --color-text-soft: #94a3b8;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 22px;
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
-  --shadow-lg: 0 18px 45px rgba(15, 23, 42, 0.12);
-  --sidebar-width: 280px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.16);
+  --component-radius: var(--radius-md);
+  --component-shadow: var(--shadow-sm);
+  --component-border: rgba(0, 0, 0, 0.125);
+  --sidebar-width: 250px;
   --sidebar-compact-width: 76px;
-  --topbar-height: 72px;
+  --topbar-height: 56px;
+  --content-padding: 28px;
   --font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
 }
 
-:root {
+.shell {
   --app-bg: #f4f6f9;
-  --sidebar-width: 240px;
+  --color-bg: var(--app-bg);
+  --sidebar-width: 250px;
   --sidebar-compact-width: 76px;
   --topbar-height: 56px;
-  --sidebar-bg: #1f2937;
-  --sidebar-bg-deep: #111827;
+  --content-padding: 24px;
+  --sidebar-bg: #343a40;
+  --sidebar-bg-deep: #2f3439;
   --sidebar-panel: rgba(255, 255, 255, 0.08);
   --sidebar-panel-active: rgba(255, 255, 255, 0.14);
   --sidebar-text: #cbd5e1;
   --sidebar-muted: #94a3b8;
-  --sidebar-heading: #7f8ea3;
+  --sidebar-heading: #adb5bd;
 }
