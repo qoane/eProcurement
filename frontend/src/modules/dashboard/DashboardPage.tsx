@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import Chart from "react-apexcharts";
-import type { ApexOptions } from "apexcharts";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable } from "../../components/ui/DataTable";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -29,20 +27,70 @@ const emptyStudio: ConfigurationStudio = {
   workflowMappings: [],
 };
 
-const chartBaseOptions: ApexOptions = {
-  chart: {
-    toolbar: { show: false },
-    fontFamily: "inherit",
-    sparkline: { enabled: false },
-  },
-  dataLabels: { enabled: false },
-  grid: { borderColor: "#e5e7eb", strokeDashArray: 4 },
-  legend: { show: false },
-  stroke: { curve: "smooth", width: 3 },
-  tooltip: { theme: "light" },
-};
-
 const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+
+function AreaChart({ label, values }: { label: string; values: number[] }) {
+  const max = Math.max(...values, 1);
+  const points = values
+    .map((value, index) => {
+      const x = values.length === 1 ? 50 : (index / (values.length - 1)) * 100;
+      const y = 100 - (value / max) * 78 - 10;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const fillPoints = `0,100 ${points} 100,100`;
+
+  return (
+    <div className="dashboard-chart" role="img" aria-label={label}>
+      <svg
+        className="dashboard-area-chart"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        <polygon points={fillPoints} />
+        <polyline points={points} />
+      </svg>
+      <div className="dashboard-chart-axis" aria-hidden="true">
+        {monthLabels.map((month) => (
+          <span key={month}>{month}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BarChart({
+  label,
+  values,
+  categories,
+}: {
+  label: string;
+  values: number[];
+  categories: string[];
+}) {
+  const max = Math.max(...values, 1);
+
+  return (
+    <div
+      className="dashboard-chart dashboard-bar-chart"
+      role="img"
+      aria-label={label}
+    >
+      {values.map((value, index) => (
+        <div className="dashboard-bar-column" key={categories[index]}>
+          <div
+            className="dashboard-bar"
+            style={{ height: `${Math.max(8, (value / max) * 100)}%` }}
+            title={`${categories[index]}: ${value}`}
+          >
+            <span>{value}</span>
+          </div>
+          <span>{categories[index]}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function StatusRow({
   label,
@@ -102,54 +150,20 @@ export function DashboardPage() {
     });
   }, []);
 
-  const supplierChart = useMemo(
-    () => ({
-      options: {
-        ...chartBaseOptions,
-        colors: ["#2563eb"],
-        fill: { opacity: 0.18, type: "solid" },
-        xaxis: { categories: monthLabels },
-        yaxis: {
-          labels: {
-            formatter: (value: number) => Math.round(value).toString(),
-          },
-        },
-      } satisfies ApexOptions,
-      series: [{ name: "Suppliers", data: buildMonthlyCounts(s) }],
-    }),
-    [s],
-  );
-
-  const workflowChart = useMemo(
-    () => ({
-      options: {
-        ...chartBaseOptions,
-        chart: { ...chartBaseOptions.chart, type: "bar" },
-        colors: ["#0ea5e9", "#22c55e"],
-        plotOptions: { bar: { borderRadius: 7, columnWidth: "48%" } },
-        xaxis: { categories: ["Open", "Active", "Completed", "Definitions"] },
-      } satisfies ApexOptions,
-      series: [
-        {
-          name: "Workflow throughput",
-          data: [
-            t.filter((task) => task.status?.toLowerCase().includes("open"))
-              .length,
-            t.filter(
-              (task) =>
-                task.status?.toLowerCase().includes("active") ||
-                !task.completedAt,
-            ).length,
-            t.filter(
-              (task) =>
-                task.completedAt ||
-                task.status?.toLowerCase().includes("complete"),
-            ).length,
-            w.length,
-          ],
-        },
-      ],
-    }),
+  const supplierChartValues = useMemo(() => buildMonthlyCounts(s), [s]);
+  const workflowChartValues = useMemo(
+    () => [
+      t.filter((task) => task.status?.toLowerCase().includes("open")).length,
+      t.filter(
+        (task) =>
+          task.status?.toLowerCase().includes("active") || !task.completedAt,
+      ).length,
+      t.filter(
+        (task) =>
+          task.completedAt || task.status?.toLowerCase().includes("complete"),
+      ).length,
+      w.length,
+    ],
     [t, w.length],
   );
 
@@ -179,22 +193,19 @@ export function DashboardPage() {
           title="Supplier registrations"
           tools={<CardToolLink external>View suppliers</CardToolLink>}
         >
-          <Chart
-            options={supplierChart.options}
-            series={supplierChart.series}
-            type="area"
-            height={285}
+          <AreaChart
+            label="Supplier registrations for the last six months"
+            values={supplierChartValues}
           />
         </AdminCard>
         <AdminCard
           title="Workflow throughput"
           tools={<CardToolLink external>Open workflows</CardToolLink>}
         >
-          <Chart
-            options={workflowChart.options}
-            series={workflowChart.series}
-            type="bar"
-            height={285}
+          <BarChart
+            label="Workflow throughput by task status"
+            values={workflowChartValues}
+            categories={["Open", "Active", "Completed", "Definitions"]}
           />
         </AdminCard>
       </div>
