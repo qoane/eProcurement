@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { MetricCard } from "../../components/ui/MetricCard";
 import { DataTable } from "../../components/ui/DataTable";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { AdminCard } from "../../components/ui/AdminCard";
+import { CardToolLink, CardTools } from "../../components/ui/CardTools";
+import { InfoBox } from "../../components/ui/InfoBox";
+import { SmallBox } from "../../components/ui/SmallBox";
 import { getSuppliers } from "../../services/suppliersApi";
 import { getTasks } from "../../services/tasksApi";
 import { getAuditEvents } from "../../services/auditApi";
@@ -41,32 +44,6 @@ const chartBaseOptions: ApexOptions = {
 };
 
 const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-
-function DashboardCard({
-  title,
-  action,
-  children,
-  className = "",
-}: {
-  title: string;
-  action?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={`dashboard-card panel ${className}`}>
-      <header className="dashboard-card-header">
-        <h2>{title}</h2>
-        {action && (
-          <a href="#" aria-label={action}>
-            {action} <span aria-hidden="true">↗</span>
-          </a>
-        )}
-      </header>
-      {children}
-    </section>
-  );
-}
 
 function StatusRow({
   label,
@@ -199,51 +176,62 @@ export function DashboardPage() {
       />
 
       <div className="dashboard-row dashboard-row-charts">
-        <DashboardCard title="Supplier registrations" action="View suppliers">
+        <AdminCard
+          title="Supplier registrations"
+          tools={<CardToolLink external>View suppliers</CardToolLink>}
+        >
           <Chart
             options={supplierChart.options}
             series={supplierChart.series}
             type="area"
             height={285}
           />
-        </DashboardCard>
-        <DashboardCard title="Workflow throughput" action="Open workflows">
+        </AdminCard>
+        <AdminCard
+          title="Workflow throughput"
+          tools={<CardToolLink external>Open workflows</CardToolLink>}
+        >
           <Chart
             options={workflowChart.options}
             series={workflowChart.series}
             type="bar"
             height={285}
           />
-        </DashboardCard>
+        </AdminCard>
       </div>
 
       <div className="grid cols-4 dashboard-metrics dashboard-section">
-        <MetricCard
-          label="Suppliers"
+        <SmallBox
+          label="Registered vendors"
           value={s.length}
-          meta="Registered vendors"
+          icon="👥"
+          variant="primary"
         />
-        <MetricCard
-          label="Workflow Tasks"
+        <SmallBox
+          label="Workflow tasks"
           value={t.length}
-          meta={`${completionRate}% completed`}
+          icon="✅"
+          footer={`${completionRate}% completed`}
+          variant="success"
         />
-        <MetricCard
-          label="Rule Sets"
+        <SmallBox
+          label="Business policy controls"
           value={rules.length}
-          meta="Business policy controls"
+          icon="⚙️"
+          variant="warning"
         />
-        <MetricCard
-          label="Approval Matrices"
+        <SmallBox
+          label="Configured routing"
           value={studio.approvalMatrices.length}
-          meta="Configured routing"
+          icon="🧭"
+          variant="info"
         />
       </div>
 
       <div className="dashboard-row dashboard-row-main dashboard-section">
-        <DashboardCard
+        <AdminCard
           title="My work"
-          action="View queue"
+          tools={<CardToolLink external>View queue</CardToolLink>}
           className="dashboard-table-card"
         >
           {t.length ? (
@@ -277,11 +265,11 @@ export function DashboardPage() {
               message="There are no workflow tasks assigned or available from the API yet."
             />
           )}
-        </DashboardCard>
+        </AdminCard>
 
-        <DashboardCard
+        <AdminCard
           title="Recent activity"
-          action="Audit log"
+          tools={<CardToolLink external>Audit log</CardToolLink>}
           className="dashboard-table-card"
         >
           {a.length ? (
@@ -329,17 +317,27 @@ export function DashboardPage() {
               message="Audit events will appear here when the audit API returns activity."
             />
           )}
-        </DashboardCard>
+        </AdminCard>
 
-        <DashboardCard
+        <AdminCard
           title="eProcurement overview"
-          action="Refresh"
+          tools={
+            <CardTools>
+              <button className="card-tool-link" type="button">
+                Refresh
+              </button>
+            </CardTools>
+          }
           className="dashboard-overview-card"
         >
-          <div className="overview-kpi">
-            <strong>{completionRate}%</strong>
-            <span>Workflow task completion</span>
-          </div>
+          <InfoBox
+            icon="📈"
+            label="Workflow task completion"
+            value={`${completionRate}%`}
+            trend={`${completedTasks} of ${t.length} tasks completed`}
+            variant="primary"
+            className="overview-kpi"
+          />
           <StatusRow
             label="Published forms"
             value={`${publishedForms}/${studio.businessProcesses.length}`}
@@ -365,7 +363,7 @@ export function DashboardPage() {
             value={a.length.toString()}
             tone="info"
           />
-        </DashboardCard>
+        </AdminCard>
       </div>
     </>
   );
