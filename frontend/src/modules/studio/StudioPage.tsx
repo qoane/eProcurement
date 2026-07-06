@@ -2,6 +2,7 @@ import {
   AppWindow,
   Bell,
   Blocks,
+  Box,
   BookOpenCheck,
   Bot,
   Braces,
@@ -93,6 +94,15 @@ export const studioModules: StudioModule[] = [
       "Manage responsive layout templates and reusable page regions.",
     emptyState: "No layouts have been created.",
     icon: LayoutTemplate,
+    group: "Experience",
+  },
+  {
+    title: "Component Library",
+    slug: "component-library",
+    description:
+      "Define reusable UI building blocks, renderer keys, configurable properties, events, and validations.",
+    emptyState: "No component definitions have been configured.",
+    icon: Box,
     group: "Experience",
   },
   {
