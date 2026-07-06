@@ -6,6 +6,8 @@ import { FieldHint } from "../../components/ui/FieldHint";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { PageRenderer } from "../ui-composition/PageRenderer";
+import { navigate } from "../../app/routes";
+import { getForms } from "../../services/formsApi";
 import {
   archivePageDefinition,
   createPageDefinition,
@@ -21,6 +23,7 @@ import type {
   PageDataSourceOption,
   PageDesigner,
   PageType,
+  FormDefinition,
 } from "../../types/api";
 
 const pageTypes: PageType[] = [
@@ -262,6 +265,7 @@ function defaultColumns(entity: string) {
 export function PageDesignerPage() {
   const [pages, setPages] = useState<PageDesigner[]>([]);
   const [dataSources, setDataSources] = useState<PageDataSourceOption[]>([]);
+  const [availableForms, setAvailableForms] = useState<FormDefinition[]>([]);
   const [form, setForm] = useState<PageDesigner>(blank);
   const [selectedCode, setSelectedCode] = useState("page-header");
   const [message, setMessage] = useState("");
@@ -273,13 +277,15 @@ export function PageDesignerPage() {
   const selectedComponent =
     components.find((x) => x.code === selectedCode) || components[0];
   async function load() {
-    const [pageResult, dataSourceResult] = await Promise.all([
+    const [pageResult, dataSourceResult, formsResult] = await Promise.all([
       getPageDefinitions(),
       getPageDataSources(),
+      getForms(),
     ]);
     const loaded = pageResult.data;
     setPages(loaded);
     setDataSources(dataSourceResult.data);
+    setAvailableForms(formsResult.data);
     setForm((current) => {
       if (current.id) return current;
       const existing = loaded.find((page) => page.code === current.code);
@@ -295,6 +301,20 @@ export function PageDesignerPage() {
       source.entity === form.datasource.entity &&
       (source.listEndpoint || "") === (form.datasource.endpoint || ""),
   );
+
+  const formPageComponents = components.filter(
+    (component) =>
+      component.componentType === "FormField" ||
+      configOf(component).pagePurpose === "data-input-form",
+  );
+  const primaryFormComponent = formPageComponents[0];
+  const selectedFormCode = primaryFormComponent
+    ? configOf(primaryFormComponent).formCode ||
+      configOf(primaryFormComponent).formId ||
+      ""
+    : "";
+  const isFormInputPage =
+    form.pageType === "Form" || selectedPurpose() === "data-input-form";
   function applyDataSource(code: string) {
     const source = dataSources.find((item) => item.code === code);
     if (!source) return;
@@ -488,6 +508,8 @@ export function PageDesignerPage() {
         title: `${entity} form`,
         createEndpoint,
         updateEndpoint,
+        formCode: selectedFormCode,
+        formEntityType: entity,
       },
     };
     const canEdit =
@@ -595,6 +617,81 @@ export function PageDesignerPage() {
     setMessage(
       `${pagePurposeTemplates.find((x) => x.code === purpose)?.label} template applied.`,
     );
+  }
+
+  function patchFormComponents(configuration: Record<string, string>) {
+    const targetComponents = formPageComponents.length
+      ? formPageComponents
+      : [
+          {
+            code: `${slug(form.datasource.entity || "record").toLowerCase()}-form`,
+            name: `${form.datasource.entity || "Record"} form`,
+            componentType: "FormField",
+            region: regions[0],
+            displayOrder: components.length + 1,
+            configuration: {
+              title: `${form.datasource.entity || "Record"} form`,
+              datasource: form.datasource.entity,
+              pagePurpose: "data-input-form",
+              createEndpoint:
+                form.datasource.createEndpoint ||
+                form.datasource.endpoint ||
+                "",
+              updateEndpoint:
+                form.datasource.updateEndpoint ||
+                `${form.datasource.endpoint || ""}/{id}`,
+            },
+          } as PageComponent,
+        ];
+    const existingCodes = new Set(
+      components.map((component) => component.code),
+    );
+    const patchedExisting = components.map((component) =>
+      targetComponents.some((target) => target.code === component.code)
+        ? {
+            ...component,
+            configuration: { ...configOf(component), ...configuration },
+          }
+        : component,
+    );
+    const additions = targetComponents
+      .filter((component) => !existingCodes.has(component.code))
+      .map((component) => ({
+        ...component,
+        configuration: { ...configOf(component), ...configuration },
+      }));
+    setForm({
+      ...form,
+      pageType: "Form",
+      components: [...patchedExisting, ...additions],
+    });
+    if (additions[0]) setSelectedCode(additions[0].code);
+  }
+
+  function selectRuntimeForm(formCode: string) {
+    const selected = availableForms.find((item) => item.code === formCode);
+    patchFormComponents({
+      formCode,
+      formId: formCode,
+      formName: selected?.name || "",
+      formEntityType: selected?.entityType || form.datasource.entity,
+      datasource: selected?.entityType || form.datasource.entity,
+      createEndpoint:
+        form.datasource.createEndpoint || form.datasource.endpoint || "",
+      updateEndpoint:
+        form.datasource.updateEndpoint ||
+        `${form.datasource.endpoint || ""}/{id}`,
+    });
+  }
+
+  function createFormDraftFromPage() {
+    const params = new URLSearchParams({
+      entityType: form.datasource.entity || "Record",
+      name: `${form.datasource.entity || "Record"} form`,
+      code: `${slug(form.datasource.entity || form.code || "record")}-FORM`,
+      returnTo: location.pathname,
+    });
+    navigate(`/app/forms/designer?${params.toString()}`);
   }
 
   function updateAction(code: string, patch: Partial<PageAction>) {
@@ -824,6 +921,42 @@ export function PageDesignerPage() {
             />
           </label>
         </section>
+        {isFormInputPage && (
+          <section className="designer-panel-block">
+            <h3>Input form</h3>
+            <p className="muted">
+              Attach a Dynamic Form definition to this page so the runtime can
+              render data-entry fields and submit to the selected datasource.
+            </p>
+            <label>
+              Form definition
+              <Select
+                value={selectedFormCode || ""}
+                onChange={(e) => selectRuntimeForm(e.target.value)}
+              >
+                <option value="">Select a form definition</option>
+                {availableForms
+                  .filter(
+                    (item) =>
+                      !form.datasource.entity ||
+                      item.entityType === form.datasource.entity,
+                  )
+                  .map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {item.name} ({item.code})
+                    </option>
+                  ))}
+              </Select>
+            </label>
+            <FieldHint>
+              The selected form code is stored on the form region component
+              metadata with create/update endpoints from the page datasource.
+            </FieldHint>
+            <Button variant="secondary" onClick={createFormDraftFromPage}>
+              Create new form draft for {form.datasource.entity || "datasource"}
+            </Button>
+          </section>
+        )}
         <section className="designer-panel-block">
           <h3>Actions</h3>
           <p className="muted">
@@ -1285,6 +1418,63 @@ export function PageDesignerPage() {
                 }
               />
             </label>
+            {selectedComponent.componentType === "FormField" && (
+              <>
+                <label>
+                  Form definition
+                  <Select
+                    value={configOf(selectedComponent).formCode || ""}
+                    onChange={(e) =>
+                      patchComponent(
+                        {},
+                        {
+                          formCode: e.target.value,
+                          formId: e.target.value,
+                          formName:
+                            availableForms.find(
+                              (item) => item.code === e.target.value,
+                            )?.name || "",
+                        },
+                      )
+                    }
+                  >
+                    <option value="">Select a form definition</option>
+                    {availableForms.map((item) => (
+                      <option key={item.code} value={item.code}>
+                        {item.name} ({item.code})
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <label>
+                  Create endpoint
+                  <Input
+                    value={
+                      configOf(selectedComponent).createEndpoint ||
+                      form.datasource.createEndpoint ||
+                      form.datasource.endpoint ||
+                      ""
+                    }
+                    onChange={(e) =>
+                      patchComponent({}, { createEndpoint: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Update endpoint
+                  <Input
+                    value={
+                      configOf(selectedComponent).updateEndpoint ||
+                      form.datasource.updateEndpoint ||
+                      ""
+                    }
+                    onChange={(e) =>
+                      patchComponent({}, { updateEndpoint: e.target.value })
+                    }
+                  />
+                </label>
+              </>
+            )}
             <label>
               Visibility Rule
               <Input
