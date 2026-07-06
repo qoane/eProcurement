@@ -23,7 +23,7 @@ export async function apiGet<T>(
 export async function apiPost<T>(
   path: string,
   body: unknown,
-  fallback: T,
+  fallback?: T,
 ): Promise<ApiResult<T>> {
   let last = "";
   for (const b of bases) {
@@ -39,7 +39,7 @@ export async function apiPost<T>(
       last = e instanceof Error ? e.message : String(e);
     }
   }
-  return { data: fallback, error: last || "API unavailable", loading: false };
+  return { data: fallback as T, error: last || "API unavailable", loading: false };
 }
 
 export async function apiPut<T>(path: string, body: unknown, fallback: T): Promise<ApiResult<T>> {
