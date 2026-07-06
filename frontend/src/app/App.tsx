@@ -1,4 +1,9 @@
 import { useEffect, useState } from "react";
+import "bootstrap/dist/css/bootstrap.min.css";
+import "bootstrap-icons/font/bootstrap-icons.css";
+import "overlayscrollbars/styles/overlayscrollbars.css";
+import "admin-lte/dist/css/adminlte.min.css";
+import "simple-datatables/dist/style.css";
 import "../theme/globals.css";
 import { PublicLayout } from "../layout/PublicLayout";
 import { AuthLayout } from "../layout/AuthLayout";
@@ -66,7 +71,12 @@ function route(p: string) {
       />
     );
   else if (p === "/app/tasks") page = <WorkflowTaskInboxPage />;
-  else if (p.startsWith("/app/tasks/")) page = <WorkflowTaskDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p.startsWith("/app/tasks/"))
+    page = (
+      <WorkflowTaskDetailPage
+        id={decodeURIComponent(p.split("/").pop() || "")}
+      />
+    );
   else if (p === "/app/audit") page = <AuditExplorerPage />;
   else if (p === "/app/workflows") page = <WorkflowListPage />;
   else if (p === "/app/workflows/designer") page = <WorkflowDesignerPage />;
