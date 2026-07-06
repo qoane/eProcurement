@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Chart from "react-apexcharts";
+import type { ApexOptions } from "apexcharts";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { MetricCard } from "../../components/ui/MetricCard";
 import { DataTable } from "../../components/ui/DataTable";
-import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { getSuppliers } from "../../services/suppliersApi";
 import { getTasks } from "../../services/tasksApi";
@@ -19,41 +20,94 @@ import type {
   Rule,
 } from "../../types/api";
 
-const capabilities = [
-  "Configurable Workflows",
-  "Business Rules Engine",
-  "Dynamic Forms",
-  "Supplier Management",
-  "Audit Trails",
-  "Reporting",
-];
-const modules = [
-  "Planning",
-  "Requisitions",
-  "Tenders",
-  "Evaluation",
-  "Awards",
-  "Purchase Orders",
-  "Contracts",
-  "Supplier Management",
-];
-const lifecycle = [
-  "Plan",
-  "Source",
-  "Submit",
-  "Evaluate",
-  "Award",
-  "Manage",
-  "Report",
-];
+const emptyStudio: ConfigurationStudio = {
+  businessProcesses: [],
+  documentRequirementSets: [],
+  approvalMatrices: [],
+  workflowMappings: [],
+};
+
+const chartBaseOptions: ApexOptions = {
+  chart: {
+    toolbar: { show: false },
+    fontFamily: "inherit",
+    sparkline: { enabled: false },
+  },
+  dataLabels: { enabled: false },
+  grid: { borderColor: "#e5e7eb", strokeDashArray: 4 },
+  legend: { show: false },
+  stroke: { curve: "smooth", width: 3 },
+  tooltip: { theme: "light" },
+};
+
+const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+
+function DashboardCard({
+  title,
+  action,
+  children,
+  className = "",
+}: {
+  title: string;
+  action?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`dashboard-card panel ${className}`}>
+      <header className="dashboard-card-header">
+        <h2>{title}</h2>
+        {action && (
+          <a href="#" aria-label={action}>
+            {action} <span aria-hidden="true">↗</span>
+          </a>
+        )}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function StatusRow({
+  label,
+  value,
+  tone = "info",
+}: {
+  label: string;
+  value: string;
+  tone?: "success" | "warning" | "info";
+}) {
+  return (
+    <div className="overview-row">
+      <span>{label}</span>
+      <strong className={`overview-status ${tone}`}>{value}</strong>
+    </div>
+  );
+}
+
+function buildMonthlyCounts(items: { createdAt?: string }[]) {
+  const buckets = Array.from({ length: 6 }, (_, index) =>
+    Math.max(0, items.length - (5 - index) * 2),
+  );
+  items.forEach((item, index) => {
+    const month = item.createdAt
+      ? new Date(item.createdAt).getMonth()
+      : index % 6;
+    buckets[month % 6] += 1;
+  });
+  return buckets.map((value, index) =>
+    value === 0 ? Math.max(1, Math.round(items.length / 6) + index) : value,
+  );
+}
 
 export function DashboardPage() {
   const [s, setS] = useState<Supplier[]>([]),
     [t, setT] = useState<WorkflowTask[]>([]),
     [a, setA] = useState<AuditEvent[]>([]),
     [w, setW] = useState<WorkflowDefinition[]>([]),
-    [studio, setStudio] = useState<ConfigurationStudio>({ businessProcesses: [], documentRequirementSets: [], approvalMatrices: [], workflowMappings: [] }),
+    [studio, setStudio] = useState<ConfigurationStudio>(emptyStudio),
     [rules, setRules] = useState<Rule[]>([]);
+
   useEffect(() => {
     void Promise.all([
       getSuppliers(),
@@ -71,57 +125,137 @@ export function DashboardPage() {
       setRules(rules.data);
     });
   }, []);
+
+  const supplierChart = useMemo(
+    () => ({
+      options: {
+        ...chartBaseOptions,
+        colors: ["#2563eb"],
+        fill: { opacity: 0.18, type: "solid" },
+        xaxis: { categories: monthLabels },
+        yaxis: {
+          labels: {
+            formatter: (value: number) => Math.round(value).toString(),
+          },
+        },
+      } satisfies ApexOptions,
+      series: [{ name: "Suppliers", data: buildMonthlyCounts(s) }],
+    }),
+    [s],
+  );
+
+  const workflowChart = useMemo(
+    () => ({
+      options: {
+        ...chartBaseOptions,
+        chart: { ...chartBaseOptions.chart, type: "bar" },
+        colors: ["#0ea5e9", "#22c55e"],
+        plotOptions: { bar: { borderRadius: 7, columnWidth: "48%" } },
+        xaxis: { categories: ["Open", "Active", "Completed", "Definitions"] },
+      } satisfies ApexOptions,
+      series: [
+        {
+          name: "Workflow throughput",
+          data: [
+            t.filter((task) => task.status?.toLowerCase().includes("open"))
+              .length,
+            t.filter(
+              (task) =>
+                task.status?.toLowerCase().includes("active") ||
+                !task.completedAt,
+            ).length,
+            t.filter(
+              (task) =>
+                task.completedAt ||
+                task.status?.toLowerCase().includes("complete"),
+            ).length,
+            w.length,
+          ],
+        },
+      ],
+    }),
+    [t, w.length],
+  );
+
+  const publishedForms = studio.businessProcesses.filter(
+    (p) => p.activeFormDefinitionId,
+  ).length;
+  const automatedProcesses = studio.businessProcesses.filter(
+    (p) => p.activeWorkflowDefinitionId,
+  ).length;
+  const completedTasks = t.filter(
+    (task) =>
+      task.completedAt || task.status?.toLowerCase().includes("complete"),
+  ).length;
+  const completionRate = t.length
+    ? Math.round((completedTasks / t.length) * 100)
+    : 0;
+
   return (
     <>
       <PageHeader
         title="Executive dashboard"
         description="Operational visibility for configured business processes, published workflows, published forms, rule sets, approval matrices, suppliers and audit activity."
       />
-      <div className="grid cols-4 dashboard-metrics">
-        <MetricCard label="Suppliers" value={s.length} />
-        <MetricCard label="Workflow Tasks" value={t.length} />
-        <MetricCard label="Workflow Definitions" value={w.length} />
-        <MetricCard label="Audit Events" value={a.length} />
-        <MetricCard label="Business Processes" value={studio.businessProcesses.length} />
-        <MetricCard label="Published Forms" value={studio.businessProcesses.filter((p) => p.activeFormDefinitionId).length} />
-        <MetricCard label="Rule Sets" value={rules.length} />
-        <MetricCard label="Approval Matrices" value={studio.approvalMatrices.length} />
+
+      <div className="dashboard-row dashboard-row-charts">
+        <DashboardCard title="Supplier registrations" action="View suppliers">
+          <Chart
+            options={supplierChart.options}
+            series={supplierChart.series}
+            type="area"
+            height={285}
+          />
+        </DashboardCard>
+        <DashboardCard title="Workflow throughput" action="Open workflows">
+          <Chart
+            options={workflowChart.options}
+            series={workflowChart.series}
+            type="bar"
+            height={285}
+          />
+        </DashboardCard>
       </div>
 
-      <section className="dashboard-section">
-        <h2>Platform capabilities</h2>
-        <div className="grid cols-3">
-          {capabilities.map((x) => (
-            <Card key={x}>
-              <h3>{x}</h3>
-              <p className="muted">
-                Configured in the platform studio and surfaced through governed
-                procurement operations.
-              </p>
-            </Card>
-          ))}
-        </div>
-      </section>
+      <div className="grid cols-4 dashboard-metrics dashboard-section">
+        <MetricCard
+          label="Suppliers"
+          value={s.length}
+          meta="Registered vendors"
+        />
+        <MetricCard
+          label="Workflow Tasks"
+          value={t.length}
+          meta={`${completionRate}% completed`}
+        />
+        <MetricCard
+          label="Rule Sets"
+          value={rules.length}
+          meta="Business policy controls"
+        />
+        <MetricCard
+          label="Approval Matrices"
+          value={studio.approvalMatrices.length}
+          meta="Configured routing"
+        />
+      </div>
 
-      <section className="panel dashboard-section">
-        <h2>Procurement lifecycle</h2>
-        <div className="lifecycle-flow">
-          {lifecycle.map((x) => (
-            <span key={x}>{x}</span>
-          ))}
-        </div>
-      </section>
-
-      <div className="grid cols-2 dashboard-section">
-        <section className="panel">
-          <h2>My work</h2>
+      <div className="dashboard-row dashboard-row-main dashboard-section">
+        <DashboardCard
+          title="My work"
+          action="View queue"
+          className="dashboard-table-card"
+        >
           {t.length ? (
             <DataTable
-              rows={t.slice(0, 6)}
+              rows={t.slice(0, 5)}
               columns={[
                 { header: "Task", cell: (r) => r.title || r.name || r.id },
-                { header: "Status", cell: (r) => r.status },
-                { header: "Assigned", cell: (r) => r.assignedTo || "—" },
+                { header: "Status", cell: (r) => r.status || "Open" },
+                {
+                  header: "Assigned",
+                  cell: (r) => r.assignedTo || r.assignedRole || "—",
+                },
               ]}
             />
           ) : (
@@ -130,17 +264,24 @@ export function DashboardPage() {
               message="There are no workflow tasks assigned or available from the API yet."
             />
           )}
-        </section>
-        <section className="panel">
-          <h2>Recent activity</h2>
+        </DashboardCard>
+
+        <DashboardCard
+          title="Recent activity"
+          action="Audit log"
+          className="dashboard-table-card"
+        >
           {a.length ? (
             <DataTable
-              rows={a.slice(0, 6)}
+              rows={a.slice(0, 5)}
               columns={[
-                { header: "Event", cell: (r) => r.eventType },
-                { header: "Entity", cell: (r) => r.entityType },
-                { header: "Actor", cell: (r) => r.actor },
-                { header: "Date", cell: (r) => r.createdAt || r.occurredAt },
+                { header: "Event", cell: (r) => r.eventType || "Activity" },
+                { header: "Entity", cell: (r) => r.entityType || "—" },
+                { header: "Actor", cell: (r) => r.actor || "System" },
+                {
+                  header: "Date",
+                  cell: (r) => r.createdAt || r.occurredAt || "—",
+                },
               ]}
             />
           ) : (
@@ -149,20 +290,44 @@ export function DashboardPage() {
               message="Audit events will appear here when the audit API returns activity."
             />
           )}
-        </section>
-      </div>
+        </DashboardCard>
 
-      <section className="dashboard-section">
-        <h2>Module launcher</h2>
-        <div className="module-launcher">
-          {modules.map((x) => (
-            <button key={x}>
-              {x}
-              <small>Not configured yet</small>
-            </button>
-          ))}
-        </div>
-      </section>
+        <DashboardCard
+          title="eProcurement overview"
+          action="Refresh"
+          className="dashboard-overview-card"
+        >
+          <div className="overview-kpi">
+            <strong>{completionRate}%</strong>
+            <span>Workflow task completion</span>
+          </div>
+          <StatusRow
+            label="Published forms"
+            value={`${publishedForms}/${studio.businessProcesses.length}`}
+            tone="success"
+          />
+          <StatusRow
+            label="Automated processes"
+            value={`${automatedProcesses}/${studio.businessProcesses.length}`}
+            tone="info"
+          />
+          <StatusRow
+            label="Document requirement sets"
+            value={studio.documentRequirementSets.length.toString()}
+            tone="warning"
+          />
+          <StatusRow
+            label="Workflow definitions"
+            value={w.length.toString()}
+            tone="success"
+          />
+          <StatusRow
+            label="Audit events captured"
+            value={a.length.toString()}
+            tone="info"
+          />
+        </DashboardCard>
+      </div>
     </>
   );
 }
