@@ -144,6 +144,26 @@ public static class SeedData
             db.Applications.Add(new Application("PROCUREMENT", "Procurement", "Procurement workspace containing governed source-to-contract modules.", "Briefcase", "LCA Indigo", "/app/suppliers", "/app", @"[""Supplier Management"",""Requisitions"",""Tenders"",""Evaluation"",""Contracts"",""Reports"",""Studio""]", Status: MetadataStatus.Active, CreatedBy: "system"));
         await db.SaveChangesAsync(cancellationToken);
 
+
+        if (!await db.NavigationDefinitions.AnyAsync(x => x.Code == "MAIN", cancellationToken))
+        {
+            var nav = new NavigationDefinition("MAIN", "Main navigation", "Administrator-configured sidebar navigation for ProcuraFlow.", Status: MetadataStatus.Active, CreatedBy: "system");
+            var procurement = new NavigationItem(nav.Id, "procurement", "Procurement", "Group", null, "BriefcaseBusiness", 10, IsCollapsible: true);
+            procurement.Children.Add(new NavigationItem(nav.Id, "suppliers", "Suppliers", "Link", "/app/suppliers", "Users", 10, procurement.Id, PermissionsJson: @"[""SupplierManagement.View""]"));
+            procurement.Children.Add(new NavigationItem(nav.Id, "tenders", "Tenders", "Link", "/app/tenders", "ScrollText", 20, procurement.Id, PermissionsJson: @"[""Tender.View""]"));
+            var administration = new NavigationItem(nav.Id, "administration", "Administration", "Group", null, "Settings", 20, IsCollapsible: true);
+            administration.Children.Add(new NavigationItem(nav.Id, "workflows", "Workflows", "Link", "/app/workflows/designer", "Workflow", 10, administration.Id, PermissionsJson: @"[""Workflow.Admin""]"));
+            administration.Children.Add(new NavigationItem(nav.Id, "rules", "Rules", "Link", "/app/rules", "ShieldCheck", 20, administration.Id, PermissionsJson: @"[""Rules.Admin""]"));
+            var studio = new NavigationItem(nav.Id, "studio", "Studio", "Group", null, "Blocks", 30, IsCollapsible: true);
+            studio.Children.Add(new NavigationItem(nav.Id, "pages", "Pages", "Link", "/app/studio/pages", "PanelTop", 10, studio.Id, PermissionsJson: @"[""Studio.Pages""]"));
+            studio.Children.Add(new NavigationItem(nav.Id, "entities", "Entities", "Link", "/app/studio/entities", "Database", 20, studio.Id, PermissionsJson: @"[""Studio.Entities""]"));
+            studio.Children.Add(new NavigationItem(nav.Id, "dashboards", "Dashboards", "Link", "/app/dashboards", "LayoutDashboard", 30, studio.Id, PermissionsJson: @"[""Studio.Dashboards""]"));
+            nav.Items.AddRange([procurement, administration, studio]);
+            db.NavigationDefinitions.Add(nav);
+            await db.SaveChangesAsync(cancellationToken);
+            db.ChangeTracker.Clear();
+        }
+
         var supplierTransitions = await db.WorkflowTransitions.AsNoTracking().Where(x => x.WorkflowVersionId == supplierVersionId).ToListAsync(cancellationToken);
         var configuredEffects = new Dictionary<string, string>
         {

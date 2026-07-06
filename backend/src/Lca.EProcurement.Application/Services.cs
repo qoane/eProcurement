@@ -86,6 +86,67 @@ public sealed record ExecuteWorkflowTaskActionDto(string ActionCode, string Acto
 public sealed record WorkflowActionResultDto(WorkflowInstance Instance, WorkflowTaskDetailDto? NextTask);
 
 
+public interface INavigationApplicationService
+{
+    Task<NavigationDesignerDto> GetAsync(string code = "MAIN", CancellationToken ct = default);
+    Task<NavigationDesignerDto> SaveAsync(NavigationDesignerDto dto, CancellationToken ct = default);
+}
+public sealed record NavigationDesignerDto(string Code, string Name, string Description, List<NavigationItemDto> Items);
+public sealed record NavigationItemDto(Guid? Id, string Code, string Label, string ItemType, string? Url, string Icon, int DisplayOrder, Guid? ParentId, bool IsCollapsible, bool IsExpandedByDefault, string PermissionsJson, string VisibilityRule, bool IsVisible, List<NavigationItemDto> Children);
+
+public sealed class NavigationApplicationService(EProcurementDbContext db) : INavigationApplicationService
+{
+    public async Task<NavigationDesignerDto> GetAsync(string code = "MAIN", CancellationToken ct = default)
+    {
+        var definition = await db.NavigationDefinitions.AsNoTracking().Include(x => x.Items).SingleOrDefaultAsync(x => x.Code == code, ct);
+        if (definition is null) return new("MAIN", "Main navigation", "Configurable application sidebar navigation.", []);
+        return new(definition.Code, definition.Name, definition.Description, BuildTree(definition.Items));
+    }
+
+    public async Task<NavigationDesignerDto> SaveAsync(NavigationDesignerDto dto, CancellationToken ct = default)
+    {
+        var definition = await db.NavigationDefinitions.Include(x => x.Items).SingleOrDefaultAsync(x => x.Code == dto.Code, ct);
+        if (definition is null)
+        {
+            definition = new NavigationDefinition(dto.Code, dto.Name, dto.Description, Status: MetadataStatus.Active, CreatedBy: "admin");
+            db.NavigationDefinitions.Add(definition);
+            await db.SaveChangesAsync(ct);
+        }
+        else
+        {
+            db.Entry(definition).CurrentValues[nameof(NavigationDefinition.Name)] = dto.Name;
+            db.Entry(definition).CurrentValues[nameof(NavigationDefinition.Description)] = dto.Description;
+            db.Entry(definition).CurrentValues[nameof(NavigationDefinition.Status)] = MetadataStatus.Active;
+            db.Entry(definition).CurrentValues[nameof(NavigationDefinition.Modified)] = DateTimeOffset.UtcNow;
+            db.Entry(definition).CurrentValues[nameof(NavigationDefinition.ModifiedBy)] = "admin";
+            db.NavigationItems.RemoveRange(definition.Items);
+            await db.SaveChangesAsync(ct);
+        }
+        AddItems(definition.Id, dto.Items, null);
+        await db.SaveChangesAsync(ct);
+        return await GetAsync(dto.Code, ct);
+    }
+
+    void AddItems(Guid definitionId, IEnumerable<NavigationItemDto> items, Guid? parentId)
+    {
+        foreach (var dto in items.OrderBy(x => x.DisplayOrder))
+        {
+            var item = new NavigationItem(definitionId, dto.Code, dto.Label, dto.ItemType, dto.Url, dto.Icon, dto.DisplayOrder, parentId, dto.IsCollapsible, dto.IsExpandedByDefault, dto.PermissionsJson, dto.VisibilityRule, dto.IsVisible);
+            db.NavigationItems.Add(item);
+            AddItems(definitionId, dto.Children, item.Id);
+        }
+    }
+
+    static List<NavigationItemDto> BuildTree(IEnumerable<NavigationItem> items)
+    {
+        var all = items.Select(x => ToDto(x, [])).ToDictionary(x => x.Id!.Value);
+        foreach (var item in items.Where(x => x.ParentId is not null).OrderBy(x => x.DisplayOrder))
+            if (all.TryGetValue(item.ParentId!.Value, out var parent)) parent.Children.Add(all[item.Id]);
+        return items.Where(x => x.ParentId is null).OrderBy(x => x.DisplayOrder).Select(x => all[x.Id]).ToList();
+    }
+    static NavigationItemDto ToDto(NavigationItem x, List<NavigationItemDto> children) => new(x.Id, x.Code, x.Label, x.ItemType, x.Url, x.Icon, x.DisplayOrder, x.ParentId, x.IsCollapsible, x.IsExpandedByDefault, x.PermissionsJson, x.VisibilityRule, x.IsVisible, children);
+}
+
 public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : IBusinessRuleApplicationService
 {
     public Task<List<BusinessRuleDefinition>> GetRulesAsync(CancellationToken ct = default) => db.BusinessRuleDefinitions.AsNoTracking().OrderBy(r => r.Code).ToListAsync(ct);
