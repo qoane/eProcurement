@@ -1,8 +1,10 @@
 import { apiDelete, apiGet, apiPost, apiPut } from "./apiClient";
-import type { PageDesigner } from "../types/api";
+import type { PageDataSourceOption, PageDesigner } from "../types/api";
 
 export const getPageDefinitions = () =>
   apiGet<PageDesigner[]>("/api/page-definitions", []);
+export const getPageDataSources = () =>
+  apiGet<PageDataSourceOption[]>("/api/page-definitions/data-sources", []);
 export const createPageDefinition = (body: PageDesigner) =>
   apiPost<PageDesigner>("/api/page-definitions", body, body);
 export const updatePageDefinition = (id: string, body: PageDesigner) =>
