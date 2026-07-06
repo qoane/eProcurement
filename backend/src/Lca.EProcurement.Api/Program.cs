@@ -20,24 +20,28 @@ builder.Services.AddScoped<IMetadataApplicationService, MetadataApplicationServi
 builder.Services.AddScoped<INavigationApplicationService, NavigationApplicationService>();
 
 var app = builder.Build();
-if (args.Contains("--seed"))
+
+async Task EnsureDatabaseSchemaAsync(bool seed)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<EProcurementDbContext>();
     await db.Database.MigrateAsync();
     await db.EnsureConfigurablePlatformSchemaAsync();
-    await SeedData.SeedAsync(db);
+    if (seed) await SeedData.SeedAsync(db);
+}
+
+if (args.Contains("--seed"))
+{
+    await EnsureDatabaseSchemaAsync(seed: true);
     return;
 }
+
+await EnsureDatabaseSchemaAsync(seed: app.Environment.IsDevelopment());
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<EProcurementDbContext>();
-    await db.Database.MigrateAsync();
-    await db.EnsureConfigurablePlatformSchemaAsync();
-    await SeedData.SeedAsync(db);
 }
 app.UseCors(FrontendCors);
 app.MapGet("/", () => Results.Ok(new { name = "LCA eProcurement API", status = "running", documentation = "/swagger", health = "/health" }));
