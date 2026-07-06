@@ -1,4 +1,5 @@
 import { navigate } from "../../app/routes";
+import { apiDelete } from "../../services/apiClient";
 import type { PageAction, PageDatasource } from "../../types/api";
 
 type ExecutePageActionOptions = {
@@ -20,7 +21,7 @@ function defaultPageRoute(datasource?: PageDatasource) {
   return entity ? `/app/${entity.toLowerCase()}` : undefined;
 }
 
-function resolveRoute(
+export function resolveRoute(
   route: string,
   row: Record<string, unknown> | undefined,
   datasource: PageDatasource | undefined,
@@ -38,14 +39,53 @@ function resolveRoute(
   });
 }
 
-export function executePageAction(
+export async function executePageAction(
   action?: PageAction,
   row?: Record<string, unknown>,
   options: ExecutePageActionOptions = {},
 ) {
-  if (action?.confirmation && !window.confirm(action.confirmation)) return;
+  if (!action) return;
 
-  const afterAction = action?.afterAction;
+  const isDelete = action.code.toLowerCase() === "delete";
+  if (isDelete) {
+    if (!action.confirmation?.trim()) {
+      options.onSuccess?.(
+        "Delete action blocked: confirmation text is required.",
+      );
+      return;
+    }
+    const confirmed = window.prompt(
+      `${action.confirmation}\n\nType DELETE to confirm.`,
+    );
+    if (confirmed !== "DELETE") return;
+  } else if (action.confirmation && !window.confirm(action.confirmation)) {
+    return;
+  }
+
+  const afterAction = action.afterAction;
+  const routeMode = afterAction?.routeMode;
+  const target =
+    routeMode === "DatasourceDefault"
+      ? defaultPageRoute(options.datasource)
+      : afterAction?.navigateTo || action.target;
+
+  if (isDelete) {
+    const deleteEndpoint = action.target || options.datasource?.deleteEndpoint;
+    if (!deleteEndpoint) {
+      options.onSuccess?.(
+        "Delete action blocked: no datasource delete endpoint is configured.",
+      );
+      return;
+    }
+    const result = await apiDelete(
+      resolveRoute(deleteEndpoint, row, options.datasource),
+    );
+    if (result.error) {
+      options.onSuccess?.(`Unable to delete record: ${result.error}`);
+      return;
+    }
+  }
+
   const shouldRefresh =
     afterAction?.refreshDatasource ||
     afterAction?.afterActionType === "Refresh";
@@ -54,14 +94,9 @@ export function executePageAction(
   if (afterAction?.successMessage)
     options.onSuccess?.(afterAction.successMessage);
 
-  const routeMode = afterAction?.routeMode;
-  const target =
-    routeMode === "DatasourceDefault"
-      ? defaultPageRoute(options.datasource)
-      : afterAction?.navigateTo || action?.target;
-
   if (
     target &&
+    !isDelete &&
     (afterAction?.afterActionType === "Navigate" ||
       afterAction?.afterActionType === "Open" ||
       !afterAction)
