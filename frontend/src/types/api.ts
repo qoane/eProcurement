@@ -1,7 +1,7 @@
 export type WorkflowNode = {
   code: string;
   name: string;
-  kind?: string;
+  kind?: string | number;
   createsTask?: boolean;
   isStart?: boolean;
   isTerminal?: boolean;
@@ -27,7 +27,7 @@ export type WorkflowTransition = {
 export type WorkflowVersion = {
   id?: string;
   versionNumber?: number;
-  status?: string;
+  status?: string | number;
   nodes?: WorkflowNode[];
   transitions?: WorkflowTransition[];
 };
