@@ -362,3 +362,44 @@ th {
 .form-grid.one { grid-template-columns: 1fr; }
 textarea.input { min-height: 86px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 @media (max-width: 1100px) { .workflow-designer-shell { grid-template-columns: 1fr; } }
+
+.designer-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 320px;
+  gap: 18px;
+  align-items: start;
+}
+.designer-palette,
+.designer-canvas,
+.designer-properties,
+.designer-section,
+.preview-card,
+.registration-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.palette-item {
+  padding: 10px 12px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  background: var(--color-surface-soft);
+  cursor: grab;
+  font-weight: 800;
+}
+.designer-section { margin-top: 16px; }
+.designer-section-head { display: grid; grid-template-columns: 1fr 180px auto; gap: 10px; align-items: end; }
+.designer-columns { display: grid; gap: 12px; margin-top: 14px; }
+.designer-column { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px; background: var(--color-surface-soft); }
+.designer-group { min-height: 120px; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-md); padding: 10px; margin-top: 10px; background: white; }
+.designer-field { width: 100%; text-align: left; border: 1px solid var(--color-border); background: white; border-radius: var(--radius-md); padding: 10px; margin-bottom: 8px; cursor: grab; display: grid; gap: 3px; }
+.designer-field.active { border-color: var(--color-primary); box-shadow: 0 0 0 3px #dbeafe; }
+.designer-field small, .preview-card small, .registration-section small { color: var(--color-text-muted); }
+.designer-properties { display: grid; gap: 12px; position: sticky; top: 16px; }
+.preview-card { display: grid; gap: 12px; }
+.registration-section { border-style: solid; margin-bottom: 14px; grid-column: 1 / -1; }
+.registration-section legend { font-weight: 900; padding: 0 8px; }
+@media (max-width: 1100px) { .designer-shell { grid-template-columns: 1fr; } .designer-properties { position: static; } }

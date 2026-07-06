@@ -79,12 +79,16 @@ export type Rule = {
   expression?: string;
   status?: string;
 };
+export type FormFieldValidation = { validationType: string; configurationJson?: string; message?: string };
+export type FormFieldVisibilityRule = { expression: string };
 export type FormField = {
   code: string;
   label: string;
   fieldType: string;
   isRequired?: boolean;
   displayOrder?: number;
+  validations?: FormFieldValidation[];
+  visibilityRules?: FormFieldVisibilityRule[];
 };
 export type FormSection = {
   code: string;
