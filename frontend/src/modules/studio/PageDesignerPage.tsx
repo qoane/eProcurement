@@ -14,6 +14,7 @@ import {
   updatePageDefinition,
 } from "../../services/pageDefinitionsApi";
 import type {
+  PageAction,
   PageComponent,
   PageDataSourceOption,
   PageDesigner,
@@ -145,6 +146,11 @@ const blank: PageDesigner = {
       label: "Open supplier",
       kind: "Row",
       target: "/app/suppliers/{referenceNumber}",
+      afterAction: {
+        afterActionType: "Navigate" as const,
+        navigateTo: "/app/suppliers/{id}",
+        routeMode: "Generated" as const,
+      },
     },
   ],
   filters: [
@@ -452,7 +458,17 @@ export function PageDesignerPage() {
               },
             ],
       actions: [
-        { code: "open", label: "Open", kind: "Row", target: getEndpoint },
+        {
+          code: "open",
+          label: "Open",
+          kind: "Row",
+          target: getEndpoint,
+          afterAction: {
+            afterActionType: "Navigate" as const,
+            navigateTo: `/app/${entity.toLowerCase()}/{id}`,
+            routeMode: "Generated" as const,
+          },
+        },
         ...(canEdit
           ? [
               {
@@ -460,6 +476,11 @@ export function PageDesignerPage() {
                 label: "Edit",
                 kind: "Row",
                 target: updateEndpoint,
+                afterAction: {
+                  afterActionType: "Navigate" as const,
+                  navigateTo: `/app/${entity.toLowerCase()}/{id}/edit`,
+                  routeMode: "Generated" as const,
+                },
               },
             ]
           : []),
@@ -471,6 +492,11 @@ export function PageDesignerPage() {
                 kind: "Row",
                 target: deleteEndpoint,
                 confirmation: `Delete this ${entity.toLowerCase()}? This action cannot be undone.`,
+                afterAction: {
+                  afterActionType: "Refresh" as const,
+                  refreshDatasource: true,
+                  successMessage: `${entity} deleted.`,
+                },
               },
             ]
           : []),
@@ -502,6 +528,37 @@ export function PageDesignerPage() {
       `${pagePurposeTemplates.find((x) => x.code === purpose)?.label} template applied.`,
     );
   }
+
+  function updateAction(code: string, patch: Partial<PageAction>) {
+    setForm({
+      ...form,
+      actions: form.actions.map((action) =>
+        action.code === code ? { ...action, ...patch } : action,
+      ),
+    });
+  }
+
+  function updateAfterAction(
+    code: string,
+    patch: Partial<NonNullable<PageAction["afterAction"]>>,
+  ) {
+    setForm({
+      ...form,
+      actions: form.actions.map((action) =>
+        action.code === code
+          ? {
+              ...action,
+              afterAction: {
+                afterActionType: "Stay",
+                ...(action.afterAction || {}),
+                ...patch,
+              },
+            }
+          : action,
+      ),
+    });
+  }
+
   function patchComponent(
     patch: Partial<PageComponent>,
     configuration?: Record<string, string>,
@@ -685,6 +742,114 @@ export function PageDesignerPage() {
               }
             />
           </label>
+        </section>
+        <section className="designer-panel-block">
+          <h3>Actions</h3>
+          <p className="muted">
+            Configure what happens after create, update, delete, open, or
+            command actions complete. Route tokens such as {"{id}"}, {"{entity}"}, and
+            datasource key fields are resolved at runtime.
+          </p>
+          {form.actions.map((action) => {
+            const afterAction = action.afterAction || {};
+            return (
+              <div className="panel" key={action.code}>
+                <label>
+                  Label
+                  <Input
+                    value={action.label}
+                    onChange={(e) =>
+                      updateAction(action.code, { label: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Action target
+                  <Input
+                    value={action.target || ""}
+                    onChange={(e) =>
+                      updateAction(action.code, { target: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  After action
+                  <Select
+                    value={afterAction.afterActionType || "Stay"}
+                    onChange={(e) =>
+                      updateAfterAction(action.code, {
+                        afterActionType: e.target.value as NonNullable<
+                          PageAction["afterAction"]
+                        >["afterActionType"],
+                        refreshDatasource: e.target.value === "Refresh",
+                      })
+                    }
+                  >
+                    <option value="Stay">Stay on current page</option>
+                    <option value="Refresh">Refresh list/data source</option>
+                    <option value="Navigate">Navigate/open page</option>
+                    <option value="Open">Open another form/page</option>
+                  </Select>
+                </label>
+                <label>
+                  Route mode
+                  <Select
+                    value={afterAction.routeMode || "Fixed"}
+                    onChange={(e) =>
+                      updateAfterAction(action.code, {
+                        routeMode: e.target.value as NonNullable<
+                          PageAction["afterAction"]
+                        >["routeMode"],
+                      })
+                    }
+                  >
+                    <option value="Fixed">Navigate to fixed route</option>
+                    <option value="Generated">
+                      Navigate using record id/key field
+                    </option>
+                    <option value="DatasourceDefault">
+                      Navigate to datasource default page
+                    </option>
+                  </Select>
+                </label>
+                <label>
+                  Navigate to
+                  <Input
+                    placeholder={`/app/${form.datasource.entity.toLowerCase()}/{id}`}
+                    value={afterAction.navigateTo || ""}
+                    onChange={(e) =>
+                      updateAfterAction(action.code, {
+                        navigateTo: e.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Success message
+                  <Input
+                    value={afterAction.successMessage || ""}
+                    onChange={(e) =>
+                      updateAfterAction(action.code, {
+                        successMessage: e.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(afterAction.refreshDatasource)}
+                    onChange={(e) =>
+                      updateAfterAction(action.code, {
+                        refreshDatasource: e.target.checked,
+                      })
+                    }
+                  />
+                  Refresh datasource after action
+                </label>
+              </div>
+            );
+          })}
         </section>
       </aside>
 

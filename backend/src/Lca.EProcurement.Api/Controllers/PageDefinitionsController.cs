@@ -10,7 +10,8 @@ public sealed record PageDatasourceDto(string Entity, string Mode = "Metadata", 
 public sealed record PageDataSourceOptionDto(string Code, string Label, string Entity, string Mode, string? ListEndpoint, string? GetEndpoint, string? CreateEndpoint, string? UpdateEndpoint, string? DeleteEndpoint, string KeyField, bool SupportsCreate, bool SupportsUpdate, bool SupportsDelete, string Description);
 public sealed record PageLayoutDto(string Template, int Columns = 12, string Density = "Comfortable", List<string>? Regions = null);
 public sealed record PageToolbarItemDto(string Code, string Label, string Kind = "Button", string? Icon = null, string? ActionCode = null);
-public sealed record PageActionDto(string Code, string Label, string Kind = "Command", string? Target = null, string? Confirmation = null);
+public sealed record PageAfterActionDto(string AfterActionType = "Stay", string? NavigateTo = null, string? RouteMode = null, bool RefreshDatasource = false, string? SuccessMessage = null);
+public sealed record PageActionDto(string Code, string Label, string Kind = "Command", string? Target = null, string? Confirmation = null, PageAfterActionDto? AfterAction = null);
 public sealed record PageFilterDto(string Code, string Label, string Field, string Operator = "Equals", string? DefaultValue = null);
 public sealed record PageColumnDto(string Code, string Label, string Field, int DisplayOrder = 0, bool Sortable = false, bool Searchable = false);
 public sealed record PageComponentDto(string Code, string Name, string ComponentType, string Region = "main", int DisplayOrder = 0, JsonElement? Configuration = null);

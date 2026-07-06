@@ -251,12 +251,20 @@ export type PageToolbarItem = {
   icon?: string;
   actionCode?: string;
 };
+export type PageAfterAction = {
+  afterActionType?: "Stay" | "Refresh" | "Navigate" | "Open";
+  navigateTo?: string;
+  routeMode?: "Fixed" | "Generated" | "DatasourceDefault";
+  refreshDatasource?: boolean;
+  successMessage?: string;
+};
 export type PageAction = {
   code: string;
   label: string;
   kind?: string;
   target?: string;
   confirmation?: string;
+  afterAction?: PageAfterAction;
 };
 export type PageFilter = {
   code: string;
