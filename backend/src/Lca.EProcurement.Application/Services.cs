@@ -69,7 +69,9 @@ public sealed record WorkflowDesignerDto(string Code, string Name, string Entity
 public sealed record WorkflowTransitionEffectDto(string EntityType, string PropertyName, string ValueExpression, string TriggerActionCode, string TriggerFromNodeCode);
 public sealed record CreateFormDefinitionDto(string Code, string Name, string EntityType, List<FormSectionDto> Sections);
 public sealed record FormSectionDto(string Code, string Title, int DisplayOrder, List<FormFieldDto> Fields);
-public sealed record FormFieldDto(string Code, string Label, string FieldType, int DisplayOrder, bool IsRequired);
+public sealed record FormFieldValidationDto(string ValidationType, string? ConfigurationJson, string Message);
+public sealed record FormFieldVisibilityRuleDto(string Expression);
+public sealed record FormFieldDto(string Code, string Label, string FieldType, int DisplayOrder, bool IsRequired, List<FormFieldValidationDto>? Validations = null, List<FormFieldVisibilityRuleDto>? VisibilityRules = null);
 public sealed record SubmitFormDto(string FormCode, string EntityType, Guid EntityId, string SubmittedBy, Dictionary<string, string?> Values);
 public sealed record CreateBusinessRuleDto(string Code, string Name, string AppliesTo, string Expression, bool IsActive = true);
 public sealed record PlatformDashboardDto(int WorkflowsCount, int RulesCount, int FormsCount, int ActiveWorkflowInstances, int PendingTasks, int BusinessProcessesCount = 0, int ApprovalMatricesCount = 0);
@@ -256,7 +258,7 @@ public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkfl
     {
         var process = await ActiveSupplierProcess(ct);
         if (process?.ActiveFormDefinitionId is null || process.ActiveWorkflowDefinitionId is null || process.ActiveDocumentRequirementSetId is null) return null;
-        var form = await db.FormDefinitions.AsNoTracking().Include(x => x.Versions.Where(v => v.Id == x.ActiveVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).SingleAsync(x => x.Id == process.ActiveFormDefinitionId, ct);
+        var form = await db.FormDefinitions.AsNoTracking().Include(x => x.Versions.Where(v => v.Id == x.ActiveVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).ThenInclude(f => f.Validations).Include(x => x.Versions.Where(v => v.Id == x.ActiveVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).ThenInclude(f => f.VisibilityRules).SingleAsync(x => x.Id == process.ActiveFormDefinitionId, ct);
         var docs = await db.DocumentRequirementSets.AsNoTracking().Include(x => x.Requirements).SingleAsync(x => x.Id == process.ActiveDocumentRequirementSetId, ct);
         var matrix = process.ActiveApprovalMatrixId is null ? null : await db.ApprovalMatrices.AsNoTracking().Include(x => x.Steps).SingleAsync(x => x.Id == process.ActiveApprovalMatrixId, ct);
         var workflow = await db.WorkflowDefinitions.AsNoTracking().Include(x => x.Versions.Where(v => v.Id == x.PublishedVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Nodes).Include(x => x.Versions.Where(v => v.Id == x.PublishedVersionId || v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Transitions).SingleAsync(x => x.Id == process.ActiveWorkflowDefinitionId, ct);
@@ -319,11 +321,23 @@ public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkfl
 
 public sealed class DynamicFormApplicationService(EProcurementDbContext db) : IDynamicFormApplicationService
 {
-    public Task<List<FormDefinition>> GetDefinitionsAsync(CancellationToken ct = default) => db.FormDefinitions.AsNoTracking().Include(f => f.Versions).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).OrderBy(f => f.Code).ToListAsync(ct);
+    public Task<List<FormDefinition>> GetDefinitionsAsync(CancellationToken ct = default) => db.FormDefinitions.AsNoTracking().Include(f => f.Versions).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).ThenInclude(f => f.Validations).Include(f => f.Versions).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).ThenInclude(f => f.VisibilityRules).OrderBy(f => f.Code).ToListAsync(ct);
     public async Task<FormDefinition> CreateDefinitionAsync(CreateFormDefinitionDto dto, CancellationToken ct = default)
     {
+        var existing = await db.FormDefinitions.Include(x => x.Versions).ThenInclude(v => v.Sections).ThenInclude(sec => sec.Fields).SingleOrDefaultAsync(x => x.Code == dto.Code, ct);
+        if (existing is not null)
+        {
+            db.FormDefinitions.Remove(existing);
+            await db.SaveChangesAsync(ct);
+        }
         var def = new FormDefinition(dto.Code, dto.Name, dto.EntityType); var version = new FormVersion(def.Id, 1);
-        foreach (var s in dto.Sections) { var section = new FormSection(version.Id, s.Code, s.Title, s.DisplayOrder); section.Fields.AddRange(s.Fields.Select(f => new FormField(section.Id, f.Code, f.Label, f.FieldType, f.DisplayOrder, f.IsRequired))); version.Sections.Add(section); }
+        foreach (var s in dto.Sections) { var section = new FormSection(version.Id, s.Code, s.Title, s.DisplayOrder); foreach (var f in s.Fields)
+            {
+                var field = new FormField(section.Id, f.Code, f.Label, f.FieldType, f.DisplayOrder, f.IsRequired);
+                field.Validations.AddRange((f.Validations ?? []).Select(v => new FormFieldValidation(field.Id, v.ValidationType, v.ConfigurationJson, v.Message)));
+                field.VisibilityRules.AddRange((f.VisibilityRules ?? []).Select(v => new FormFieldVisibilityRule(field.Id, v.Expression)));
+                section.Fields.Add(field);
+            } version.Sections.Add(section); }
         def.Versions.Add(version); db.FormDefinitions.Add(def); await db.SaveChangesAsync(ct); return def;
     }
     public async Task<FormSection?> AddSectionAsync(string formCode, FormSectionDto dto, CancellationToken ct = default)
@@ -331,7 +345,13 @@ public sealed class DynamicFormApplicationService(EProcurementDbContext db) : ID
         var version = await DraftFormVersion(formCode, ct);
         if (version is null) return null;
         var section = new FormSection(version.Id, dto.Code, dto.Title, dto.DisplayOrder);
-        section.Fields.AddRange(dto.Fields.Select(f => new FormField(section.Id, f.Code, f.Label, f.FieldType, f.DisplayOrder, f.IsRequired)));
+        foreach (var f in dto.Fields)
+        {
+            var field = new FormField(section.Id, f.Code, f.Label, f.FieldType, f.DisplayOrder, f.IsRequired);
+            field.Validations.AddRange((f.Validations ?? []).Select(v => new FormFieldValidation(field.Id, v.ValidationType, v.ConfigurationJson, v.Message)));
+            field.VisibilityRules.AddRange((f.VisibilityRules ?? []).Select(v => new FormFieldVisibilityRule(field.Id, v.Expression)));
+            section.Fields.Add(field);
+        }
         db.FormSections.Add(section); await db.SaveChangesAsync(ct); return section;
     }
     public async Task<FormField?> AddFieldAsync(string formCode, string sectionCode, FormFieldDto dto, CancellationToken ct = default)
@@ -341,10 +361,12 @@ public sealed class DynamicFormApplicationService(EProcurementDbContext db) : ID
         var section = await db.FormSections.SingleOrDefaultAsync(s => s.FormVersionId == version.Id && s.Code == sectionCode, ct);
         if (section is null) return null;
         var field = new FormField(section.Id, dto.Code, dto.Label, dto.FieldType, dto.DisplayOrder, dto.IsRequired);
+        field.Validations.AddRange((dto.Validations ?? []).Select(v => new FormFieldValidation(field.Id, v.ValidationType, v.ConfigurationJson, v.Message)));
+        field.VisibilityRules.AddRange((dto.VisibilityRules ?? []).Select(v => new FormFieldVisibilityRule(field.Id, v.Expression)));
         db.FormFields.Add(field); await db.SaveChangesAsync(ct); return field;
     }
     public async Task<FormDefinition?> PublishVersionAsync(string code, string actor, CancellationToken ct = default) { var d = await db.FormDefinitions.Include(x => x.Versions).SingleOrDefaultAsync(x => x.Code == code, ct); var v = d?.Versions.OrderByDescending(x => x.VersionNumber).FirstOrDefault(x => x.Status == WorkflowVersionStatus.Draft); if (d is null || v is null) return null; db.Entry(v).CurrentValues[nameof(FormVersion.Status)] = WorkflowVersionStatus.Published; db.Entry(v).CurrentValues[nameof(FormVersion.PublishedAt)] = DateTimeOffset.UtcNow; db.Entry(v).CurrentValues[nameof(FormVersion.PublishedBy)] = actor; db.Entry(d).CurrentValues[nameof(FormDefinition.ActiveVersionId)] = v.Id; await db.SaveChangesAsync(ct); return d; }
-    public Task<FormDefinition?> GetActiveByCodeAsync(string code, CancellationToken ct = default) => db.FormDefinitions.AsNoTracking().Include(d => d.Versions.Where(v => v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).SingleOrDefaultAsync(d => d.Code == code && d.IsActive, ct);
+    public Task<FormDefinition?> GetActiveByCodeAsync(string code, CancellationToken ct = default) => db.FormDefinitions.AsNoTracking().Include(d => d.Versions.Where(v => v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).ThenInclude(f => f.Validations).Include(d => d.Versions.Where(v => v.Status == WorkflowVersionStatus.Published)).ThenInclude(v => v.Sections).ThenInclude(s => s.Fields).ThenInclude(f => f.VisibilityRules).SingleOrDefaultAsync(d => d.Code == code && d.IsActive, ct);
     public async Task<FormSubmission> SubmitAsync(SubmitFormDto dto, CancellationToken ct = default) { var d = await db.FormDefinitions.SingleAsync(x => x.Code == dto.FormCode && x.ActiveVersionId != null, ct); var sub = new FormSubmission(d.Id, d.ActiveVersionId!.Value, dto.EntityType, dto.EntityId, dto.SubmittedBy, DateTimeOffset.UtcNow); sub.Values.AddRange(dto.Values.Select(v => new FormSubmissionValue(sub.Id, v.Key, v.Value))); db.FormSubmissions.Add(sub); await db.SaveChangesAsync(ct); return sub; }
     public Task<List<FormSubmission>> GetSubmissionsAsync(string entityType, Guid entityId, CancellationToken ct = default) => db.FormSubmissions.AsNoTracking().Include(s => s.Values).Where(s => s.EntityType == entityType && s.EntityId == entityId).ToListAsync(ct);
     async Task<FormVersion?> DraftFormVersion(string code, CancellationToken ct) => (await db.FormDefinitions.Include(f => f.Versions).SingleOrDefaultAsync(f => f.Code == code && f.IsActive, ct))?.Versions.OrderByDescending(v => v.VersionNumber).FirstOrDefault(v => v.Status == WorkflowVersionStatus.Draft);

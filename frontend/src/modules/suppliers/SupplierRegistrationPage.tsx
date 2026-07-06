@@ -18,11 +18,11 @@ export function SupplierRegistrationPage() {
       setDocs(data?.documentRequirements ?? null);
     });
   }, []);
-  const sections = useMemo(() => form?.versions?.find((v) => v.status === "Published")?.sections ?? form?.versions?.[0]?.sections ?? [], [form]);
+  const sections = useMemo(() => form?.versions?.find((v) => v.status === "Published")?.sections ?? [], [form]);
   return (
     <>
       <PageHeader title="Supplier registration" description="Supplier Management consumes the published business process, active dynamic form, document requirements, and workflow configuration from the platform." />
-      {form ? (
+      {form && sections.length > 0 ? (
         <div className="grid cols-2">
           <form className="panel form-grid" onSubmit={async (event) => {
               event.preventDefault();
@@ -35,8 +35,13 @@ export function SupplierRegistrationPage() {
               setMessage(workflowInstanceId ? `Registration submitted. Workflow instance: ${workflowInstanceId}` : "Registration could not be submitted.");
             }}>
             <label>Supplier reference *<Input name="referenceNumber" defaultValue={`SUP-LCA-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`} /></label>
-            {sections.flatMap((section) => section.fields ?? []).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)).map((field) => (
-              <label key={field.code}>{field.label}{field.isRequired ? " *" : ""}<Input type={field.fieldType === "email" ? "email" : "text"} name={field.code} /></label>
+            {sections.sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)).map((section) => (
+              <fieldset className="registration-section" key={section.code}>
+                <legend>{section.title}</legend>
+                {(section.fields ?? []).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)).map((field) => (
+                  <label key={field.code}>{field.label}{field.isRequired ? " *" : ""}<Input required={field.isRequired} type={field.fieldType === "email" ? "email" : field.fieldType === "number" ? "number" : "text"} name={field.code} placeholder={field.visibilityRules?.[0]?.expression ? `Visible when ${field.visibilityRules[0].expression}` : undefined} />{field.validations?.[0]?.message && <small>{field.validations[0].message}</small>}</label>
+                ))}
+              </fieldset>
             ))}
             {docs?.requirements?.map((r) => <label key={`upload-${r.documentType}`}>{r.documentType} file metadata{r.required ? " *" : ""}<Input name={`doc_${r.documentType}`} defaultValue={`${r.documentType}.pdf`} /></label>)}
             {message && <p className="success">{message}</p>}
