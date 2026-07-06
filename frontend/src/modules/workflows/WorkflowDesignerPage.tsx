@@ -28,7 +28,8 @@ export function WorkflowDesignerPage() {
   const [definitions, setDefinitions] = useState<WorkflowDefinition[]>([]);
   const [code, setCode] = useState("SUPPLIER-ONBOARDING");
   const selectedWorkflow = definitions.find((x) => x.code === code);
-  const selectedVersion = useMemo(() => selectedWorkflow?.versions?.find((x) => x.status === "Draft") ?? selectedWorkflow?.versions?.find((x) => x.id === selectedWorkflow?.publishedVersionId) ?? selectedWorkflow?.versions?.[0], [selectedWorkflow]);
+  const statusLabel = (status: unknown) => (typeof status === "number" ? ["Draft", "Published", "Archived"][status] : status);
+  const selectedVersion = useMemo(() => selectedWorkflow?.versions?.find((x) => statusLabel(x.status) === "Draft") ?? selectedWorkflow?.versions?.find((x) => x.id === selectedWorkflow?.publishedVersionId) ?? selectedWorkflow?.versions?.[0], [selectedWorkflow]);
   const [nodes, setNodes] = useState<WorkflowNode[]>(starterNodes);
   const [transitions, setTransitions] = useState<WorkflowTransition[]>(starterTransitions);
   const [selection, setSelection] = useState<Selection>({ type: "node", code: "DocumentCheck" });

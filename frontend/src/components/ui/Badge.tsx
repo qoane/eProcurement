@@ -7,8 +7,22 @@ export function Badge({
 }) {
   return <span className={`badge ${tone}`}>{children}</span>;
 }
-export function StatusBadge({ status }: { status?: string }) {
-  const s = (status || "Not configured").toLowerCase();
+const workflowStatusByValue: Record<number, string> = {
+  0: "Draft",
+  1: "Published",
+  2: "Archived",
+};
+
+function statusLabel(status: unknown) {
+  if (typeof status === "string" && status.trim()) return status;
+  if (typeof status === "number") return workflowStatusByValue[status] ?? String(status);
+  if (typeof status === "boolean") return status ? "Active" : "Inactive";
+  return "Not configured";
+}
+
+export function StatusBadge({ status }: { status?: unknown }) {
+  const label = statusLabel(status);
+  const s = label.toLowerCase();
   const tone =
     s.includes("approved") ||
     s.includes("complete") ||
@@ -22,5 +36,5 @@ export function StatusBadge({ status }: { status?: string }) {
         : s.includes("reject") || s.includes("fail")
           ? "danger"
           : "info";
-  return <Badge tone={tone}>{status || "Not configured"}</Badge>;
+  return <Badge tone={tone}>{label}</Badge>;
 }
