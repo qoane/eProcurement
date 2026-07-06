@@ -36,7 +36,18 @@ public interface IWorkflowApplicationService
     Task<WorkflowTask?> AssignTaskAsync(Guid id, string assignedTo, string actor, CancellationToken ct = default);
     Task<WorkflowTask?> CompleteTaskAsync(Guid id, string actor, CancellationToken ct = default);
 }
-public interface IBusinessRuleApplicationService { Task<List<BusinessRuleDefinition>> GetRulesAsync(CancellationToken ct = default); Task<BusinessRuleDefinition> CreateRuleAsync(CreateBusinessRuleDto dto, CancellationToken ct = default); Task<RuleResult> EvaluateAsync(string ruleCode, string entityType, Guid entityId, string actor, CancellationToken ct = default); }
+public interface IBusinessRuleApplicationService
+{
+    Task<List<BusinessRuleDefinition>> GetRulesAsync(CancellationToken ct = default);
+    Task<List<BusinessRuleExecutionLog>> GetHistoryAsync(string? ruleCode = null, CancellationToken ct = default);
+    Task<BusinessRuleDefinition> CreateRuleAsync(CreateBusinessRuleDto dto, CancellationToken ct = default);
+    Task<BusinessRuleDefinition?> PublishAsync(string code, string actor, CancellationToken ct = default);
+    Task<RuleValidationResultDto> ValidateAsync(RuleExpressionDto dto, CancellationToken ct = default);
+    Task<RuleSimulationResultDto> SimulateAsync(RuleSimulationDto dto, CancellationToken ct = default);
+    Task<RuleResult> EvaluateAsync(string ruleCode, string entityType, Guid entityId, string actor, CancellationToken ct = default);
+    Task<List<RuleResult>> EvaluatePublishedAsync(string appliesTo, string entityType, Guid entityId, string actor, Dictionary<string, string?>? values = null, CancellationToken ct = default);
+    RuleDesignerMetadataDto GetDesignerMetadata(string appliesTo = nameof(Supplier));
+}
 public interface ISupplierApplicationService
 {
     Task<List<object>> GetSuppliersAsync(CancellationToken ct = default);
@@ -73,7 +84,13 @@ public sealed record FormFieldValidationDto(string ValidationType, string? Confi
 public sealed record FormFieldVisibilityRuleDto(string Expression);
 public sealed record FormFieldDto(string Code, string Label, string FieldType, int DisplayOrder, bool IsRequired, List<FormFieldValidationDto>? Validations = null, List<FormFieldVisibilityRuleDto>? VisibilityRules = null);
 public sealed record SubmitFormDto(string FormCode, string EntityType, Guid EntityId, string SubmittedBy, Dictionary<string, string?> Values);
-public sealed record CreateBusinessRuleDto(string Code, string Name, string AppliesTo, string Expression, bool IsActive = true);
+public sealed record CreateBusinessRuleDto(string Code, string Name, string AppliesTo, string Expression, bool IsActive = true, string Category = "General", string FailureMessage = "Rule failed");
+public sealed record RuleExpressionDto(string AppliesTo, string Expression);
+public sealed record RuleValidationResultDto(bool IsValid, List<string> Errors, List<string> Warnings);
+public sealed record RuleSimulationDto(string AppliesTo, string Expression, Dictionary<string, string?> Values, List<SupplierDocumentUploadDto>? Documents = null, List<string>? Categories = null);
+public sealed record RuleSimulationResultDto(bool Passed, RuleValidationResultDto Validation, Dictionary<string, object?> Trace);
+public sealed record RuleDesignerMetadataDto(List<string> Categories, List<string> Fields, List<string> Functions, List<string> Operators);
+
 public sealed record PlatformDashboardDto(int WorkflowsCount, int RulesCount, int FormsCount, int ActiveWorkflowInstances, int PendingTasks, int BusinessProcessesCount = 0, int ApprovalMatricesCount = 0);
 public sealed record WorkflowMappingDto(string EntityType, string ActionCode, string WorkflowCode, bool IsActive = true);
 public sealed record CreateTransitionEffectDto(Guid TriggerTransitionId, string EntityType, string PropertyName, string ValueExpression);
@@ -154,38 +171,112 @@ public sealed class NavigationApplicationService(EProcurementDbContext db) : INa
 
 public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : IBusinessRuleApplicationService
 {
-    public Task<List<BusinessRuleDefinition>> GetRulesAsync(CancellationToken ct = default) => db.BusinessRuleDefinitions.AsNoTracking().OrderBy(r => r.Code).ToListAsync(ct);
-    public async Task<BusinessRuleDefinition> CreateRuleAsync(CreateBusinessRuleDto dto, CancellationToken ct = default) { var rule = new BusinessRuleDefinition(dto.Code, dto.Name, dto.AppliesTo, dto.Expression, dto.IsActive); db.BusinessRuleDefinitions.Add(rule); await db.SaveChangesAsync(ct); return rule; }
+    static readonly string[] Functions = ["HasDocument(\"TaxClearance\")", "InCategory(\"ICT\")", "Field(\"legalName\")", "IsNotEmpty(Field(\"legalName\"))", "Equals(Field(\"country\"), \"Lesotho\")", "Contains(Field(\"email\"), \"@\")"];
+    static readonly string[] Fields = ["Supplier.ReferenceNumber", "Supplier.LegalName", "Supplier.Status", "Supplier.Documents", "Supplier.Categories", "legalName", "tradingName", "email", "phone", "country"];
+    public Task<List<BusinessRuleDefinition>> GetRulesAsync(CancellationToken ct = default) => db.BusinessRuleDefinitions.AsNoTracking().OrderBy(r => r.Category).ThenBy(r => r.Code).ToListAsync(ct);
+    public Task<List<BusinessRuleExecutionLog>> GetHistoryAsync(string? ruleCode = null, CancellationToken ct = default) => db.BusinessRuleExecutionLogs.AsNoTracking().Where(x => ruleCode == null || x.RuleCode == ruleCode).OrderByDescending(x => x.ExecutedAt).Take(100).ToListAsync(ct);
+    public async Task<BusinessRuleDefinition> CreateRuleAsync(CreateBusinessRuleDto dto, CancellationToken ct = default)
+    {
+        var validation = SimpleExpressionEvaluator.Validate(dto.Expression);
+        if (!validation.IsValid) throw new InvalidOperationException(string.Join("; ", validation.Errors));
+        var existing = await db.BusinessRuleDefinitions.SingleOrDefaultAsync(x => x.Code == dto.Code, ct);
+        if (existing is not null) db.BusinessRuleDefinitions.Remove(existing);
+        var rule = new BusinessRuleDefinition(dto.Code, dto.Name, dto.AppliesTo, dto.Expression, dto.IsActive, dto.Category, BusinessRuleStatus.Draft, dto.FailureMessage);
+        db.BusinessRuleDefinitions.Add(rule); await db.SaveChangesAsync(ct); return rule;
+    }
+    public async Task<BusinessRuleDefinition?> PublishAsync(string code, string actor, CancellationToken ct = default)
+    {
+        var rule = await db.BusinessRuleDefinitions.SingleOrDefaultAsync(r => r.Code == code && r.IsActive, ct); if (rule is null) return null;
+        var validation = SimpleExpressionEvaluator.Validate(rule.Expression); if (!validation.IsValid) throw new InvalidOperationException(string.Join("; ", validation.Errors));
+        db.Entry(rule).CurrentValues[nameof(BusinessRuleDefinition.Status)] = BusinessRuleStatus.Published;
+        db.Entry(rule).CurrentValues[nameof(BusinessRuleDefinition.PublishedAt)] = DateTimeOffset.UtcNow;
+        db.Entry(rule).CurrentValues[nameof(BusinessRuleDefinition.PublishedBy)] = actor;
+        await db.SaveChangesAsync(ct); return rule with { Status = BusinessRuleStatus.Published, PublishedAt = DateTimeOffset.UtcNow, PublishedBy = actor };
+    }
+    public Task<RuleValidationResultDto> ValidateAsync(RuleExpressionDto dto, CancellationToken ct = default) => Task.FromResult(SimpleExpressionEvaluator.Validate(dto.Expression));
+    public Task<RuleSimulationResultDto> SimulateAsync(RuleSimulationDto dto, CancellationToken ct = default)
+    {
+        var validation = SimpleExpressionEvaluator.Validate(dto.Expression);
+        var supplier = new Supplier("SIM-001", dto.Values.GetValueOrDefault("legalName") ?? "Simulation Supplier", SupplierStatus.Draft);
+        supplier.Documents.AddRange((dto.Documents ?? []).Select(d => new SupplierDocument(supplier.Id, d.DocumentType, d.FileName, "simulation", DateTimeOffset.UtcNow)));
+        supplier.Categories.AddRange((dto.Categories ?? []).Select(c => new SupplierCategory(c)));
+        var context = new RuleEvaluationContext(supplier, dto.Values);
+        var passed = validation.IsValid && SimpleExpressionEvaluator.Evaluate(dto.Expression, context);
+        return Task.FromResult(new RuleSimulationResultDto(passed, validation, new() { ["documents"] = supplier.Documents.Count, ["categories"] = supplier.Categories.Count, ["values"] = dto.Values.Count }));
+    }
     public async Task<RuleResult> EvaluateAsync(string ruleCode, string entityType, Guid entityId, string actor, CancellationToken ct = default)
     {
-        var rule = await db.BusinessRuleDefinitions.SingleAsync(r => r.Code == ruleCode && r.IsActive, ct);
-        object entity = entityType == nameof(Supplier)
-            ? await db.Suppliers.Include(s => s.Documents).Include(s => s.Categories).SingleAsync(s => s.Id == entityId, ct)
-            : throw new NotSupportedException($"Rules for entity type '{entityType}' are not configured.");
-        var passed = SimpleExpressionEvaluator.Evaluate(rule.Expression, entity);
-        var result = new RuleResult(rule.Code, passed, passed ? "Rule passed" : $"Rule failed: {rule.Name}");
-        db.BusinessRuleExecutionLogs.Add(new BusinessRuleExecutionLog(rule.Code, entityType, entityId, JsonSerializer.Serialize(entity), passed ? RuleOutcome.Passed : RuleOutcome.Failed, JsonSerializer.Serialize(result), DateTimeOffset.UtcNow));
-        db.AuditEvents.Add(new AuditEvent("Rule evaluated", entityType, entityId, EntityReference(entity), actor, result.Message, DateTimeOffset.UtcNow));
-        await db.SaveChangesAsync(ct);
-        return result;
+        var rule = await db.BusinessRuleDefinitions.SingleAsync(r => r.Code == ruleCode && r.IsActive && r.Status == BusinessRuleStatus.Published, ct);
+        return (await EvaluateRules([rule], entityType, entityId, actor, null, ct)).Single();
+    }
+    public async Task<List<RuleResult>> EvaluatePublishedAsync(string appliesTo, string entityType, Guid entityId, string actor, Dictionary<string, string?>? values = null, CancellationToken ct = default)
+    {
+        var rules = await db.BusinessRuleDefinitions.Where(r => r.AppliesTo == appliesTo && r.IsActive && r.Status == BusinessRuleStatus.Published).OrderBy(r => r.Category).ThenBy(r => r.Code).ToListAsync(ct);
+        return await EvaluateRules(rules, entityType, entityId, actor, values, ct);
+    }
+    public RuleDesignerMetadataDto GetDesignerMetadata(string appliesTo = nameof(Supplier)) => new(["Registration", "Compliance", "Risk", "Documents", "Eligibility"], Fields.ToList(), Functions.ToList(), ["&&", "||", "!", "==", "!="]);
+    async Task<List<RuleResult>> EvaluateRules(List<BusinessRuleDefinition> rules, string entityType, Guid entityId, string actor, Dictionary<string, string?>? values, CancellationToken ct)
+    {
+        object entity = entityType == nameof(Supplier) ? await db.Suppliers.Include(s => s.Documents).Include(s => s.Categories).SingleAsync(s => s.Id == entityId, ct) : throw new NotSupportedException($"Rules for entity type '{entityType}' are not configured.");
+        var results = new List<RuleResult>();
+        foreach (var rule in rules)
+        {
+            var passed = SimpleExpressionEvaluator.Evaluate(rule.Expression, new RuleEvaluationContext(entity, values ?? []));
+            var result = new RuleResult(rule.Code, passed, passed ? "Rule passed" : rule.FailureMessage);
+            db.BusinessRuleExecutionLogs.Add(new BusinessRuleExecutionLog(rule.Code, entityType, entityId, JsonSerializer.Serialize(entity), passed ? RuleOutcome.Passed : RuleOutcome.Failed, JsonSerializer.Serialize(result), DateTimeOffset.UtcNow));
+            db.AuditEvents.Add(new AuditEvent("Rule evaluated", entityType, entityId, EntityReference(entity), actor, result.Message, DateTimeOffset.UtcNow));
+            results.Add(result);
+        }
+        await db.SaveChangesAsync(ct); return results;
     }
     static string EntityReference(object e) => e is Supplier s ? s.ReferenceNumber : e.ToString() ?? string.Empty;
 }
 
+public sealed record RuleEvaluationContext(object Entity, Dictionary<string, string?> Values);
+
 public static class SimpleExpressionEvaluator
 {
-    public static bool Evaluate(string expression, object entity)
+    public static RuleValidationResultDto Validate(string expression)
     {
-        if (entity is Supplier supplier && expression.StartsWith("Supplier.", StringComparison.Ordinal))
-        {
-            var body = expression["Supplier.".Length..];
-            if (body.StartsWith("Documents.Any(", StringComparison.Ordinal)) return AnyEquals(body, supplier.Documents.Select(d => d.DocumentType), "DocumentType");
-            if (body == "Categories.Any()") return supplier.Categories.Any();
-            if (body.StartsWith("Status == ", StringComparison.Ordinal)) return string.Equals(supplier.Status.ToString(), Quoted(body[10..]), StringComparison.OrdinalIgnoreCase);
-        }
-        throw new InvalidOperationException($"Expression '{expression}' is not supported by the safe evaluator.");
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(expression)) errors.Add("Expression is required.");
+        if (expression.Contains(';')) errors.Add("Statements are not allowed; use a single boolean expression.");
+        if (expression.Count(c => c == '(') != expression.Count(c => c == ')')) errors.Add("Parentheses are not balanced.");
+        return new(errors.Count == 0, errors, expression.Length > 900 ? ["Expression is long; consider splitting rules by category."] : []);
     }
-    static bool AnyEquals(string body, IEnumerable<string> values, string property) => values.Any(v => string.Equals(v, Quoted(body.Replace("Documents.Any(", "").TrimEnd(')').Replace(property + " == ", "")), StringComparison.OrdinalIgnoreCase));
+    public static bool Evaluate(string expression, object entityOrContext)
+    {
+        var context = entityOrContext is RuleEvaluationContext c ? c : new RuleEvaluationContext(entityOrContext, []);
+        return EvalOr(expression.Trim(), context);
+    }
+    static bool EvalOr(string e, RuleEvaluationContext c) => SplitTop(e, "||").Select(x => EvalAnd(x, c)).Any(x => x);
+    static bool EvalAnd(string e, RuleEvaluationContext c) => SplitTop(e, "&&").Select(x => EvalAtom(x, c)).All(x => x);
+    static bool EvalAtom(string raw, RuleEvaluationContext c)
+    {
+        var e = Unwrap(raw.Trim());
+        if (e.StartsWith('!')) return !EvalAtom(e[1..], c);
+        if (e.StartsWith("HasDocument(", StringComparison.Ordinal)) return Supplier(c).Documents.Any(d => string.Equals(d.DocumentType, Arg(e), StringComparison.OrdinalIgnoreCase));
+        if (e.StartsWith("InCategory(", StringComparison.Ordinal)) return Supplier(c).Categories.Any(x => string.Equals(x.Name, Arg(e), StringComparison.OrdinalIgnoreCase));
+        if (e.StartsWith("IsNotEmpty(", StringComparison.Ordinal)) return !string.IsNullOrWhiteSpace(Value(e[11..^1], c));
+        if (e.StartsWith("Contains(", StringComparison.Ordinal)) { var args = Args(e); return Value(args[0], c)?.Contains(Quoted(args[1]), StringComparison.OrdinalIgnoreCase) == true; }
+        if (e.StartsWith("Equals(", StringComparison.Ordinal)) { var args = Args(e); return string.Equals(Value(args[0], c), Quoted(args[1]), StringComparison.OrdinalIgnoreCase); }
+        if (e.Contains(" != ")) { var parts = e.Split(" != ", 2, StringSplitOptions.TrimEntries); return !string.Equals(Value(parts[0], c), Quoted(parts[1]), StringComparison.OrdinalIgnoreCase); }
+        if (e.Contains(" == ")) { var parts = e.Split(" == ", 2, StringSplitOptions.TrimEntries); return string.Equals(Value(parts[0], c), Quoted(parts[1]), StringComparison.OrdinalIgnoreCase); }
+        if (e.StartsWith("Supplier.Documents.Any(", StringComparison.Ordinal)) return Supplier(c).Documents.Any(d => string.Equals(d.DocumentType, Quoted(e.Split("==",2)[1].TrimEnd(')')), StringComparison.OrdinalIgnoreCase));
+        if (e == "Supplier.Categories.Any()") return Supplier(c).Categories.Any();
+        throw new InvalidOperationException($"Expression '{e}' is not supported by the safe evaluator.");
+    }
+    static Supplier Supplier(RuleEvaluationContext c) => c.Entity as Supplier ?? throw new InvalidOperationException("Supplier rules require a Supplier context.");
+    static string? Value(string token, RuleEvaluationContext c)
+    {
+        token = token.Trim(); var s = Supplier(c);
+        if (token.StartsWith("Field(", StringComparison.Ordinal)) return c.Values.GetValueOrDefault(Arg(token));
+        return token switch { "Supplier.ReferenceNumber" => s.ReferenceNumber, "Supplier.LegalName" => s.LegalName, "Supplier.Status" => s.Status.ToString(), _ => c.Values.GetValueOrDefault(token) ?? Quoted(token) };
+    }
+    static string Unwrap(string e) { while (e.StartsWith('(') && e.EndsWith(')')) e = e[1..^1].Trim(); return e; }
+    static List<string> SplitTop(string e, string op) { var parts = new List<string>(); var depth = 0; var start = 0; for (var i=0;i<e.Length-(op.Length-1);i++){ if(e[i]=='(')depth++; else if(e[i]==')')depth--; else if(depth==0 && e.Substring(i,op.Length)==op){ parts.Add(e[start..i]); start=i+op.Length; i+=op.Length-1; }} parts.Add(e[start..]); return parts; }
+    static string Arg(string call) => Quoted(call[(call.IndexOf('(')+1)..call.LastIndexOf(')')]);
+    static List<string> Args(string call) => SplitTop(call[(call.IndexOf('(')+1)..call.LastIndexOf(')')], ",");
     static string Quoted(string value) => value.Trim().Trim('"');
 }
 
@@ -250,7 +341,7 @@ public sealed class WorkflowApplicationService(EProcurementDbContext db, IBusine
     async Task<string> Reference(string entityType, Guid entityId, CancellationToken ct) => entityType == nameof(Supplier) ? (await db.Suppliers.SingleAsync(s => s.Id == entityId, ct)).ReferenceNumber : entityId.ToString();
 }
 
-public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkflowApplicationService workflows, IDynamicFormApplicationService forms) : ISupplierApplicationService
+public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkflowApplicationService workflows, IDynamicFormApplicationService forms, IBusinessRuleApplicationService rules) : ISupplierApplicationService
 {
     public async Task<List<object>> GetSuppliersAsync(CancellationToken ct = default) => await db.Suppliers.AsNoTracking().Include(s => s.Documents).Include(s => s.Categories).OrderBy(s => s.ReferenceNumber).Select(s => new { s.Id, s.ReferenceNumber, s.LegalName, Status = s.Status.ToString(), Documents = s.Documents, Categories = s.Categories.Select(c => c.Name) }).Cast<object>().ToListAsync(ct);
 
@@ -275,6 +366,8 @@ public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkfl
         foreach (var doc in dto.Documents) if (!supplier.Documents.Any(x => x.DocumentType == doc.DocumentType && x.FileName == doc.FileName)) db.SupplierDocuments.Add(new SupplierDocument(supplier.Id, doc.DocumentType, doc.FileName, dto.Actor, DateTimeOffset.UtcNow));
         db.AuditEvents.Add(new AuditEvent("Supplier registration submitted", nameof(Supplier), supplier.Id, supplier.ReferenceNumber, dto.Actor, config.Process.Code, DateTimeOffset.UtcNow));
         await db.SaveChangesAsync(ct);
+        var ruleResults = await rules.EvaluatePublishedAsync("SupplierRegistration", nameof(Supplier), supplier.Id, dto.Actor, dto.Values, ct);
+        if (ruleResults.Any(x => !x.Passed)) throw new InvalidOperationException($"Supplier registration blocked by published rules: {string.Join(", ", ruleResults.Where(x => !x.Passed).Select(x => x.RuleCode))}");
         var submission = await forms.SubmitAsync(new SubmitFormDto(config.Form.Code, nameof(Supplier), supplier.Id, dto.Actor, dto.Values), ct);
         var instance = await workflows.StartAsync(config.Workflow.Code, nameof(Supplier), supplier.Id, dto.Actor, ct);
         var version = config.Workflow.Versions.Single(v => v.Id == config.Workflow.PublishedVersionId || v.Status == WorkflowVersionStatus.Published);

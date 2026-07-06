@@ -78,6 +78,9 @@ export type Rule = {
   appliesTo?: string;
   expression?: string;
   status?: string;
+  category?: string;
+  failureMessage?: string;
+  publishedAt?: string;
 };
 export type FormFieldValidation = { validationType: string; configurationJson?: string; message?: string };
 export type FormFieldVisibilityRule = { expression: string };
@@ -328,3 +331,7 @@ export type ComponentDefinition = {
   status?: string;
   version?: number;
 };
+export type RuleDesignerMetadata = { categories: string[]; fields: string[]; functions: string[]; operators: string[] };
+export type RuleValidationResult = { isValid: boolean; errors: string[]; warnings: string[] };
+export type RuleSimulationResult = { passed: boolean; validation: RuleValidationResult; trace: Record<string, unknown> };
+export type RuleExecutionLog = { ruleCode: string; entityType: string; entityId: string; outcome: string; resultJson: string; executedAt: string };
