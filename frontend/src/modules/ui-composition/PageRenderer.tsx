@@ -17,6 +17,7 @@ import type {
 } from "../../types/api";
 import { executePageAction } from "./actions";
 import { loadDataSource } from "./dataSources";
+import { ConfiguredRegistration } from "./ConfiguredRegistration";
 
 function read(row: Record<string, unknown>, field: string) {
   return field.split(".").reduce<unknown>((value, key) => {
@@ -54,6 +55,8 @@ function renderComponent(
     );
   if (component.componentType === "FormField")
     return <FieldRenderer label={component.name} required />;
+  if (component.componentType === "ConfiguredRegistration")
+    return <ConfiguredRegistration configuration={component.configuration} />;
   return null;
 }
 

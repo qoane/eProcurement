@@ -84,7 +84,8 @@ public static class SeedData
             Component("WORKFLOW-STATUS", "Workflow Status", "Workflow", "WorkflowStatus", @"[{""code"":""workflowCode"",""name"":""Workflow code"",""dataType"":""string""},{""code"":""statusField"",""name"":""Status field"",""dataType"":""string""}]", "Workflow", @"[""workflow"",""status""]"),
             Component("AUDIT-TIMELINE", "Audit Timeline", "Audit", "AuditTimeline", @"[{""code"":""entityType"",""name"":""Entity type"",""dataType"":""string""},{""code"":""entityId"",""name"":""Entity id binding"",""dataType"":""string""}]", "History", @"[""audit"",""timeline""]"),
             Component("SIGNATURE", "Signature", "Content", "Signature", @"[{""code"":""signerRole"",""name"":""Signer role"",""dataType"":""string""},{""code"":""requireTimestamp"",""name"":""Require timestamp"",""dataType"":""boolean"",""defaultValue"":""true""}]", "Signature", @"[""approval"",""signature""]"),
-            Component("COMMENTS", "Comments", "Collaboration", "Comments", @"[{""code"":""threadKey"",""name"":""Thread key"",""dataType"":""string""},{""code"":""allowAttachments"",""name"":""Allow attachments"",""dataType"":""boolean"",""defaultValue"":""false""}]", "MessagesSquare", @"[""collaboration"",""comments""]")
+            Component("COMMENTS", "Comments", "Collaboration", "Comments", @"[{""code"":""threadKey"",""name"":""Thread key"",""dataType"":""string""},{""code"":""allowAttachments"",""name"":""Allow attachments"",""dataType"":""boolean"",""defaultValue"":""false""}]", "MessagesSquare", @"[""collaboration"",""comments""]"),
+            Component("CONFIGURED-REGISTRATION", "Configured Registration", "Composition", "ConfiguredRegistration", @"[{""code"":""configurationEndpoint"",""name"":""Configuration endpoint"",""dataType"":""string"",""required"":true},{""code"":""submitEndpoint"",""name"":""Submit endpoint"",""dataType"":""string"",""required"":true},{""code"":""referencePrefix"",""name"":""Reference prefix"",""dataType"":""string""},{""code"":""actor"",""name"":""Default actor"",""dataType"":""string""}]", "Blocks", @"[""application"",""business-process"",""dynamic-form"",""workflow"",""rules"",""documents"",""approval""]")
         ];
     }
 
@@ -214,6 +215,25 @@ public static class SeedData
                 @"[{""code"":""supplier-grid"",""name"":""Supplier grid"",""componentType"":""DataGrid"",""region"":""main"",""displayOrder"":10,""configuration"":{""componentDefinitionCode"":""DATA-GRID""}}]",
                 @"[{""role"":""ProcurementOfficer"",""access"":""View""},{""role"":""Administrator"",""access"":""Manage""}]",
                 @"{""route"":""/app/suppliers"",""parentRoute"":""/app"",""menuGroup"":""Procurement"",""showInNavigation"":true}",
+                Status: MetadataStatus.Active,
+                CreatedBy: "system"));
+        await db.SaveChangesAsync(cancellationToken);
+
+        if (!await db.PageDefinitions.AnyAsync(x => x.Code == "SUPPLIER-REGISTRATION", cancellationToken))
+            db.PageDefinitions.Add(new PageDefinition(
+                "SUPPLIER-REGISTRATION",
+                "Supplier registration",
+                "Registration page assembled by ProcuraFlow from application, business process, dynamic form, workflow, rule, approval, document, navigation, and UI composition metadata.",
+                PageType.Form,
+                @"{""entity"":""Supplier"",""mode"":""Configuration"",""endpoint"":""/api/suppliers/registration/configuration"",""keyField"":""referenceNumber""}",
+                @"{""template"":""ConfiguredRegistration"",""columns"":12,""density"":""Comfortable"",""regions"":[""main"",""sidebar""]}",
+                @"[{""code"":""process"",""label"":""Supplier Registration business process"",""kind"":""Metadata"",""actionCode"":""SUPPLIER-REGISTRATION""}]",
+                @"[{""code"":""back-to-suppliers"",""label"":""Back to suppliers"",""kind"":""Secondary"",""target"":""/app/suppliers""}]",
+                @"[]",
+                @"[]",
+                @"[{""code"":""supplier-registration-composition"",""name"":""Supplier registration composition"",""componentType"":""ConfiguredRegistration"",""region"":""main"",""displayOrder"":10,""configuration"":{""componentDefinitionCode"":""CONFIGURED-REGISTRATION"",""applicationCode"":""PROCUREMENT"",""businessProcessCode"":""SUPPLIER-REGISTRATION"",""configurationEndpoint"":""/api/suppliers/registration/configuration"",""submitEndpoint"":""/api/suppliers/registration"",""referencePrefix"":""SUP-LCA"",""actor"":""supplier@demo.co.ls""}}]",
+                @"[{""role"":""Supplier"",""access"":""Submit""},{""role"":""Administrator"",""access"":""Manage""}]",
+                @"{""route"":""/app/suppliers/register"",""parentRoute"":""/app/suppliers"",""menuGroup"":""Procurement"",""showInNavigation"":true}",
                 Status: MetadataStatus.Active,
                 CreatedBy: "system"));
         await db.SaveChangesAsync(cancellationToken);
