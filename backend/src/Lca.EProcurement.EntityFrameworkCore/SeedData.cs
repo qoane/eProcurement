@@ -198,6 +198,26 @@ public static class SeedData
             if (!await db.ComponentDefinitions.AnyAsync(x => x.Code == component.Code, cancellationToken)) db.ComponentDefinitions.Add(component);
         await db.SaveChangesAsync(cancellationToken);
 
+
+        if (!await db.PageDefinitions.AnyAsync(x => x.Code == "SUPPLIER-LIST", cancellationToken))
+            db.PageDefinitions.Add(new PageDefinition(
+                "SUPPLIER-LIST",
+                "Suppliers",
+                "Enterprise supplier master data composed from page, layout, component, data source, and permission metadata.",
+                PageType.DataGrid,
+                @"{""entity"":""Supplier"",""mode"":""Api"",""endpoint"":""/api/suppliers"",""keyField"":""referenceNumber""}",
+                @"{""template"":""DataGrid"",""columns"":12,""density"":""Comfortable"",""regions"":[""main""]}",
+                @"[{""code"":""register"",""label"":""Register supplier"",""kind"":""Button"",""actionCode"":""register""}]",
+                @"[{""code"":""register"",""label"":""Register supplier"",""kind"":""Primary"",""target"":""/app/suppliers/register""},{""code"":""open-detail"",""label"":""Open detail"",""kind"":""Row"",""target"":""/app/suppliers/{referenceNumber}""}]",
+                @"[{""code"":""search"",""label"":""Search suppliers"",""field"":""legalName"",""operator"":""Contains""}]",
+                @"[{""code"":""reference"",""label"":""Reference"",""field"":""referenceNumber"",""displayOrder"":10,""sortable"":true,""searchable"":true},{""code"":""supplier"",""label"":""Supplier"",""field"":""legalName"",""displayOrder"":20,""sortable"":true,""searchable"":true},{""code"":""status"",""label"":""Status"",""field"":""status"",""displayOrder"":30,""sortable"":true,""searchable"":true},{""code"":""categories"",""label"":""Categories"",""field"":""categories"",""displayOrder"":40}]",
+                @"[{""code"":""supplier-grid"",""name"":""Supplier grid"",""componentType"":""DataGrid"",""region"":""main"",""displayOrder"":10,""configuration"":{""componentDefinitionCode"":""DATA-GRID""}}]",
+                @"[{""role"":""ProcurementOfficer"",""access"":""View""},{""role"":""Administrator"",""access"":""Manage""}]",
+                @"{""route"":""/app/suppliers"",""parentRoute"":""/app"",""menuGroup"":""Procurement"",""showInNavigation"":true}",
+                Status: MetadataStatus.Active,
+                CreatedBy: "system"));
+        await db.SaveChangesAsync(cancellationToken);
+
         if (!await db.NavigationDefinitions.AnyAsync(x => x.Code == "MAIN", cancellationToken))
         {
             var nav = new NavigationDefinition("MAIN", "Main navigation", "Administrator-configured sidebar navigation for ProcuraFlow.", Status: MetadataStatus.Active, CreatedBy: "system");
