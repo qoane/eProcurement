@@ -341,3 +341,24 @@ th {
     grid-template-columns: 1fr;
   }
 }
+.workflow-designer-shell { display: grid; grid-template-columns: 260px minmax(620px, 1fr) 340px; gap: 16px; align-items: start; margin: 18px 0; }
+.workflow-node-list { display: grid; gap: 10px; }
+.workflow-node-row { display: grid; gap: 4px; text-align: left; border: 1px solid var(--color-border); background: var(--color-surface-soft); border-radius: var(--radius-md); padding: 12px; cursor: pointer; }
+.workflow-node-row span { color: var(--color-text-muted); font-size: 12px; }
+.workflow-node-row.active { border-color: var(--color-primary); box-shadow: 0 0 0 3px #dbeafe; }
+.workflow-canvas { position: relative; min-height: 520px; overflow: auto; border: 1px solid var(--color-border); border-radius: var(--radius-xl); background-image: radial-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(135deg, #f8fbff, #eef6ff); background-size: 24px 24px, 100% 100%; box-shadow: var(--shadow-sm); }
+.workflow-links { position: absolute; inset: 0; width: 1300px; height: 520px; pointer-events: none; }
+.workflow-links g { pointer-events: all; cursor: pointer; }
+.workflow-links line { stroke: #2563eb; stroke-width: 3; }
+.workflow-links text { fill: #0f172a; font-size: 12px; font-weight: 800; paint-order: stroke; stroke: white; stroke-width: 4px; }
+.workflow-node-card { position: absolute; z-index: 2; width: 180px; display: grid; gap: 4px; padding: 13px 14px; border-radius: 16px; border: 2px solid white; background: white; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15); cursor: grab; }
+.workflow-node-card strong { font-size: 14px; }
+.workflow-node-card span, .workflow-node-card small { color: var(--color-text-muted); }
+.workflow-node-card.start { border-color: #22c55e; }
+.workflow-node-card.task { border-color: #2563eb; }
+.workflow-node-card.automatic { border-color: #a855f7; }
+.workflow-node-card.end { border-color: #f97316; }
+.workflow-node-card.selected { outline: 4px solid #bfdbfe; }
+.form-grid.one { grid-template-columns: 1fr; }
+textarea.input { min-height: 86px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+@media (max-width: 1100px) { .workflow-designer-shell { grid-template-columns: 1fr; } }

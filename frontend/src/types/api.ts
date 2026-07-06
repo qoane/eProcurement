@@ -5,6 +5,13 @@ export type WorkflowNode = {
   createsTask?: boolean;
   isStart?: boolean;
   isTerminal?: boolean;
+  defaultAssignedRole?: string;
+  positionX?: number;
+  positionY?: number;
+  actionConfigurationJson?: string;
+  conditionConfigurationJson?: string;
+  businessRuleCodesJson?: string;
+  assignedRolesJson?: string;
 };
 export type WorkflowTransition = {
   fromNodeCode: string;
@@ -12,8 +19,13 @@ export type WorkflowTransition = {
   actionName: string;
   toNodeCode: string;
   requiredRuleCode?: string;
+  conditionExpression?: string;
+  actionConfigurationJson?: string;
+  businessRuleCodesJson?: string;
+  assignedRolesJson?: string;
 };
 export type WorkflowVersion = {
+  id?: string;
   versionNumber?: number;
   status?: string;
   nodes?: WorkflowNode[];
@@ -23,6 +35,7 @@ export type WorkflowDefinition = {
   code: string;
   name: string;
   entityType: string;
+  publishedVersionId?: string;
   versions?: WorkflowVersion[];
 };
 export type Supplier = {
