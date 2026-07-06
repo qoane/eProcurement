@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "predev": "npm install --no-audit --no-fund",
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "format": "prettier --write src"
