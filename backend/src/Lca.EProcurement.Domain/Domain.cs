@@ -8,6 +8,7 @@ public enum WorkflowNodeKind { Start, Task, Automatic, End }
 public enum WorkflowActionKind { Transition, TaskAssignment, TaskCompletion, Cancellation }
 public enum RuleOutcome { Passed, Failed }
 public enum BusinessProcessStatus { Draft, Published, Archived }
+public enum BusinessRuleStatus { Draft, Published, Archived }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Wizard, Form, SplitView, Timeline, Kanban, Calendar, Report }
@@ -69,7 +70,7 @@ public record WorkflowInstance(Guid WorkflowDefinitionId, Guid WorkflowVersionId
 public record WorkflowTask(Guid WorkflowInstanceId, string NodeCode, string? AssignedRole, string? AssignedTo = null, WorkflowTaskStatus Status = WorkflowTaskStatus.Open, DateTimeOffset CreatedAt = default, DateTimeOffset? AssignedAt = null, DateTimeOffset? CompletedAt = null) : Entity(Guid.NewGuid());
 public record WorkflowHistory(Guid WorkflowInstanceId, string EventType, string NodeCode, string Actor, string Details, DateTimeOffset OccurredAt, Guid? WorkflowTaskId = null) : Entity(Guid.NewGuid());
 
-public record BusinessRuleDefinition(string Code, string Name, string AppliesTo, string Expression, bool IsActive = true) : Entity(Guid.NewGuid());
+public record BusinessRuleDefinition(string Code, string Name, string AppliesTo, string Expression, bool IsActive = true, string Category = "General", BusinessRuleStatus Status = BusinessRuleStatus.Draft, string FailureMessage = "Rule failed", DateTimeOffset? PublishedAt = null, string? PublishedBy = null) : Entity(Guid.NewGuid());
 public record BusinessRuleExecutionLog(string RuleCode, string EntityType, Guid EntityId, string InputJson, RuleOutcome Outcome, string ResultJson, DateTimeOffset ExecutedAt) : Entity(Guid.NewGuid());
 
 public record AuditEvent(string EventType, string EntityType, Guid EntityId, string EntityReference, string Actor, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
