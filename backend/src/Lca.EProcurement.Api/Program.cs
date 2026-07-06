@@ -21,6 +21,7 @@ builder.Services.AddScoped<IConfigurationStudioApplicationService, Configuration
 builder.Services.AddScoped<IMetadataApplicationService, MetadataApplicationService>();
 builder.Services.AddScoped<INavigationApplicationService, NavigationApplicationService>();
 builder.Services.AddScoped<IPageDefinitionApplicationService, PageDefinitionApplicationService>();
+builder.Services.AddScoped<IEntityRecordApplicationService, EntityRecordApplicationService>();
 
 var app = builder.Build();
 
