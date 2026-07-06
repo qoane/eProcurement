@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { FieldHint } from "../../components/ui/FieldHint";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { PageRenderer } from "../ui-composition/PageRenderer";
@@ -765,12 +766,17 @@ export function PageDesignerPage() {
               ))}
             </Select>
           </label>
-          <small className="muted">
+          <FieldHint>
             {selectedDataSource?.description ||
-              "Choose a generated metadata datasource or custom API-backed datasource discovered from existing page definitions."}
-          </small>
+              "Choose generated metadata when the platform owns the schema, or Custom / manual for a page backed by a custom API contract."}
+          </FieldHint>
           <label>
             Endpoint
+            <FieldHint>
+              List endpoint used by metadata-driven runtime components. Use
+              generated endpoints such as /api/suppliers, or a custom API path
+              when data comes from bespoke controllers.
+            </FieldHint>
             <Input
               value={form.datasource.endpoint || ""}
               onChange={(e) =>
@@ -787,6 +793,11 @@ export function PageDesignerPage() {
           </label>
           <label>
             Key field
+            <FieldHint>
+              Unique field used to resolve row actions and route tokens. For
+              generated pages this is usually id; custom APIs may expose
+              referenceNumber or another stable key.
+            </FieldHint>
             <Input
               value={form.datasource.keyField || "id"}
               onChange={(e) =>
@@ -822,6 +833,11 @@ export function PageDesignerPage() {
             Delete record actions require confirmation text and use the
             configured datasource delete endpoint.
           </p>
+          <FieldHint tone="warning">
+            Action targets should match the selected datasource mode: generated
+            metadata pages call generated endpoints, while custom API pages must
+            use explicit custom routes and payload expectations.
+          </FieldHint>
           {(form.pageType === "DataGrid" ||
             selectedPurpose().includes("list")) && (
             <Button variant="secondary" onClick={addDeleteRecordAction}>
@@ -856,6 +872,11 @@ export function PageDesignerPage() {
                 </label>
                 <label>
                   Action target
+                  <FieldHint>
+                    Endpoint or route invoked by this action. Row actions can
+                    include tokens such as /api/suppliers/{"{id}"} so runtime
+                    data replaces the key field.
+                  </FieldHint>
                   <Input
                     value={action.target || ""}
                     onChange={(e) =>
@@ -881,6 +902,11 @@ export function PageDesignerPage() {
                 </label>
                 <label>
                   After action
+                  <FieldHint>
+                    Post-action behavior controls whether metadata-driven pages
+                    stay put, refresh their datasource, or navigate after a
+                    generated/custom API call succeeds.
+                  </FieldHint>
                   <Select
                     value={afterAction.afterActionType || "Stay"}
                     onChange={(e) =>
@@ -921,6 +947,10 @@ export function PageDesignerPage() {
                 </label>
                 <label>
                   Navigate to
+                  <FieldHint>
+                    Destination route after success. Use dynamic tokens for
+                    record pages, for example /app/suppliers/{"{id}"}.
+                  </FieldHint>
                   <Input
                     placeholder={`/app/${form.datasource.entity.toLowerCase()}/{id}`}
                     value={afterAction.navigateTo || ""}
@@ -1019,6 +1049,11 @@ export function PageDesignerPage() {
                 </label>
                 <label>
                   Route
+                  <FieldHint>
+                    Runtime URL for this page. Use static routes like
+                    /app/suppliers or dynamic routes like /app/suppliers/
+                    {"{id}"} for detail pages.
+                  </FieldHint>
                   <Input
                     value={form.route}
                     onChange={(e) =>
@@ -1035,6 +1070,11 @@ export function PageDesignerPage() {
                 </label>
                 <label>
                   Page Type
+                  <FieldHint>
+                    Select the runtime pattern for the metadata renderer, such
+                    as DataGrid for lists, DetailPage for one record, or Form
+                    for create/edit flows.
+                  </FieldHint>
                   <Select
                     value={form.pageType}
                     onChange={(e) =>
@@ -1054,7 +1094,36 @@ export function PageDesignerPage() {
                   />
                 </label>
                 <label>
+                  Navigation visibility
+                  <FieldHint>
+                    Controls whether this page metadata appears in the generated
+                    navigation menu. Hide detail/edit pages that are opened from
+                    row actions, but keep list pages visible.
+                  </FieldHint>
+                  <span className="checkbox-field">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.navigation.showInNavigation)}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          navigation: {
+                            ...form.navigation,
+                            showInNavigation: e.target.checked,
+                          },
+                        })
+                      }
+                    />
+                    Show in navigation
+                  </span>
+                </label>
+                <label>
                   Permissions
+                  <FieldHint>
+                    Comma-separated roles allowed to load this page metadata.
+                    Pair View pages with read-only APIs and Manage pages with
+                    create/update/delete APIs.
+                  </FieldHint>
                   <Input
                     value={form.permissions.map((p) => p.role).join(", ")}
                     onChange={(e) =>
@@ -1114,6 +1183,11 @@ export function PageDesignerPage() {
             </section>
             <section className="designer-layout-picker">
               <h3>Layout</h3>
+              <FieldHint>
+                Layout regions define named drop zones stored in page metadata.
+                Components render only when their region matches one of these
+                names.
+              </FieldHint>
               <div>
                 {layouts.map((l) => (
                   <Button
@@ -1196,6 +1270,11 @@ export function PageDesignerPage() {
             </label>
             <label>
               Datasource
+              <FieldHint>
+                Component-level datasource override. Leave as the page entity
+                for generated metadata pages, or set a custom API-backed alias
+                for specialized components.
+              </FieldHint>
               <Input
                 value={
                   configOf(selectedComponent).datasource ||
@@ -1240,6 +1319,10 @@ export function PageDesignerPage() {
             </label>
             <label>
               Permissions
+              <FieldHint>
+                Optional component-level role metadata for hiding a region or
+                control even when the user can access the page.
+              </FieldHint>
               <Input
                 value={configOf(selectedComponent).permissions || ""}
                 onChange={(e) =>
