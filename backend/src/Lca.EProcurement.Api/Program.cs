@@ -1,3 +1,4 @@
+using Lca.EProcurement.Api.Controllers;
 using Lca.EProcurement.Application;
 using Lca.EProcurement.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,7 @@ builder.Services.AddScoped<IPlatformConfigurationApplicationService, PlatformCon
 builder.Services.AddScoped<IConfigurationStudioApplicationService, ConfigurationStudioApplicationService>();
 builder.Services.AddScoped<IMetadataApplicationService, MetadataApplicationService>();
 builder.Services.AddScoped<INavigationApplicationService, NavigationApplicationService>();
+builder.Services.AddScoped<IPageDefinitionApplicationService, PageDefinitionApplicationService>();
 
 var app = builder.Build();
 

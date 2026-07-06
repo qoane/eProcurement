@@ -165,6 +165,7 @@ export type ApplicationDesigner = {
   modules: string[];
   status?: string;
   version?: number;
+  publishedVersionId?: string;
 };
 
 export type EntityProperty = {
@@ -213,7 +214,8 @@ export type PageType =
   | "Timeline"
   | "Kanban"
   | "Calendar"
-  | "Report";
+  | "Report"
+  | "MasterDetail";
 export type PageDatasource = {
   entity: string;
   mode?: string;
@@ -275,8 +277,12 @@ export type PageDesigner = {
   code: string;
   name: string;
   description: string;
+  applicationId?: string;
   pageType: PageType;
+  route: string;
+  icon: string;
   datasource: PageDatasource;
+  layoutId?: string;
   layout: PageLayout;
   toolbar: PageToolbarItem[];
   actions: PageAction[];
@@ -287,6 +293,7 @@ export type PageDesigner = {
   navigation: PageNavigation;
   status?: string;
   version?: number;
+  publishedVersionId?: string;
 };
 
 export type ComponentProperty = {
