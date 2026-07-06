@@ -33,6 +33,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { ApplicationDesignerPage } from "./ApplicationDesignerPage";
 import { EntityDesignerPage } from "./EntityDesignerPage";
 import { PageDesignerPage } from "./PageDesignerPage";
+import { NavigationDesignerPage } from "./NavigationDesignerPage";
 
 type StudioModule = {
   title: string;
@@ -326,6 +327,7 @@ export function StudioModulePage({ slug }: { slug: string }) {
   if (slug === "applications") return <ApplicationDesignerPage />;
   if (slug === "entities") return <EntityDesignerPage />;
   if (slug === "pages") return <PageDesignerPage />;
+  if (slug === "navigation") return <NavigationDesignerPage />;
   const Icon = module.icon;
   return (
     <div className="studio-page">
