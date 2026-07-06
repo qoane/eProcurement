@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Lca.EProcurement.Api.Controllers;
 
 public sealed record PageDatasourceDto(string Entity, string Mode = "Metadata", string? Endpoint = null, string? KeyField = null);
+public sealed record PageDataSourceOptionDto(string Code, string Label, string Entity, string Mode, string? ListEndpoint, string? GetEndpoint, string? CreateEndpoint, string? UpdateEndpoint, string? DeleteEndpoint, string KeyField, bool SupportsCreate, bool SupportsUpdate, bool SupportsDelete, string Description);
 public sealed record PageLayoutDto(string Template, int Columns = 12, string Density = "Comfortable", List<string>? Regions = null);
 public sealed record PageToolbarItemDto(string Code, string Label, string Kind = "Button", string? Icon = null, string? ActionCode = null);
 public sealed record PageActionDto(string Code, string Label, string Kind = "Command", string? Target = null, string? Confirmation = null);
@@ -26,6 +27,7 @@ public sealed class DuplicatePageDefinitionCodeException(string code, Guid exist
 public interface IPageDefinitionApplicationService
 {
     Task<List<PageDesignerDto>> ListAsync(CancellationToken ct = default);
+    Task<List<PageDataSourceOptionDto>> ListDataSourcesAsync(CancellationToken ct = default);
     Task<PageDesignerDto?> GetAsync(Guid id, CancellationToken ct = default);
     Task<PageDesignerDto> CreateAsync(PageDesignerDto dto, CancellationToken ct = default);
     Task<PageDesignerDto?> UpdateAsync(Guid id, PageDesignerDto dto, CancellationToken ct = default);
@@ -39,6 +41,82 @@ public sealed class PageDefinitionApplicationService(EProcurementDbContext db) :
     static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     public async Task<List<PageDesignerDto>> ListAsync(CancellationToken ct = default) => (await db.PageDefinitions.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct)).Select(ToDto).ToList();
     public async Task<PageDesignerDto?> GetAsync(Guid id, CancellationToken ct = default) => await db.PageDefinitions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct) is { } p ? ToDto(p) : null;
+
+    public async Task<List<PageDataSourceOptionDto>> ListDataSourcesAsync(CancellationToken ct = default)
+    {
+        var options = new Dictionary<string, PageDataSourceOptionDto>(StringComparer.OrdinalIgnoreCase);
+
+        void Add(PageDataSourceOptionDto option) => options[option.Code] = option;
+
+        Add(new PageDataSourceOptionDto(
+            "SUPPLIERS",
+            "Suppliers",
+            "Supplier",
+            "Application",
+            "/api/suppliers",
+            "/api/suppliers/{id}",
+            "/api/suppliers",
+            "/api/suppliers/{id}",
+            "/api/suppliers/{id}",
+            "id",
+            true,
+            true,
+            true,
+            "SupplierManagement application API for supplier records."));
+
+        var entities = await db.EntityDefinitions.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
+        foreach (var entity in entities)
+        {
+            var code = NormalizeCode(entity.Code);
+            var routeEntity = code.ToLowerInvariant();
+            var keyField = string.IsNullOrWhiteSpace(entity.DefaultSearchField) ? "id" : entity.DefaultSearchField;
+            Add(new PageDataSourceOptionDto(
+                code,
+                string.IsNullOrWhiteSpace(entity.PluralName) ? entity.Name : entity.PluralName,
+                entity.Name,
+                "GeneratedCrud",
+                $"/api/entities/{routeEntity}/records",
+                $"/api/entities/{routeEntity}/records/{{id}}",
+                $"/api/entities/{routeEntity}/records",
+                $"/api/entities/{routeEntity}/records/{{id}}",
+                $"/api/entities/{routeEntity}/records/{{id}}",
+                keyField,
+                true,
+                true,
+                true,
+                string.IsNullOrWhiteSpace(entity.Description)
+                    ? $"Generated CRUD API for {entity.Name} metadata."
+                    : entity.Description));
+        }
+
+        var pages = await db.PageDefinitions.AsNoTracking().ToListAsync(ct);
+        foreach (var page in pages)
+        {
+            var datasource = Deserialize(page.DatasourceJson, new PageDatasourceDto(""));
+            if (string.IsNullOrWhiteSpace(datasource.Endpoint) || string.IsNullOrWhiteSpace(datasource.Entity)) continue;
+
+            var code = NormalizeCode($"{datasource.Entity}-{datasource.Mode}");
+            if (options.ContainsKey(code)) continue;
+
+            Add(new PageDataSourceOptionDto(
+                code,
+                $"{datasource.Entity} custom API",
+                datasource.Entity,
+                string.IsNullOrWhiteSpace(datasource.Mode) ? "CustomApi" : datasource.Mode,
+                datasource.Endpoint,
+                null,
+                null,
+                null,
+                null,
+                string.IsNullOrWhiteSpace(datasource.KeyField) ? "id" : datasource.KeyField,
+                false,
+                false,
+                false,
+                $"Custom API discovered from page definition {page.Code}."));
+        }
+
+        return options.Values.OrderBy(x => x.Label).ToList();
+    }
     public async Task<PageDesignerDto> CreateAsync(PageDesignerDto dto, CancellationToken ct = default)
     {
         var code = NormalizeCode(dto.Code);
@@ -79,6 +157,7 @@ public sealed class PageDefinitionApplicationService(EProcurementDbContext db) :
 public sealed class PageDefinitionsController(IPageDefinitionApplicationService pages) : ControllerBase
 {
     [HttpGet] public async Task<ActionResult<List<PageDesignerDto>>> List(CancellationToken ct) => Ok(await pages.ListAsync(ct));
+    [HttpGet("data-sources")] public async Task<ActionResult<List<PageDataSourceOptionDto>>> DataSources(CancellationToken ct) => Ok(await pages.ListDataSourcesAsync(ct));
     [HttpGet("{id:guid}")] public async Task<ActionResult<PageDesignerDto>> Get(Guid id, CancellationToken ct) => await pages.GetAsync(id, ct) is { } item ? Ok(item) : NotFound();
     [HttpPost] public async Task<ActionResult<PageDesignerDto>> Create(PageDesignerDto dto, CancellationToken ct)
     {

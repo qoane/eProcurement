@@ -222,6 +222,22 @@ export type PageDatasource = {
   endpoint?: string;
   keyField?: string;
 };
+export type PageDataSourceOption = {
+  code: string;
+  label: string;
+  entity: string;
+  mode: string;
+  listEndpoint?: string;
+  getEndpoint?: string;
+  createEndpoint?: string;
+  updateEndpoint?: string;
+  deleteEndpoint?: string;
+  keyField: string;
+  supportsCreate: boolean;
+  supportsUpdate: boolean;
+  supportsDelete: boolean;
+  description: string;
+};
 export type PageLayout = {
   template: string;
   columns?: number;

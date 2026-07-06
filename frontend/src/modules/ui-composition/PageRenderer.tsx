@@ -74,12 +74,12 @@ export function PageRenderer({
 
   useEffect(() => {
     setLoading(true);
-    void loadDataSource(page.datasource?.entity).then((result) => {
+    void loadDataSource(page.datasource).then((result) => {
       setRows(result.rows);
       setError(result.error);
       setLoading(false);
     });
-  }, [page.datasource?.entity]);
+  }, [page.datasource]);
 
   const searchable = useMemo(
     () =>
