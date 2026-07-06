@@ -8,6 +8,7 @@ import { PageRenderer } from "../ui-composition/PageRenderer";
 import {
   archivePageDefinition,
   createPageDefinition,
+  deletePageDefinition,
   getPageDataSources,
   getPageDefinitions,
   publishPageDefinition,
@@ -303,6 +304,10 @@ export function PageDesignerPage() {
         mode: source.mode,
         endpoint: source.listEndpoint,
         keyField: source.keyField,
+        getEndpoint: source.getEndpoint,
+        createEndpoint: source.createEndpoint,
+        updateEndpoint: source.updateEndpoint,
+        deleteEndpoint: source.deleteEndpoint,
       },
     });
   }
@@ -354,6 +359,64 @@ export function PageDesignerPage() {
       await load();
     }
   }
+
+  async function removePageDefinition() {
+    if (!form.id) {
+      setMessage("Save the page definition before deleting it.");
+      return;
+    }
+    const confirmed = window.prompt(
+      `Type DELETE to permanently delete the page definition "${form.name}".`,
+    );
+    if (confirmed !== "DELETE") {
+      setMessage("Page definition delete cancelled.");
+      return;
+    }
+    const res = await deletePageDefinition(form.id);
+    if (res.error) {
+      setMessage(`Unable to delete page definition: ${res.error}`);
+      return;
+    }
+    setForm(blank);
+    setSelectedCode(blank.components?.[0]?.code || "");
+    setMessage(`${form.name} page definition deleted.`);
+    await load();
+  }
+
+  function addDeleteRecordAction() {
+    const entity = form.datasource.entity || "Record";
+    const target =
+      form.datasource.deleteEndpoint ||
+      endpointFrom(selectedDataSource, "delete", form.datasource.endpoint);
+    const keyField =
+      form.datasource.keyField || selectedDataSource?.keyField || "id";
+    const existing = form.actions.some((action) => action.code === "delete");
+    const deleteAction: PageAction = {
+      code: "delete",
+      label: "Delete",
+      kind: "Row",
+      target,
+      confirmation: `Type DELETE to permanently delete this ${entity.toLowerCase()}.`,
+      afterAction: {
+        afterActionType: "Refresh",
+        refreshDatasource: true,
+        successMessage: `${entity} deleted.`,
+      },
+    };
+    setForm({
+      ...form,
+      datasource: { ...form.datasource, keyField, deleteEndpoint: target },
+      actions: existing
+        ? form.actions.map((action) =>
+            action.code === "delete" ? { ...action, ...deleteAction } : action,
+          )
+        : [...form.actions, deleteAction],
+    });
+    setMessage(
+      "Record delete action configured with confirmation and datasource delete endpoint.",
+    );
+  }
+
   function addComponent(type: string, region = regions[0]) {
     const code = slug(`${type}-${components.length + 1}`).toLowerCase();
     const component = {
@@ -442,6 +505,10 @@ export function PageDesignerPage() {
         entity,
         endpoint: listEndpoint || form.datasource.endpoint,
         keyField: form.datasource.keyField || source?.keyField || "id",
+        getEndpoint,
+        createEndpoint,
+        updateEndpoint,
+        deleteEndpoint,
       },
       layout: { ...form.layout, template: "Single Column", regions: ["main"] },
       toolbar:
@@ -628,6 +695,9 @@ export function PageDesignerPage() {
           <Button variant="secondary" onClick={archive}>
             Archive
           </Button>
+          <Button variant="secondary" onClick={removePageDefinition}>
+            Delete page definition
+          </Button>
         </div>
       </header>
 
@@ -747,9 +817,17 @@ export function PageDesignerPage() {
           <h3>Actions</h3>
           <p className="muted">
             Configure what happens after create, update, delete, open, or
-            command actions complete. Route tokens such as {"{id}"}, {"{entity}"}, and
-            datasource key fields are resolved at runtime.
+            command actions complete. Route tokens such as {"{id}"},{" "}
+            {"{entity}"}, and datasource key fields are resolved at runtime.
+            Delete record actions require confirmation text and use the
+            configured datasource delete endpoint.
           </p>
+          {(form.pageType === "DataGrid" ||
+            selectedPurpose().includes("list")) && (
+            <Button variant="secondary" onClick={addDeleteRecordAction}>
+              Add record delete action
+            </Button>
+          )}
           {form.actions.map((action) => {
             const afterAction = action.afterAction || {};
             return (
@@ -764,11 +842,40 @@ export function PageDesignerPage() {
                   />
                 </label>
                 <label>
+                  Action kind
+                  <Select
+                    value={action.kind || "Button"}
+                    onChange={(e) =>
+                      updateAction(action.code, { kind: e.target.value })
+                    }
+                  >
+                    <option value="Button">Page/header button</option>
+                    <option value="Secondary">Secondary page action</option>
+                    <option value="Row">Record row action</option>
+                  </Select>
+                </label>
+                <label>
                   Action target
                   <Input
                     value={action.target || ""}
                     onChange={(e) =>
                       updateAction(action.code, { target: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Confirmation text
+                  <Input
+                    placeholder={
+                      action.code.toLowerCase() === "delete"
+                        ? "Type DELETE to permanently delete this record."
+                        : "Optional confirmation prompt"
+                    }
+                    value={action.confirmation || ""}
+                    onChange={(e) =>
+                      updateAction(action.code, {
+                        confirmation: e.target.value,
+                      })
                     }
                   />
                 </label>

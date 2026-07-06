@@ -220,6 +220,10 @@ export type PageDatasource = {
   entity: string;
   mode?: string;
   endpoint?: string;
+  getEndpoint?: string;
+  createEndpoint?: string;
+  updateEndpoint?: string;
+  deleteEndpoint?: string;
   keyField?: string;
 };
 export type PageDataSourceOption = {

@@ -35,8 +35,8 @@ function formatCell(row: Record<string, unknown>, column: PageColumn) {
   return value == null || value === "" ? "—" : String(value);
 }
 
-function firstRowAction(actions: PageAction[]) {
-  return actions.find(
+function rowActions(actions: PageAction[]) {
+  return actions.filter(
     (action) => action.kind === "Row" || action.target?.includes("{"),
   );
 }
@@ -124,7 +124,7 @@ export function PageRenderer({
     ),
   );
   const headerActions = page.actions.filter((action) => action.kind !== "Row");
-  const rowAction = firstRowAction(page.actions);
+  const rowActionItems = rowActions(page.actions);
 
   if (loading) return <LoadingState />;
   if (!allowed)
@@ -145,7 +145,7 @@ export function PageRenderer({
             key={action.code}
             variant={action.kind === "Secondary" ? "secondary" : "primary"}
             onClick={() =>
-              executePageAction(action, undefined, {
+              void executePageAction(action, undefined, {
                 datasource: page.datasource,
                 onRefresh: refreshDatasource,
                 onSuccess: setActionMessage,
@@ -179,23 +179,32 @@ export function PageRenderer({
                   cell: (row: Record<string, unknown>) =>
                     formatCell(row, column),
                 })),
-                ...(rowAction
+                ...(rowActionItems.length
                   ? [
                       {
-                        header: "Action",
+                        header: "Actions",
                         cell: (row: Record<string, unknown>) => (
-                          <Button
-                            variant="secondary"
-                            onClick={() =>
-                              executePageAction(rowAction, row, {
-                                datasource: page.datasource,
-                                onRefresh: refreshDatasource,
-                                onSuccess: setActionMessage,
-                              })
-                            }
-                          >
-                            {rowAction.label}
-                          </Button>
+                          <div className="actions">
+                            {rowActionItems.map((action) => (
+                              <Button
+                                key={action.code}
+                                variant={
+                                  action.code.toLowerCase() === "delete"
+                                    ? "secondary"
+                                    : "primary"
+                                }
+                                onClick={() =>
+                                  void executePageAction(action, row, {
+                                    datasource: page.datasource,
+                                    onRefresh: refreshDatasource,
+                                    onSuccess: setActionMessage,
+                                  })
+                                }
+                              >
+                                {action.label}
+                              </Button>
+                            ))}
+                          </div>
                         ),
                       },
                     ]
