@@ -187,11 +187,21 @@ export function PageRenderer({
 
   function refreshDatasource() {
     setLoading(true);
-    void loadDataSource(page.datasource).then((result) => {
-      setRows(result.rows);
-      setError(result.error);
-      setLoading(false);
-    });
+    setError(undefined);
+    void loadDataSource(page.datasource)
+      .then((result) => {
+        setRows(result.rows);
+        setError(result.error);
+      })
+      .catch((exception: unknown) => {
+        setRows([]);
+        setError(
+          exception instanceof Error
+            ? exception.message
+            : "Unexpected datasource loading error.",
+        );
+      })
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
@@ -273,7 +283,12 @@ export function PageRenderer({
           <strong>{actionMessage}</strong>
         </div>
       )}
-      {error && <EmptyState title="Data source warning" message={error} />}
+      {error && (
+        <EmptyState
+          title="Datasource could not be loaded"
+          message={`${error} Check the Page Designer datasource mode, endpoint, and key field before publishing.`}
+        />
+      )}
       {page.pageType === "DataGrid" && (
         <>
           <Input
