@@ -7,7 +7,6 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { AdminCard } from "../../components/ui/AdminCard";
 import { CardToolLink, CardTools } from "../../components/ui/CardTools";
 import { InfoBox } from "../../components/ui/InfoBox";
-import { SmallBox } from "../../components/ui/SmallBox";
 import { getSuppliers } from "../../services/suppliersApi";
 import { getTasks } from "../../services/tasksApi";
 import { getAuditEvents } from "../../services/auditApi";
@@ -201,29 +200,32 @@ export function DashboardPage() {
       </div>
 
       <div className="grid cols-4 dashboard-metrics dashboard-section">
-        <SmallBox
+        <InfoBox
           label="Registered vendors"
           value={s.length}
           icon="👥"
+          trend="Supplier records from the LCA register"
           variant="primary"
         />
-        <SmallBox
+        <InfoBox
           label="Workflow tasks"
           value={t.length}
           icon="✅"
-          footer={`${completionRate}% completed`}
+          trend={`${completionRate}% completed`}
           variant="success"
         />
-        <SmallBox
+        <InfoBox
           label="Business policy controls"
           value={rules.length}
           icon="⚙️"
+          trend="Active rule catalogue entries"
           variant="warning"
         />
-        <SmallBox
+        <InfoBox
           label="Configured routing"
           value={studio.approvalMatrices.length}
           icon="🧭"
+          trend="Approval matrices available"
           variant="info"
         />
       </div>
