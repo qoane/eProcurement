@@ -71,14 +71,19 @@ export function PageRenderer({
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [actionMessage, setActionMessage] = useState<string>();
 
-  useEffect(() => {
+  function refreshDatasource() {
     setLoading(true);
     void loadDataSource(page.datasource).then((result) => {
       setRows(result.rows);
       setError(result.error);
       setLoading(false);
     });
+  }
+
+  useEffect(() => {
+    refreshDatasource();
   }, [page.datasource]);
 
   const searchable = useMemo(
@@ -139,12 +144,23 @@ export function PageRenderer({
           <Button
             key={action.code}
             variant={action.kind === "Secondary" ? "secondary" : "primary"}
-            onClick={() => executePageAction(action)}
+            onClick={() =>
+              executePageAction(action, undefined, {
+                datasource: page.datasource,
+                onRefresh: refreshDatasource,
+                onSuccess: setActionMessage,
+              })
+            }
           >
             {action.label}
           </Button>
         ))}
       />
+      {actionMessage && (
+        <div className="designer-message">
+          <strong>{actionMessage}</strong>
+        </div>
+      )}
       {error && <EmptyState title="Data source warning" message={error} />}
       {page.pageType === "DataGrid" && (
         <>
@@ -170,7 +186,13 @@ export function PageRenderer({
                         cell: (row: Record<string, unknown>) => (
                           <Button
                             variant="secondary"
-                            onClick={() => executePageAction(rowAction, row)}
+                            onClick={() =>
+                              executePageAction(rowAction, row, {
+                                datasource: page.datasource,
+                                onRefresh: refreshDatasource,
+                                onSuccess: setActionMessage,
+                              })
+                            }
                           >
                             {rowAction.label}
                           </Button>
