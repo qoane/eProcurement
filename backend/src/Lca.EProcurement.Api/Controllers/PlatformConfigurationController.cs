@@ -14,5 +14,6 @@ public sealed class PlatformConfigurationController(IPlatformConfigurationApplic
     [HttpPost("document-type-requirements")] public async Task<IActionResult> CreateDocumentTypeRequirement(DocumentTypeRequirementDto dto, CancellationToken ct) => Created("/api/platform-configuration/document-type-requirements", await configuration.CreateDocumentTypeRequirementAsync(dto, ct));
     [HttpGet("lookup-values")] public async Task<IActionResult> LookupValues([FromQuery] string? lookupType, CancellationToken ct) => Ok(await configuration.GetLookupValuesAsync(lookupType, ct));
     [HttpPost("lookup-values")] public async Task<IActionResult> CreateLookupValue(LookupValueDto dto, CancellationToken ct) => Created("/api/platform-configuration/lookup-values", await configuration.CreateLookupValueAsync(dto, ct));
+    [HttpGet("supplier-categories")] public async Task<IActionResult> SupplierCategories(CancellationToken ct) => Ok(await configuration.GetSupplierCategoriesAsync(ct));
     [HttpPost("supplier-categories")] public async Task<IActionResult> CreateSupplierCategory(SupplierCategoryDto dto, CancellationToken ct) => Created("/api/platform-configuration/supplier-categories", await configuration.CreateSupplierCategoryAsync(dto, ct));
 }
