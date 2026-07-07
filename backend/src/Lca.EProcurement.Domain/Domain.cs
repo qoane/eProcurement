@@ -10,6 +10,8 @@ public enum RuleOutcome { Passed, Failed }
 public enum BusinessProcessStatus { Draft, Published, Archived }
 public enum BusinessRuleStatus { Draft, Published, Archived }
 public enum RequisitionStatus { Draft, Submitted, BudgetValidation, ManagerApproval, ProcurementReview, Approved, Rejected }
+public enum TenderType { RFP, RFQ, RFI }
+public enum TenderStatus { Draft, Published, Clarification, Cancelled, Closed }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }

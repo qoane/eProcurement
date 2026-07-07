@@ -27,6 +27,8 @@ builder.Services.AddScoped<IBudgetApplicationService, BudgetApplicationService>(
 builder.Services.AddScoped<ICostCentreApplicationService, CostCentreApplicationService>();
 builder.Services.AddScoped<IProcurementCategoryApplicationService, ProcurementCategoryApplicationService>();
 builder.Services.AddScoped<IFinancialYearApplicationService, FinancialYearApplicationService>();
+builder.Services.AddScoped<IRequisitionApplicationService, RequisitionApplicationService>();
+builder.Services.AddScoped<ITenderApplicationService, TenderApplicationService>();
 
 var app = builder.Build();
 
