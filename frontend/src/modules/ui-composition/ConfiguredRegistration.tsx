@@ -51,6 +51,12 @@ function inputType(fieldType: string) {
   return "text";
 }
 
+function filesForRequirement(formData: FormData, documentType: string) {
+  return formData
+    .getAll(`doc_${documentType}`)
+    .filter((value): value is File => value instanceof File && value.name.length > 0);
+}
+
 export function ConfiguredRegistration({
   configuration,
 }: {
@@ -104,13 +110,24 @@ export function ConfiguredRegistration({
           const referenceNumber = String(
             fd.get("referenceNumber") || generatedReference,
           );
-          const documents = requirements.map((requirement) => ({
-            documentType: requirement.documentType,
-            fileName: String(
-              fd.get(`doc_${requirement.documentType}`) ||
-                `${requirement.documentType}.pdf`,
-            ),
-          }));
+          const documents = requirements.flatMap((requirement) =>
+            filesForRequirement(fd, requirement.documentType).map((file) => ({
+              documentType: requirement.documentType,
+              fileName: file.name,
+            })),
+          );
+          const oversized = requirements.flatMap((requirement) =>
+            filesForRequirement(fd, requirement.documentType)
+              .filter((file) => file.size > requirement.maximumFileSize)
+              .map((file) => `${requirement.documentType}: ${file.name}`),
+          );
+          if (oversized.length > 0) {
+            setError(
+              `File size exceeds configured limit for: ${oversized.join(", ")}`,
+            );
+            return;
+          }
+          setError(undefined);
           const result = await registerSupplier({
             referenceNumber,
             actor: options.actor ?? "supplier@demo.co.ls",
@@ -159,14 +176,23 @@ export function ConfiguredRegistration({
         ))}
         {requirements.map((requirement) => (
           <label key={`upload-${requirement.documentType}`}>
-            {requirement.documentType} file metadata
+            Upload {requirement.documentType}
             {requirement.required ? " *" : ""}
             <Input
+              accept={requirement.allowedExtensions}
+              multiple={requirement.maximumFiles > 1}
               name={`doc_${requirement.documentType}`}
-              defaultValue={`${requirement.documentType}.pdf`}
+              required={requirement.required}
+              type="file"
             />
+            <small>
+              {requirement.minimumFiles}-{requirement.maximumFiles} file(s), {" "}
+              {requirement.allowedExtensions}, max {" "}
+              {Math.round(requirement.maximumFileSize / 1048576)}MB
+            </small>
           </label>
         ))}
+        {error && <p className="error">{error}</p>}
         {message && <p className="success">{message}</p>}
         <Button>Submit through configured process</Button>
       </form>
