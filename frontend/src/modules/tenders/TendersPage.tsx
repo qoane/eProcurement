@@ -1,5 +1,38 @@
-import { UiCompositionPage } from "../ui-composition/UiCompositionPage";
+import { FormEvent, useEffect, useState } from "react";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { LoadingState } from "../../components/ui/LoadingState";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { navigate } from "../../app/routes";
+import { createClarification, createTender, getTender, getTenders, publishTender, respondClarification, TenderDetail, TenderSummary } from "../../services/tendersApi";
 
 export function TendersPage() {
-  return <UiCompositionPage route="/app/tenders" pageCode="TENDERS" />;
+  const [items, setItems] = useState<TenderSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>();
+  useEffect(() => { getTenders().then(r => { setItems(r.data); setError(r.error); setLoading(false); }); }, []);
+  if (loading) return <LoadingState />;
+  return <><PageHeader title="Tenders" description="RFIs, RFQs and RFPs from tender creation through publishing and clarifications." actions={<Button onClick={() => navigate("/app/tenders/new")}>New tender</Button>} />{error && <div className="alert alert-danger">{error}</div>}{items.length === 0 ? <EmptyState title="No tenders" message="Create the first tender to begin sourcing." /> : <div className="card"><div className="card-body table-responsive"><table className="table table-hover"><thead><tr><th>Number</th><th>Title</th><th>Type</th><th>Method</th><th>Status</th><th>Closing</th></tr></thead><tbody>{items.map(t => <tr key={t.id} onClick={() => navigate(`/app/tenders/${t.id}`)} style={{ cursor: "pointer" }}><td>{t.tenderNumber}</td><td>{t.title}</td><td>{t.tenderType}</td><td>{t.procurementMethod}</td><td><Badge>{t.status}</Badge></td><td>{new Date(t.closingDate).toLocaleDateString()}</td></tr>)}</tbody></table></div></div>}</>;
 }
+
+export function NewTenderPage() {
+  const [error, setError] = useState<string>();
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const result = await createTender({ tenderNumber: String(f.get("tenderNumber")), title: String(f.get("title")), description: String(f.get("description")), tenderType: String(f.get("tenderType")), procurementMethod: String(f.get("procurementMethod")), closingDate: new Date(String(f.get("closingDate"))).toISOString(), createdBy: "procurement@lca.org.ls", lots: [{ lotNumber: "LOT-1", title: String(f.get("title")), description: "Primary lot" }], documents: [{ documentType: "TermsOfReference", fileName: "terms-of-reference.pdf", description: "Tender terms of reference", isRequired: true }], supplierInvitations: [] });
+    if (result.error) setError(result.error); else navigate(`/app/tenders/${result.data.tender.id}`);
+  }
+  return <><PageHeader title="New tender" description="Create an RFI, RFQ or RFP draft using the tender management API." /><div className="card"><form className="card-body" onSubmit={submit}>{error && <div className="alert alert-danger">{error}</div>}<div className="row g-3"><div className="col-md-4"><label className="form-label">Tender number</label><input name="tenderNumber" className="form-control" required placeholder="RFP-LCA-2026-001" /></div><div className="col-md-4"><label className="form-label">Type</label><select name="tenderType" className="form-select"><option>RFI</option><option>RFQ</option><option>RFP</option></select></div><div className="col-md-4"><label className="form-label">Closing date</label><input name="closingDate" type="date" className="form-control" required /></div><div className="col-md-6"><label className="form-label">Title</label><input name="title" className="form-control" required /></div><div className="col-md-6"><label className="form-label">Procurement method</label><input name="procurementMethod" className="form-control" defaultValue="Open Tender" required /></div><div className="col-12"><label className="form-label">Description</label><textarea name="description" className="form-control" rows={5} required /></div></div><div className="mt-3"><Button>Create draft tender</Button></div></form></div></>;
+}
+
+export function TenderDetailPage({ id }: { id: string }) {
+  const [detail, setDetail] = useState<TenderDetail | null>(null); const [loading, setLoading] = useState(true); const [question, setQuestion] = useState(""); const [responses, setResponses] = useState<Record<string,string>>({});
+  const load = () => getTender(id).then(r => { setDetail(r.data); setLoading(false); });
+  useEffect(() => { load(); }, [id]);
+  if (loading) return <LoadingState />; if (!detail) return <EmptyState title="Tender not found" message="The tender could not be loaded from the API." />;
+  const t = detail.tender;
+  return <><PageHeader title={t.title} description={`${t.tenderNumber} · ${t.tenderType} · ${t.procurementMethod}`} actions={<>{t.status === "Draft" && <Button onClick={async () => { await publishTender(id); load(); }}>Publish</Button>}<Button variant="secondary" onClick={() => navigate("/app/tenders")}>Back</Button></>} /><div className="row g-3"><div className="col-lg-8"><div className="card"><div className="card-body"><Badge>{t.status}</Badge><p className="mt-3">{t.description}</p><dl className="row"><dt className="col-sm-3">Closing</dt><dd className="col-sm-9">{new Date(t.closingDate).toLocaleString()}</dd><dt className="col-sm-3">Published</dt><dd className="col-sm-9">{t.publishedAt ? new Date(t.publishedAt).toLocaleString() : "Not published"}</dd></dl></div></div><Clarifications detail={detail} question={question} setQuestion={setQuestion} responses={responses} setResponses={setResponses} reload={load} /></div><div className="col-lg-4"><div className="card"><div className="card-header">Documents</div><div className="list-group list-group-flush">{detail.documents.map(d => <div className="list-group-item" key={d.id}><strong>{d.documentType}</strong><div>{d.fileName}</div><small>{d.description}</small></div>)}</div></div><div className="card mt-3"><div className="card-header">Audit</div><div className="card-body">{detail.auditTimeline.map(a => <p key={a.id}><strong>{a.eventType}</strong><br/><small>{a.actor} · {new Date(a.occurredAt).toLocaleString()}</small></p>)}</div></div></div></div></>;
+}
+function Clarifications({ detail, question, setQuestion, responses, setResponses, reload }: any) { return <div className="card mt-3"><div className="card-header">Clarification workspace</div><div className="card-body"><form onSubmit={async e => { e.preventDefault(); await createClarification(detail.tender.id, question, "supplier@demo.co.ls"); setQuestion(""); reload(); }} className="input-group mb-3"><input className="form-control" value={question} onChange={e => setQuestion(e.target.value)} placeholder="Ask a clarification question" required /><Button>Ask</Button></form>{detail.clarifications.map((c: any) => <div className="border rounded p-3 mb-2" key={c.id}><strong>{c.question}</strong><div><small>{c.askedBy} · {new Date(c.askedAt).toLocaleString()}</small></div>{c.responses.map((r: any) => <div className="alert alert-info mt-2 mb-0" key={r.id}>{r.response}<br/><small>{r.respondedBy}</small></div>)}<form onSubmit={async e => { e.preventDefault(); await respondClarification(detail.tender.id, c.id, responses[c.id] || ""); setResponses({ ...responses, [c.id]: "" }); reload(); }} className="input-group mt-2"><input className="form-control" value={responses[c.id] || ""} onChange={e => setResponses({ ...responses, [c.id]: e.target.value })} placeholder="Response" required /><Button variant="secondary">Respond</Button></form></div>)}</div></div>; }

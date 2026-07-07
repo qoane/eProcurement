@@ -27,7 +27,7 @@ import { DynamicFormsPage } from "../modules/forms/DynamicFormsPage";
 import { FormDesignerPage } from "../modules/forms/FormDesignerPage";
 import { ConfigurationPage } from "../modules/configuration/ConfigurationPage";
 import { ReportingPage } from "../modules/reporting/ReportingPage";
-import { TendersPage } from "../modules/tenders/TendersPage";
+import { NewTenderPage, TenderDetailPage, TendersPage } from "../modules/tenders/TendersPage";
 import { PlanningPage, NewPlanningPage, PlanningDetailPage, BudgetsPage, CostCentresPage, ProcurementCategoriesPage } from "../modules/planning/PlanningPages";
 import { RequisitionListPage, NewRequisitionPage, RequisitionDetailPage } from "../modules/requisitions/RequisitionPages";
 import { StudioModulePage, StudioPage } from "../modules/studio/StudioPage";
@@ -110,6 +110,8 @@ function route(p: string) {
   else if (p === "/app/requisitions/new") page = <NewRequisitionPage />;
   else if (p.startsWith("/app/requisitions/")) page = <RequisitionDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/tenders") page = <TendersPage />;
+  else if (p === "/app/tenders/new") page = <NewTenderPage />;
+  else if (p.startsWith("/app/tenders/")) page = <TenderDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/evaluation")
     page = <NotConfiguredPage title="Evaluation" />;
   else if (p === "/app/awards") page = <NotConfiguredPage title="Awards" />;

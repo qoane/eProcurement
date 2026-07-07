@@ -9,6 +9,15 @@ public static class SeedData
     public static readonly string[] Users = ["supplier@demo.co.ls", "procurement@lca.org.ls", "evaluator@lca.org.ls", "approver@lca.org.ls", "finance@lca.org.ls", "auditor@lca.org.ls", "admin@lca.org.ls"];
     public static List<SupplierCategory> Categories() => [new("ICT Equipment"), new("Consulting Services"), new("Office Supplies"), new("Telecommunications"), new("Facilities Management")];
     public static Supplier DemoSupplier(SupplierCategory category) => new("SUP-LCA-2026-0001", "Maseru ICT Supplies Pty Ltd", SupplierStatus.Draft) { Categories = [category] };
+    public static Tender SampleTender()
+    {
+        var tender = new Tender("RFP-LCA-2026-0001", "National Broadband Quality of Service Monitoring Platform", "Sample RFP tender for a standards-based monitoring platform, implementation services, support, and knowledge transfer.", TenderType.RFP, "Open Tender", TenderStatus.Published, DateTimeOffset.UtcNow.AddDays(-2), DateTimeOffset.UtcNow.AddDays(30), "system", DateTimeOffset.UtcNow.AddDays(-5), DateTimeOffset.UtcNow.AddDays(-2), "system");
+        tender.Lots.Add(new TenderLot(tender.Id, "LOT-1", "QoS monitoring platform", "Software platform, probes, implementation, support, and training."));
+        tender.Documents.Add(new TenderDocument(tender.Id, "TermsOfReference", "qos-monitoring-tor.pdf", "Terms of reference and scope of services.", true, DateTimeOffset.UtcNow.AddDays(-5), "system"));
+        tender.Documents.Add(new TenderDocument(tender.Id, "PricingSchedule", "pricing-schedule.xlsx", "Structured pricing schedule template.", true, DateTimeOffset.UtcNow.AddDays(-5), "system"));
+        tender.StatusHistory.Add(new TenderStatusHistory(tender.Id, TenderStatus.Draft, TenderStatus.Published, "system", DateTimeOffset.UtcNow.AddDays(-2), "Seed tender published"));
+        return tender;
+    }
     public static List<BusinessRuleDefinition> Rules() => [new("SUP-HAS-REG", "Supplier must have company registration document", "Supplier", "Supplier.Documents.Any(DocumentType == \"CompanyRegistration\")"), new("SUP-HAS-TAX", "Supplier must have tax clearance document", "Supplier", "Supplier.Documents.Any(DocumentType == \"TaxClearance\")"), new("SUP-HAS-CATEGORY", "Supplier must be assigned at least one category before approval", "Supplier", "Supplier.Categories.Any()", Category: "Eligibility", Status: BusinessRuleStatus.Published, FailureMessage: "At least one supplier category is required.", PublishedAt: DateTimeOffset.UtcNow, PublishedBy: "seed")];
     public static WorkflowDefinition SupplierOnboardingWorkflow()
     {
@@ -192,7 +201,41 @@ public static class SeedData
         if (!await db.Applications.AnyAsync(x => x.Code == "PROCUREMENT", cancellationToken))
             db.Applications.Add(new Application("PROCUREMENT", "Procurement", "Procurement workspace containing governed source-to-contract modules.", "Briefcase", "LCA Indigo", "/app/suppliers", "/app", @"[""Supplier Management"",""Requisitions"",""Tenders"",""Evaluation"",""Contracts"",""Reports"",""Studio""]", Status: MetadataStatus.Active, CreatedBy: "system"));
         await db.SaveChangesAsync(cancellationToken);
-
+        if (!await db.WorkflowDefinitions.AnyAsync(x => x.Code == "TENDER-PUBLISHING", cancellationToken))
+        {
+            var wf = new WorkflowDefinition("TENDER-PUBLISHING", "Tender Publishing", nameof(Tender));
+            var version = new WorkflowVersion(wf.Id, 1, WorkflowVersionStatus.Published, DateTimeOffset.UtcNow, "system");
+            version.Nodes.AddRange([new(version.Id, "Draft", "Draft", WorkflowNodeKind.Start, IsStart: true), new(version.Id, "ProcurementReview", "Procurement Review", WorkflowNodeKind.Task, CreatesTask: true, DefaultAssignedRole: "ProcurementOfficer"), new(version.Id, "ApprovedForPublication", "Approved for Publication", WorkflowNodeKind.Task, CreatesTask: true, DefaultAssignedRole: "Approver"), new(version.Id, "Published", "Published", WorkflowNodeKind.Task), new(version.Id, "Closed", "Closed", WorkflowNodeKind.End, IsTerminal: true), new(version.Id, "Cancelled", "Cancelled", WorkflowNodeKind.End, IsTerminal: true)]);
+            version.Transitions.AddRange([new(version.Id, "Draft", "SubmitForReview", "Submit for procurement review", "ProcurementReview"), new(version.Id, "ProcurementReview", "Approve", "Approve for publication", "ApprovedForPublication"), new(version.Id, "ApprovedForPublication", "Publish", "Publish", "Published"), new(version.Id, "Published", "Close", "Close", "Closed"), new(version.Id, "Draft", "Cancel", "Cancel", "Cancelled"), new(version.Id, "Published", "Cancel", "Cancel", "Cancelled")]);
+            wf = wf with { PublishedVersionId = version.Id }; wf.Versions.Add(version); db.WorkflowDefinitions.Add(wf);
+        }
+        await db.SaveChangesAsync(cancellationToken);
+        var tenderWorkflowId = await db.WorkflowDefinitions.Where(x => x.Code == "TENDER-PUBLISHING").Select(x => x.Id).SingleAsync(cancellationToken);
+        if (!await db.FormDefinitions.AnyAsync(x => x.Code == "TENDER-FORM", cancellationToken))
+        {
+            var form = new FormDefinition("TENDER-FORM", "Tender Form", nameof(Tender));
+            var version = new FormVersion(form.Id, 1, WorkflowVersionStatus.Published, DateTimeOffset.UtcNow, "system");
+            var basics = new FormSection(version.Id, "basics", "Tender basics", 1);
+            basics.Fields.Add(new FormField(basics.Id, "tenderNumber", "Tender number", "text", 1, true)); basics.Fields.Add(new FormField(basics.Id, "title", "Title", "text", 2, true)); basics.Fields.Add(new FormField(basics.Id, "tenderType", "Tender type", "select", 3, true));
+            var dates = new FormSection(version.Id, "dates", "Publication and closing", 2); dates.Fields.Add(new FormField(dates.Id, "closingDate", "Closing date", "date", 1, true));
+            version.Sections.AddRange([basics, dates]); form = form with { ActiveVersionId = version.Id }; form.Versions.Add(version); db.FormDefinitions.Add(form);
+        }
+        if (!await db.DocumentRequirementSets.AnyAsync(x => x.Name == "Tender Document Requirements", cancellationToken))
+        {
+            var set = new DocumentRequirementSet("Tender Document Requirements", "Required tender document metadata for RFIs, RFQs and RFPs.", nameof(Tender));
+            set.Requirements.Add(new DocumentRequirement(set.Id, "TermsOfReference", true, 1, 1, ".pdf,.docx", 20_971_520));
+            set.Requirements.Add(new DocumentRequirement(set.Id, "PricingSchedule", true, 1, 1, ".xlsx,.pdf", 10_485_760));
+            db.DocumentRequirementSets.Add(set);
+        }
+        await db.SaveChangesAsync(cancellationToken);
+        var tenderFormId = await db.FormDefinitions.Where(x => x.Code == "TENDER-FORM").Select(x => x.Id).SingleAsync(cancellationToken);
+        var tenderDocsId = await db.DocumentRequirementSets.Where(x => x.Name == "Tender Document Requirements").Select(x => x.Id).SingleAsync(cancellationToken);
+        if (!await db.BusinessProcessDefinitions.AnyAsync(x => x.Code == "TENDER-MANAGEMENT", cancellationToken)) db.BusinessProcessDefinitions.Add(new BusinessProcessDefinition("TENDER-MANAGEMENT", "Tender Management", "Tender and sourcing foundation covering RFI, RFQ, RFP creation, publishing, supplier notification, documents, and clarifications.", nameof(Tender), tenderWorkflowId, tenderFormId, tenderDocsId, null, BusinessProcessStatus.Published));
+        if (!await db.Tenders.AnyAsync(x => x.TenderNumber == "RFP-LCA-2026-0001", cancellationToken)) db.Tenders.Add(SampleTender());
+        if (!await db.PageDefinitions.AnyAsync(x => x.Code == "TENDER-LIST", cancellationToken)) db.PageDefinitions.Add(new PageDefinition("TENDER-LIST", "Tenders", "Tender list page backed by the real tender API.", null, PageType.DataGrid, "/app/tenders", "ScrollText", @"{""entity"":""Tender"",""mode"":""Api"",""endpoint"":""/api/tenders"",""keyField"":""id""}", Status: MetadataStatus.Active, CreatedBy: "system"));
+        if (!await db.PageDefinitions.AnyAsync(x => x.Code == "TENDER-DETAIL", cancellationToken)) db.PageDefinitions.Add(new PageDefinition("TENDER-DETAIL", "Tender detail", "Tender detail and clarification workspace backed by real APIs.", null, PageType.DetailPage, "/app/tenders/{id}", "ScrollText", @"{""entity"":""Tender"",""mode"":""Api"",""endpoint"":""/api/tenders/{id}"",""keyField"":""id""}", Status: MetadataStatus.Active, CreatedBy: "system"));
+        if (!await db.PageDefinitions.AnyAsync(x => x.Code == "TENDER-NEW", cancellationToken)) db.PageDefinitions.Add(new PageDefinition("TENDER-NEW", "New tender", "Tender creation page backed by the real tender API.", null, PageType.Form, "/app/tenders/new", "FilePlus", @"{""entity"":""Tender"",""mode"":""Api"",""endpoint"":""/api/tenders"",""keyField"":""id""}", Status: MetadataStatus.Active, CreatedBy: "system"));
+        await db.SaveChangesAsync(cancellationToken);
 
 
         foreach (var component in ComponentLibrary())
