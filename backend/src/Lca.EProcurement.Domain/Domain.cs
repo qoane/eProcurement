@@ -18,6 +18,8 @@ public enum BidOpeningSubmissionStatus { Pending, Opened, Late, Disqualified, Re
 public enum EvaluationSessionStatus { Draft, Scheduled, InProgress, Consensus, Completed, Cancelled, ReferredToAward }
 public enum EvaluationStage { Administrative, Technical, Financial, Consensus }
 public enum EvaluationSubmissionStatus { Pending, Responsive, NonResponsive, Evaluated, Recommended, Rejected }
+public enum AwardStatus { Draft, Recommended, UnderApproval, Approved, Rejected, Published, Cancelled, ConvertedToPurchaseOrder, ConvertedToContract }
+public enum AwardDecisionStatus { Pending, Approved, Rejected, Deferred }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }
@@ -138,6 +140,22 @@ public record EvaluationDeclaration(Guid EvaluationSessionId, string EvaluatorEm
 public record EvaluationRecommendation(Guid EvaluationSessionId, Guid RecommendedBidSubmissionId, Guid SupplierId, string SupplierName, string RecommendationText, decimal RecommendedAmount, string RecommendedBy, DateTimeOffset RecommendedAt, string Status) : Entity(Guid.NewGuid());
 public record EvaluationReport(Guid EvaluationSessionId, string ReportNumber, DateTimeOffset GeneratedAt, string GeneratedBy, string SummaryJson) : Entity(Guid.NewGuid());
 public record EvaluationHistory(Guid EvaluationSessionId, string EventType, string Actor, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
+
+public record Award(string AwardNumber, Guid TenderId, Guid EvaluationSessionId, Guid RecommendedBidSubmissionId, Guid SupplierId, string SupplierName, decimal AwardAmount, AwardStatus Status, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? SubmittedAt = null, DateTimeOffset? ApprovedAt = null, DateTimeOffset? PublishedAt = null, DateTimeOffset? CancelledAt = null, string? Notes = null) : Entity(Guid.NewGuid())
+{
+    public List<AwardItem> Items { get; init; } = [];
+    public List<AwardDecision> Decisions { get; init; } = [];
+    public List<AwardApproval> Approvals { get; init; } = [];
+    public List<AwardNotification> Notifications { get; init; } = [];
+    public List<AwardHistory> History { get; init; } = [];
+    public List<AwardReport> Reports { get; init; } = [];
+}
+public record AwardItem(Guid AwardId, Guid? TenderLotId, string Description, decimal Quantity, decimal UnitPrice, decimal TotalAmount, string? Notes = null) : Entity(Guid.NewGuid());
+public record AwardDecision(Guid AwardId, string DecisionType, AwardDecisionStatus DecisionStatus, string DecisionBy, DateTimeOffset DecisionAt, string Comments) : Entity(Guid.NewGuid());
+public record AwardApproval(Guid AwardId, string Role, string ApproverEmail, bool Approved, DateTimeOffset? ApprovedAt = null, string? Comments = null) : Entity(Guid.NewGuid());
+public record AwardNotification(Guid AwardId, Guid SupplierId, string SupplierName, string SupplierEmail, string NotificationType, string Subject, string Message, DateTimeOffset? SentAt, string Status) : Entity(Guid.NewGuid());
+public record AwardHistory(Guid AwardId, AwardStatus FromStatus, AwardStatus ToStatus, string Actor, string Notes, DateTimeOffset ChangedAt) : Entity(Guid.NewGuid());
+public record AwardReport(Guid AwardId, string ReportNumber, DateTimeOffset GeneratedAt, string GeneratedBy, string SummaryJson) : Entity(Guid.NewGuid());
 
 public record WorkflowDefinition(string Code, string Name, string EntityType, bool IsActive = true, Guid? PublishedVersionId = null) : Entity(Guid.NewGuid())
 {
