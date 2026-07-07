@@ -1,0 +1,14 @@
+import { apiGet, apiPost } from "./apiClient";
+const actor = { actor: "procurement@lca.org.ls" };
+export type AwardSummary = { id:string; awardNumber:string; tenderNumber:string; tenderTitle:string; supplierName:string; awardAmount:number; status:string; createdAt:string };
+export type AwardDetail = { award:any; tender:any; evaluationSession:any; recommendation:any; items:any[]; approvals:any[]; notifications:any[]; history:any[]; reports:any[]; auditTimeline:any[]; workflowInstance?:any };
+export const getAwards=()=>apiGet<AwardSummary[]>("/api/awards",[]);
+export const getAward=(id:string)=>apiGet<AwardDetail>(`/api/awards/${id}`,null as unknown as AwardDetail);
+export const createAwardFromEvaluation=(evaluationSessionId:string)=>apiPost<AwardDetail>(`/api/awards/from-evaluation/${evaluationSessionId}`,actor);
+export const submitAward=(id:string)=>apiPost<AwardDetail>(`/api/awards/${id}/submit`,actor);
+export const approveAward=(id:string)=>apiPost<AwardDetail>(`/api/awards/${id}/approve`,{ actor:"approver@lca.org.ls", role:"ManagementApprover", comments:"Approved" });
+export const rejectAward=(id:string)=>apiPost<AwardDetail>(`/api/awards/${id}/reject`,{ actor:"approver@lca.org.ls", comments:"Rejected" });
+export const publishAward=(id:string)=>apiPost<AwardDetail>(`/api/awards/${id}/publish`,actor);
+export const cancelAward=(id:string)=>apiPost<AwardDetail>(`/api/awards/${id}/cancel`,actor);
+export const convertAwardToPo=(id:string)=>apiPost(`/api/awards/${id}/convert-to-purchase-order`,actor);
+export const convertAwardToContract=(id:string)=>apiPost(`/api/awards/${id}/convert-to-contract`,actor);
