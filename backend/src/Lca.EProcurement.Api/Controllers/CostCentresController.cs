@@ -3,8 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace Lca.EProcurement.Api.Controllers;
 [ApiController]
 [Route("api/cost-centres")]
-public sealed class CostCentresController(IBudgetApplicationService budgets) : ControllerBase
+public sealed class CostCentresController(ICostCentreApplicationService costCentres) : ControllerBase
 {
-    [HttpGet] public async Task<IActionResult> Get(CancellationToken ct) => Ok(await budgets.GetCostCentresAsync(ct));
-    [HttpPost] public async Task<IActionResult> Create(CreateCostCentreDto dto, CancellationToken ct) { var c = await budgets.CreateCostCentreAsync(dto, ct); return Created($"/api/cost-centres/{c.Id}", c); }
+    [HttpGet] public async Task<IActionResult> Get(CancellationToken ct) => Ok(await costCentres.GetAsync(ct));
+    [HttpPost] public async Task<IActionResult> Create(CreateCostCentreDto dto, CancellationToken ct) { var c = await costCentres.CreateAsync(dto, ct); return Created($"/api/cost-centres/{c.Id}", c); }
 }
