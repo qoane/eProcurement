@@ -1,4 +1,8 @@
 using Lca.EProcurement.Api.Controllers;
+using Lca.EProcurement.Api.Security;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using Lca.EProcurement.Application;
 using Lca.EProcurement.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +14,10 @@ builder.Services.AddCors(options => options.AddPolicy(FrontendCors, policy => po
 builder.Services.AddControllers().AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
+var jwt = builder.Configuration.GetSection("Jwt").Get<JwtSettings>() ?? new JwtSettings();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options => { options.TokenValidationParameters = new TokenValidationParameters { ValidateIssuer = true, ValidateAudience = true, ValidateIssuerSigningKey = true, ValidateLifetime = true, ValidIssuer = jwt.Issuer, ValidAudience = jwt.Audience, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey)) }; });
+builder.Services.AddAuthorization();
 builder.Services.AddDbContext<EProcurementDbContext>(options => options.UseConfiguredProvider(builder.Configuration["Database:Provider"] ?? "SqlServer", builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddScoped<IWorkflowApplicationService, WorkflowApplicationService>();
 builder.Services.AddScoped<IBusinessRuleApplicationService, BusinessRuleApplicationService>();
@@ -35,6 +43,8 @@ builder.Services.AddScoped<IEvaluationApplicationService, EvaluationApplicationS
 builder.Services.AddScoped<IAwardApplicationService, AwardApplicationService>();
 builder.Services.AddScoped<IPurchaseOrderApplicationService, PurchaseOrderApplicationService>();
 builder.Services.AddScoped<IContractApplicationService, ContractApplicationService>();
+builder.Services.AddScoped<IPasswordService, PasswordService>();
+builder.Services.AddScoped<IIdentityService, IdentityService>();
 
 var app = builder.Build();
 
@@ -61,6 +71,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 app.UseCors(FrontendCors);
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapGet("/", () => Results.Ok(new { name = "LCA eProcurement API", status = "running", documentation = "/swagger", health = "/health" }));
 app.MapGet("/health", async (EProcurementDbContext db) => Results.Ok(new { status = "healthy", platform = "LCA eProcurement", provider = db.Database.ProviderName, database = db.Database.GetDbConnection().Database }));
 app.MapControllers();

@@ -1,9 +1,11 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lca.EProcurement.Api.Controllers;
 
 [ApiController]
+[RequirePermission("BidOpening.View")]
 [Route("api/bid-opening")]
 public sealed class BidOpeningController(IBidOpeningApplicationService bidOpening) : ControllerBase
 {

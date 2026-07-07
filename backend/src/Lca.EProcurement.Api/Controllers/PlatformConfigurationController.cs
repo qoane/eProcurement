@@ -1,7 +1,9 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 namespace Lca.EProcurement.Api.Controllers;
 [ApiController, Route("api/platform-configuration")]
+[RequirePermission("Configuration.View")]
 public sealed class PlatformConfigurationController(IPlatformConfigurationApplicationService configuration) : ControllerBase
 {
     [HttpGet("workflow-mappings")] public async Task<IActionResult> WorkflowMappings(CancellationToken ct) => Ok(await configuration.GetWorkflowMappingsAsync(ct));

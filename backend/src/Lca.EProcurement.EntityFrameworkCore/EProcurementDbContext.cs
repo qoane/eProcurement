@@ -126,9 +126,23 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
     public DbSet<RequisitionAttachment> RequisitionAttachments => Set<RequisitionAttachment>();
     public DbSet<RequisitionStatusHistory> RequisitionStatusHistories => Set<RequisitionStatusHistory>();
     public DbSet<BudgetCommitment> BudgetCommitments => Set<BudgetCommitment>();
+    public DbSet<ApplicationUser> ApplicationUsers => Set<ApplicationUser>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+    public DbSet<SupplierUserLink> SupplierUserLinks => Set<SupplierUserLink>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ApplicationUser>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Email).IsUnique(); b.Property(x => x.Email).HasMaxLength(256); b.Property(x => x.FullName).HasMaxLength(256); b.Property(x => x.PhoneNumber).HasMaxLength(64); b.Property(x => x.UserType).HasConversion<string>().HasMaxLength(64); b.Property(x => x.PasswordHash).HasMaxLength(1024); b.HasMany(x => x.UserRoles).WithOne().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade); b.HasOne(x => x.Profile).WithOne().HasForeignKey<UserProfile>(x => x.UserId).OnDelete(DeleteBehavior.Cascade); b.HasOne(x => x.SupplierLink).WithOne().HasForeignKey<SupplierUserLink>(x => x.UserId).OnDelete(DeleteBehavior.Cascade); });
+        modelBuilder.Entity<Role>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Name).IsUnique(); b.Property(x => x.Name).HasMaxLength(128); b.Property(x => x.Description).HasMaxLength(512); b.HasMany(x => x.RolePermissions).WithOne().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade); b.HasMany(x => x.UserRoles).WithOne().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade); });
+        modelBuilder.Entity<Permission>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Code).IsUnique(); b.Property(x => x.Code).HasMaxLength(128); b.Property(x => x.Name).HasMaxLength(256); b.Property(x => x.Description).HasMaxLength(512); b.Property(x => x.Category).HasMaxLength(128); b.HasMany(x => x.RolePermissions).WithOne().HasForeignKey(x => x.PermissionId).OnDelete(DeleteBehavior.Cascade); });
+        modelBuilder.Entity<RolePermission>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.RoleId, x.PermissionId }).IsUnique(); });
+        modelBuilder.Entity<UserRole>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.UserId, x.RoleId }).IsUnique(); });
+        modelBuilder.Entity<UserProfile>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.UserId).IsUnique(); b.Property(x => x.Department).HasMaxLength(128); b.Property(x => x.JobTitle).HasMaxLength(128); b.Property(x => x.PreferencesJson).HasColumnType("nvarchar(max)"); });
+        modelBuilder.Entity<SupplierUserLink>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.UserId, x.SupplierId }).IsUnique(); });
         modelBuilder.Entity<SeedMetadata>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.Kind, x.Code }).IsUnique(); b.Property(x => x.Kind).HasMaxLength(64); b.Property(x => x.Code).HasMaxLength(128); b.Property(x => x.Name).HasMaxLength(256); });
         modelBuilder.Entity<Supplier>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.ReferenceNumber).IsUnique(); b.Property(x => x.ReferenceNumber).HasMaxLength(64); b.Property(x => x.LegalName).HasMaxLength(256); b.Property(x => x.Status).HasConversion<string>().HasMaxLength(64); b.HasMany(x => x.Documents).WithOne().HasForeignKey(x => x.SupplierId); b.HasMany(x => x.PerformanceRatings).WithOne().HasForeignKey(x => x.SupplierId); b.HasMany(x => x.Categories).WithMany().UsingEntity("SupplierCategoryAssignments"); });
         modelBuilder.Entity<SupplierDocument>(b => { b.HasKey(x => x.Id); b.Property(x => x.DocumentType).HasMaxLength(128); b.Property(x => x.FileName).HasMaxLength(256); b.Property(x => x.UploadedBy).HasMaxLength(256); });

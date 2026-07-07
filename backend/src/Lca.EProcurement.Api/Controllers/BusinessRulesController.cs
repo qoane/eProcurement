@@ -1,7 +1,9 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 namespace Lca.EProcurement.Api.Controllers;
 [ApiController, Route("api/business-rules")]
+[RequirePermission("Studio.Rules")]
 public sealed class BusinessRulesController(IBusinessRuleApplicationService rules) : ControllerBase
 {
     [HttpGet] public async Task<IActionResult> Get(CancellationToken ct) => Ok(await rules.GetRulesAsync(ct));

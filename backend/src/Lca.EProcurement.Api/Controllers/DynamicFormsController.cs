@@ -1,7 +1,9 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 namespace Lca.EProcurement.Api.Controllers;
 [ApiController, Route("api/form-definitions")]
+[RequirePermission("Studio.Forms")]
 public sealed class DynamicFormsController(IDynamicFormApplicationService forms) : ControllerBase
 {
     [HttpGet] public async Task<IActionResult> Get(CancellationToken ct) => Ok(await forms.GetDefinitionsAsync(ct));

@@ -1,9 +1,11 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lca.EProcurement.Api.Controllers;
 
 [ApiController, Route("api/navigation")]
+[RequirePermission("Studio.Navigation")]
 public sealed class NavigationController(INavigationApplicationService navigation) : ControllerBase
 {
     [HttpGet("main")]

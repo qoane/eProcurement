@@ -290,3 +290,25 @@ public record RequisitionItem(Guid RequisitionId, string Description, decimal Qu
 public record RequisitionAttachment(Guid RequisitionId, string FileName, string ContentType, string UploadedBy, DateTimeOffset UploadedAt, string StorageReference) : Entity(Guid.NewGuid());
 public record RequisitionStatusHistory(Guid RequisitionId, RequisitionStatus FromStatus, RequisitionStatus ToStatus, string Actor, string Notes, DateTimeOffset ChangedAt) : Entity(Guid.NewGuid());
 public record BudgetCommitment(Guid RequisitionId, Guid BudgetId, Guid BudgetLineId, Guid FinancialYearId, Guid CostCentreId, Guid ProcurementCategoryId, decimal Amount, string CommittedBy, DateTimeOffset CommittedAt, string Reference) : Entity(Guid.NewGuid());
+
+public enum UserType { SystemAdministrator, ProcurementOfficer, FinanceUser, Approver, Evaluator, Auditor, Supplier }
+
+public record ApplicationUser(string Email, string FullName, string? PhoneNumber, UserType UserType, bool IsActive, bool IsExternalUser, Guid? SupplierId, DateTimeOffset CreatedAt, DateTimeOffset? LastLoginAt, string PasswordHash) : Entity(Guid.NewGuid())
+{
+    public List<UserRole> UserRoles { get; init; } = [];
+    public UserProfile? Profile { get; init; }
+    public SupplierUserLink? SupplierLink { get; init; }
+}
+public record Role(string Name, string Description, bool IsActive = true) : Entity(Guid.NewGuid())
+{
+    public List<RolePermission> RolePermissions { get; init; } = [];
+    public List<UserRole> UserRoles { get; init; } = [];
+}
+public record Permission(string Code, string Name, string Description, string Category, bool IsActive = true) : Entity(Guid.NewGuid())
+{
+    public List<RolePermission> RolePermissions { get; init; } = [];
+}
+public record RolePermission(Guid RoleId, Guid PermissionId) : Entity(Guid.NewGuid());
+public record UserRole(Guid UserId, Guid RoleId) : Entity(Guid.NewGuid());
+public record UserProfile(Guid UserId, string Department, string JobTitle, string PreferencesJson = "{}") : Entity(Guid.NewGuid());
+public record SupplierUserLink(Guid UserId, Guid SupplierId, bool IsPrimaryContact = false, DateTimeOffset LinkedAt = default) : Entity(Guid.NewGuid());

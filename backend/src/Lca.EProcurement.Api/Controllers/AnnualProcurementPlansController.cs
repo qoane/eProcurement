@@ -1,9 +1,11 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lca.EProcurement.Api.Controllers;
 
 [ApiController]
+[RequirePermission("Planning.View")]
 [Route("api/procurement-plans")]
 public sealed class AnnualProcurementPlansController(IAnnualProcurementPlanApplicationService plans) : ControllerBase
 {

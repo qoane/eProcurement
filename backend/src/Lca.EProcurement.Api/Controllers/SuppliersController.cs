@@ -1,7 +1,9 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 namespace Lca.EProcurement.Api.Controllers;
 [ApiController, Route("api/suppliers")]
+[RequirePermission("Supplier.View")]
 public sealed class SuppliersController(ISupplierApplicationService suppliers) : ControllerBase
 {
     [HttpGet] public async Task<IActionResult> Get(CancellationToken ct) => Ok(await suppliers.GetSuppliersAsync(ct));

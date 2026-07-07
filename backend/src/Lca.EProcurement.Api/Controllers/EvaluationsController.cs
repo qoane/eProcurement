@@ -1,9 +1,11 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lca.EProcurement.Api.Controllers;
 
 [ApiController]
+[RequirePermission("Evaluation.View")]
 [Route("api/evaluations")]
 public sealed class EvaluationsController(IEvaluationApplicationService evaluations) : ControllerBase
 {
@@ -13,6 +15,7 @@ public sealed class EvaluationsController(IEvaluationApplicationService evaluati
     [HttpPost("{id:guid}/schedule")] public async Task<IActionResult> Schedule(Guid id, EvaluationActorDto dto, CancellationToken ct) => (await evaluations.ScheduleAsync(id, dto, ct)) is { } e ? Ok(e) : NotFound();
     [HttpPost("{id:guid}/start")] public async Task<IActionResult> Start(Guid id, EvaluationActorDto dto, CancellationToken ct) => (await evaluations.StartAsync(id, dto, ct)) is { } e ? Ok(e) : NotFound();
     [HttpPost("{id:guid}/declare-conflict")] public async Task<IActionResult> Declare(Guid id, EvaluationDeclarationDto dto, CancellationToken ct) => (await evaluations.DeclareConflictAsync(id, dto, ct)) is { } e ? Ok(e) : NotFound();
+    [RequirePermission("Evaluation.Score")]
     [HttpPost("{id:guid}/score")] public async Task<IActionResult> Score(Guid id, EvaluationScoreDto dto, CancellationToken ct) => (await evaluations.ScoreAsync(id, dto, ct)) is { } e ? Ok(e) : NotFound();
     [HttpPost("{id:guid}/consensus")] public async Task<IActionResult> Consensus(Guid id, EvaluationConsensusScoreDto dto, CancellationToken ct) => (await evaluations.ConsensusAsync(id, dto, ct)) is { } e ? Ok(e) : NotFound();
     [HttpPost("{id:guid}/recommend")] public async Task<IActionResult> Recommend(Guid id, EvaluationRecommendationDto dto, CancellationToken ct) => (await evaluations.RecommendAsync(id, dto, ct)) is { } e ? Ok(e) : NotFound();

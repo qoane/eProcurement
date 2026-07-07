@@ -7,6 +7,7 @@ import {
   getNavigation,
   type NavigationItem,
 } from "../services/navigationApi";
+import { parsePermissions, useAuth } from "../auth/AuthContext";
 
 const storageKey = "procuraflow.sidebar.groups";
 const compactKey = "procuraflow.sidebar.compact";
@@ -22,11 +23,15 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
   const C = iconMap[name] ?? Icons.Circle;
   return <C size={size} aria-hidden="true" />;
 }
-function visible(items: NavigationItem[]): NavigationItem[] {
+function visible(items: NavigationItem[], hasPermission: (code: string) => boolean): NavigationItem[] {
   return items
     .filter((x) => x.isVisible)
+    .filter((x) => {
+      const required = parsePermissions(x.permissionsJson);
+      return required.length === 0 || required.some(hasPermission);
+    })
     .sort((a, b) => a.displayOrder - b.displayOrder)
-    .map((x) => ({ ...x, children: visible(x.children || []) }));
+    .map((x) => ({ ...x, children: visible(x.children || [], hasPermission) }));
 }
 function getStoredExpandedGroups(items: NavigationItem[]) {
   const defaults = Object.fromEntries(
@@ -174,11 +179,12 @@ function NavGroup({
 }
 
 export function Sidebar() {
+  const { hasPermission } = useAuth();
   const [navigation, setNavigation] = useState(defaultNavigation);
   const [compact, setCompact] = useState(
     () => localStorage.getItem(compactKey) === "true",
   );
-  const items = useMemo(() => visible(navigation.items), [navigation]);
+  const items = useMemo(() => visible(navigation.items, hasPermission), [navigation, hasPermission]);
   useEffect(() => {
     getNavigation().then((r) => setNavigation(r.data));
   }, []);
