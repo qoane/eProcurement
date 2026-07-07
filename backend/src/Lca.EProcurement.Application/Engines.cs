@@ -6,14 +6,14 @@ namespace Lca.EProcurement.Application;
 public interface IAuditSink { void Record(string type, string entityType, Guid entityId, string reference, string actor, string details); }
 public sealed class InMemoryAuditSink : IAuditSink { public List<AuditEvent> Events { get; } = []; public void Record(string t, string et, Guid id, string r, string a, string d) => Events.Add(new AuditEvent(t, et, id, r, a, d, DateTimeOffset.UtcNow)); }
 
-public sealed record RuleResult(string RuleCode, bool Passed, string Message);
+public sealed record RuleResult(string RuleCode, bool Passed, string Message, string? RuleName = null, string? Expression = null, string? FailureMessage = null);
 public sealed class BusinessRulesEngine(List<BusinessRuleDefinition> definitions, List<BusinessRuleExecutionLog> logs, IAuditSink audit)
 {
     public RuleResult Evaluate(string ruleCode, Supplier supplier, string actor)
     {
         var rule = definitions.Single(r => r.Code == ruleCode && r.IsActive);
         var passed = SimpleExpressionEvaluator.Evaluate(rule.Expression, supplier);
-        var result = new RuleResult(rule.Code, passed, passed ? "Rule passed" : $"Rule failed: {rule.Name}");
+        var result = new RuleResult(rule.Code, passed, passed ? $"Business rule {rule.Code} ({rule.Name}) passed." : $"Business rule {rule.Code} ({rule.Name}) failed: {rule.FailureMessage}", rule.Name, rule.Expression, rule.FailureMessage);
         logs.Add(new BusinessRuleExecutionLog(rule.Code, nameof(Supplier), supplier.Id, JsonSerializer.Serialize(supplier), passed ? RuleOutcome.Passed : RuleOutcome.Failed, JsonSerializer.Serialize(result), DateTimeOffset.UtcNow));
         audit.Record("Rule evaluated", nameof(Supplier), supplier.Id, supplier.ReferenceNumber, actor, result.Message);
         return result;
@@ -66,7 +66,7 @@ public sealed class WorkflowEngine(List<WorkflowDefinition> definitions, List<Wo
         var version = definitions.SelectMany(d => d.Versions).Single(v => v.Id == instance.WorkflowVersionId);
         var transition = version.Transitions.Single(t => t.FromNodeCode == instance.CurrentNodeCode && t.ActionCode == actionCode);
         if (transition.RequiredRuleCode is not null && !rules.Evaluate(transition.RequiredRuleCode, supplier, actor).Passed)
-            throw new InvalidOperationException($"Workflow action '{actionCode}' blocked by rule '{transition.RequiredRuleCode}'.");
+            throw new InvalidOperationException($"Workflow action '{actionCode}' cannot be completed because business rule '{transition.RequiredRuleCode}' was not satisfied.");
         tasks.Where(t => t.WorkflowInstanceId == instance.Id && t.NodeCode == instance.CurrentNodeCode && t.Status is WorkflowTaskStatus.Open or WorkflowTaskStatus.Assigned).ToList().ForEach(t => tasks[tasks.IndexOf(t)] = t with { Status = WorkflowTaskStatus.Completed, CompletedAt = DateTimeOffset.UtcNow });
         var target = version.Nodes.Single(n => n.Code == transition.ToNodeCode);
         var next = instance with { CurrentNodeCode = target.Code, Status = target.IsTerminal ? WorkflowInstanceStatus.Completed : WorkflowInstanceStatus.Running, CompletedAt = target.IsTerminal ? DateTimeOffset.UtcNow : null };

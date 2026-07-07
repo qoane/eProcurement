@@ -5,6 +5,8 @@ import { Button } from "../../components/ui/Button";
 import { StatusBadge } from "../../components/ui/Badge";
 import { Timeline } from "../../components/ui/Timeline";
 import { executeTaskAction, getTaskDetail } from "../../services/tasksApi";
+import { getRules } from "../../services/rulesApi";
+import type { Rule } from "../../types/api";
 
 type SupplierDocument = {
   id: string;
@@ -36,10 +38,15 @@ export function WorkflowTaskDetailPage({ id }: { id?: string }) {
   >({});
   const [verificationConfirmed, setVerificationConfirmed] = useState(false);
   const [reviewNote, setReviewNote] = useState("");
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [actionError, setActionError] = useState<string>();
   const load = () => {
     if (id) void getTaskDetail(id).then((r) => setDetail(r.data));
   };
   useEffect(load, [id]);
+  useEffect(() => {
+    void getRules().then((r) => setRules(r.data));
+  }, []);
   const supplier = detail?.supplier?.supplier;
   const documents: SupplierDocument[] = detail?.supplier?.documents ?? [];
   const selectedDocument =
@@ -56,6 +63,10 @@ export function WorkflowTaskDetailPage({ id }: { id?: string }) {
   );
   const documentsVerified =
     documents.length > 0 && reviewedCount === documents.length;
+  const ruleByCode = useMemo(
+    () => new Map(rules.map((rule) => [rule.code, rule])),
+    [rules],
+  );
   const canAcceptDocuments = documentsVerified && verificationConfirmed;
   const setDocumentCheck = (
     documentId: string,
@@ -76,7 +87,12 @@ export function WorkflowTaskDetailPage({ id }: { id?: string }) {
   };
   const executeAction = async (actionCode: string) => {
     if (!canAcceptDocuments) return;
-    await executeTaskAction(id!, actionCode);
+    setActionError(undefined);
+    const result = await executeTaskAction(id!, actionCode);
+    if (result.error) {
+      setActionError(result.error);
+      return;
+    }
     setVerificationConfirmed(false);
     setReviewNote("");
     load();
@@ -240,7 +256,37 @@ export function WorkflowTaskDetailPage({ id }: { id?: string }) {
           ),
         )}
       </Panel>
+      <Panel title="Business rules for this task">
+        {(detail?.availableActions ?? []).some((a: any) => a.requiredRuleCode) ? (
+          <div className="rule-list">
+            {(detail?.availableActions ?? [])
+              .filter((a: any) => a.requiredRuleCode)
+              .map((a: any) => {
+                const rule = ruleByCode.get(a.requiredRuleCode);
+                return (
+                  <div className="rule-card" key={`${a.actionCode}-${a.requiredRuleCode}`}>
+                    <strong>{a.actionName}</strong> requires {a.requiredRuleCode}
+                    {rule ? (
+                      <>
+                        <p>
+                          <strong>{rule.name}</strong> · {rule.category ?? "General"} · {rule.status ?? "Draft"}
+                        </p>
+                        <p>{rule.failureMessage}</p>
+                        <code>{rule.expression}</code>
+                      </>
+                    ) : (
+                      <p className="muted">Rule details are unavailable. Check Business Rules Studio permissions.</p>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        ) : (
+          <p className="muted">No required business rules are configured for the available actions.</p>
+        )}
+      </Panel>
       <Panel title="Available workflow actions">
+        {actionError && <div className="alert alert-warning">{actionError}</div>}
         <div className="verification-summary">
           <strong>
             {reviewedCount} of {documents.length} documents verified.
