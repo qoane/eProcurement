@@ -1,0 +1,22 @@
+using Microsoft.EntityFrameworkCore.Migrations;
+#nullable disable
+namespace Lca.EProcurement.EntityFrameworkCore.Migrations;
+public partial class NotificationsAndSettings : Migration
+{
+    protected override void Up(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.Sql(@"
+IF OBJECT_ID(N'[dbo].[NotificationTemplates]', N'U') IS NULL CREATE TABLE [dbo].[NotificationTemplates]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_NotificationTemplates] PRIMARY KEY,[Code] nvarchar(128) NOT NULL,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(2000) NOT NULL,[EventCode] nvarchar(128) NOT NULL,[Channel] nvarchar(32) NOT NULL,[SubjectTemplate] nvarchar(512) NOT NULL,[BodyTemplate] nvarchar(max) NOT NULL,[IsActive] bit NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[UpdatedAt] datetimeoffset NULL,CONSTRAINT [UX_NotificationTemplates_Code] UNIQUE([Code]));
+IF OBJECT_ID(N'[dbo].[NotificationMessages]', N'U') IS NULL CREATE TABLE [dbo].[NotificationMessages]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_NotificationMessages] PRIMARY KEY,[EventCode] nvarchar(128) NOT NULL,[EntityType] nvarchar(128) NOT NULL,[EntityId] uniqueidentifier NULL,[Channel] nvarchar(32) NOT NULL,[Subject] nvarchar(512) NOT NULL,[Body] nvarchar(max) NOT NULL,[Priority] nvarchar(32) NOT NULL,[Status] nvarchar(32) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[SentAt] datetimeoffset NULL,[FailureReason] nvarchar(2000) NULL,[RelatedUrl] nvarchar(512) NULL);
+IF OBJECT_ID(N'[dbo].[NotificationRecipients]', N'U') IS NULL CREATE TABLE [dbo].[NotificationRecipients]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_NotificationRecipients] PRIMARY KEY,[NotificationMessageId] uniqueidentifier NOT NULL,[UserId] nvarchar(256) NOT NULL,[RecipientType] nvarchar(64) NOT NULL,[Name] nvarchar(256) NOT NULL,[Email] nvarchar(256) NULL,[PhoneNumber] nvarchar(64) NULL,[RoleCode] nvarchar(128) NULL,[Status] nvarchar(32) NOT NULL,[ReadAt] datetimeoffset NULL,CONSTRAINT [FK_NotificationRecipients_NotificationMessages_NotificationMessageId] FOREIGN KEY([NotificationMessageId]) REFERENCES [dbo].[NotificationMessages]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[NotificationDeliveryLogs]', N'U') IS NULL CREATE TABLE [dbo].[NotificationDeliveryLogs]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_NotificationDeliveryLogs] PRIMARY KEY,[NotificationMessageId] uniqueidentifier NOT NULL,[Channel] nvarchar(32) NOT NULL,[RequestPayload] nvarchar(max) NOT NULL,[ResponsePayload] nvarchar(max) NOT NULL,[Status] nvarchar(32) NOT NULL,[SentAt] datetimeoffset NOT NULL,[Error] nvarchar(2000) NULL,CONSTRAINT [FK_NotificationDeliveryLogs_NotificationMessages_NotificationMessageId] FOREIGN KEY([NotificationMessageId]) REFERENCES [dbo].[NotificationMessages]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[NotificationPreferences]', N'U') IS NULL CREATE TABLE [dbo].[NotificationPreferences]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_NotificationPreferences] PRIMARY KEY,[UserId] nvarchar(256) NOT NULL,[EventCode] nvarchar(128) NOT NULL,[InAppEnabled] bit NOT NULL,[EmailEnabled] bit NOT NULL,[SmsEnabled] bit NOT NULL,CONSTRAINT [UX_NotificationPreferences_UserId_EventCode] UNIQUE([UserId],[EventCode]));
+IF OBJECT_ID(N'[dbo].[NotificationEventMappings]', N'U') IS NULL CREATE TABLE [dbo].[NotificationEventMappings]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_NotificationEventMappings] PRIMARY KEY,[EventCode] nvarchar(128) NOT NULL,[TemplateCode] nvarchar(128) NOT NULL,[Channel] nvarchar(32) NOT NULL,[EntityType] nvarchar(128) NOT NULL,[RecipientRoleCode] nvarchar(128) NULL,[IsActive] bit NOT NULL);
+IF OBJECT_ID(N'[dbo].[SystemSettingOverrides]', N'U') IS NULL CREATE TABLE [dbo].[SystemSettingOverrides]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_SystemSettingOverrides] PRIMARY KEY,[Key] nvarchar(256) NOT NULL,[Value] nvarchar(max) NOT NULL,[IsSecret] bit NOT NULL,[Category] nvarchar(128) NOT NULL,[UpdatedBy] nvarchar(256) NOT NULL,[UpdatedAt] datetimeoffset NOT NULL,CONSTRAINT [UX_SystemSettingOverrides_Key] UNIQUE([Key]));
+");
+    }
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.Sql(@"DROP TABLE IF EXISTS [dbo].[SystemSettingOverrides];DROP TABLE IF EXISTS [dbo].[NotificationEventMappings];DROP TABLE IF EXISTS [dbo].[NotificationPreferences];DROP TABLE IF EXISTS [dbo].[NotificationDeliveryLogs];DROP TABLE IF EXISTS [dbo].[NotificationRecipients];DROP TABLE IF EXISTS [dbo].[NotificationMessages];DROP TABLE IF EXISTS [dbo].[NotificationTemplates];");
+    }
+}
