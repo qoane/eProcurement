@@ -34,6 +34,7 @@ builder.Services.AddScoped<IBidOpeningApplicationService, BidOpeningApplicationS
 builder.Services.AddScoped<IEvaluationApplicationService, EvaluationApplicationService>();
 builder.Services.AddScoped<IAwardApplicationService, AwardApplicationService>();
 builder.Services.AddScoped<IPurchaseOrderApplicationService, PurchaseOrderApplicationService>();
+builder.Services.AddScoped<IContractApplicationService, ContractApplicationService>();
 
 var app = builder.Build();
 
