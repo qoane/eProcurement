@@ -1055,16 +1055,29 @@ public interface ITenderApplicationService
 }
 
 public sealed record TenderSummaryDto(Guid Id, string TenderNumber, string Title, string TenderType, string ProcurementMethod, string Status, DateTimeOffset? PublicationDate, DateTimeOffset ClosingDate);
+public sealed record PublicTenderSummaryDto(string Reference, string Title, string TenderType, string ProcurementMethod, string Category, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, string Status, string Slug);
+public sealed record PublicTenderDetailDto(PublicTenderPublication Tender, List<PublicTenderDocument> Documents, List<PublicTenderClarification> Clarifications);
+public sealed record PublicTenderCategoryDto(string Category, int Count);
+public sealed record PublicTenderCalendarItemDto(string Reference, string Title, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, string Category, string Status);
 public sealed record TenderDetailDto(Tender Tender, List<TenderLot> Lots, List<TenderDocument> Documents, List<TenderSupplierInvitation> SupplierInvitations, List<TenderClarification> Clarifications, List<TenderStatusHistory> StatusHistory, List<AuditEvent> AuditTimeline);
 public sealed record TenderActorDto(string Actor);
 public sealed record CreateTenderLotDto(string LotNumber, string Title, string Description);
-public sealed record CreateTenderDocumentDto(string DocumentType, string FileName, string Description, bool IsRequired = true);
+public sealed record CreateTenderDocumentDto(string DocumentType, string FileName, string Description, bool IsRequired = true, bool IsPublic = false, string? PublicUrl = null, bool IsDownloadable = true);
 public sealed record CreateTenderSupplierInvitationDto(Guid? SupplierId, string SupplierName, string SupplierEmail);
-public sealed record CreateTenderDto(string TenderNumber, string Title, string Description, TenderType TenderType, string ProcurementMethod, DateTimeOffset ClosingDate, string CreatedBy, List<CreateTenderLotDto>? Lots = null, List<CreateTenderDocumentDto>? Documents = null, List<CreateTenderSupplierInvitationDto>? SupplierInvitations = null);
+public sealed record CreateTenderDto(string TenderNumber, string Title, string Description, TenderType TenderType, string ProcurementMethod, DateTimeOffset ClosingDate, string CreatedBy, List<CreateTenderLotDto>? Lots = null, List<CreateTenderDocumentDto>? Documents = null, List<CreateTenderSupplierInvitationDto>? SupplierInvitations = null, string Category = "General");
 public sealed record CreateTenderClarificationDto(string Question, string AskedBy, bool IsPublic = true);
 public sealed record RespondToTenderClarificationDto(string Response, string RespondedBy);
 
-public sealed class TenderApplicationService(EProcurementDbContext db) : ITenderApplicationService
+public interface IPublicTenderApplicationService
+{
+    Task<List<PublicTenderSummaryDto>> GetTendersAsync(CancellationToken ct = default);
+    Task<PublicTenderDetailDto?> GetTenderAsync(string reference, CancellationToken ct = default);
+    Task<List<PublicTenderCategoryDto>> GetCategoriesAsync(CancellationToken ct = default);
+    Task<List<PublicTenderCalendarItemDto>> GetCalendarAsync(CancellationToken ct = default);
+    Task<List<PublicTenderSummaryDto>> GetLatestAsync(int count = 5, CancellationToken ct = default);
+}
+
+public sealed class TenderApplicationService(EProcurementDbContext db, INotificationSender notifications) : ITenderApplicationService
 {
     public Task<List<TenderSummaryDto>> GetTendersAsync(CancellationToken ct = default) => db.Tenders.AsNoTracking().OrderByDescending(x => x.CreatedAt).Select(x => new TenderSummaryDto(x.Id, x.TenderNumber, x.Title, x.TenderType.ToString(), x.ProcurementMethod, x.Status.ToString(), x.PublicationDate, x.ClosingDate)).ToListAsync(ct);
 
@@ -1078,9 +1091,9 @@ public sealed class TenderApplicationService(EProcurementDbContext db) : ITender
     {
         if (await db.Tenders.AnyAsync(x => x.TenderNumber == dto.TenderNumber, ct)) throw new InvalidOperationException($"Tender number '{dto.TenderNumber}' already exists.");
         var now = DateTimeOffset.UtcNow;
-        var tender = new Tender(dto.TenderNumber, dto.Title, dto.Description, dto.TenderType, dto.ProcurementMethod, TenderStatus.Draft, null, dto.ClosingDate, dto.CreatedBy, now);
+        var tender = new Tender(dto.TenderNumber, dto.Title, dto.Description, dto.TenderType, dto.ProcurementMethod, TenderStatus.Draft, null, dto.ClosingDate, dto.CreatedBy, now, Category: dto.Category);
         foreach (var lot in dto.Lots ?? []) tender.Lots.Add(new TenderLot(tender.Id, lot.LotNumber, lot.Title, lot.Description));
-        foreach (var doc in dto.Documents ?? []) tender.Documents.Add(new TenderDocument(tender.Id, doc.DocumentType, doc.FileName, doc.Description, doc.IsRequired, now, dto.CreatedBy));
+        foreach (var doc in dto.Documents ?? []) tender.Documents.Add(new TenderDocument(tender.Id, doc.DocumentType, doc.FileName, doc.Description, doc.IsRequired, now, dto.CreatedBy, doc.IsPublic, doc.PublicUrl, doc.IsDownloadable));
         foreach (var inv in dto.SupplierInvitations ?? []) tender.SupplierInvitations.Add(new TenderSupplierInvitation(tender.Id, inv.SupplierId, inv.SupplierName, inv.SupplierEmail, now, dto.CreatedBy));
         tender.StatusHistory.Add(new TenderStatusHistory(tender.Id, TenderStatus.Draft, TenderStatus.Draft, dto.CreatedBy, now, "Tender created"));
         db.Tenders.Add(tender);
@@ -1089,7 +1102,12 @@ public sealed class TenderApplicationService(EProcurementDbContext db) : ITender
         return (await GetTenderAsync(tender.Id, ct))!;
     }
 
-    public Task<TenderDetailDto?> PublishTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default) => ChangeStatus(id, TenderStatus.Published, dto.Actor, "Tender published", publish: true, ct);
+    public async Task<TenderDetailDto?> PublishTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default)
+    {
+        var detail = await ChangeStatus(id, TenderStatus.Published, dto.Actor, "Tender published", publish: true, ct);
+        if (detail is not null) await notifications.QueueAsync("TenderPublished", nameof(Tender), id, new { EntityReference = detail.Tender.TenderNumber, TenderNumber = detail.Tender.TenderNumber, TenderTitle = detail.Tender.Title, Status = detail.Tender.Status.ToString(), ClosingDate = detail.Tender.ClosingDate, RelatedUrl = $"/public/tenders/{detail.Tender.TenderNumber}" }, [new NotificationRecipientDto(dto.Actor, dto.Actor)], ct);
+        return detail;
+    }
     public Task<TenderDetailDto?> CancelTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default) => ChangeStatus(id, TenderStatus.Cancelled, dto.Actor, "Tender cancelled", publish: false, ct);
 
     public Task<List<TenderClarification>> GetClarificationsAsync(Guid tenderId, CancellationToken ct = default) => db.TenderClarifications.AsNoTracking().Include(x => x.Responses).Where(x => x.TenderId == tenderId).OrderByDescending(x => x.AskedAt).ToListAsync(ct);
@@ -1115,6 +1133,12 @@ public sealed class TenderApplicationService(EProcurementDbContext db) : ITender
         db.TenderClarificationResponses.Add(response);
         db.AuditEvents.Add(new AuditEvent("Tender clarification responded", nameof(Tender), tender.Id, tender.TenderNumber, dto.RespondedBy, dto.Response, now));
         await db.SaveChangesAsync(ct);
+        if (tender.Status is TenderStatus.Published or TenderStatus.Clarification)
+        {
+            var refreshed = await IncludeTender(db.Tenders).SingleAsync(x => x.Id == tenderId, ct);
+            await UpsertPublicPublication(refreshed, now, ct);
+            await db.SaveChangesAsync(ct);
+        }
         return response;
     }
 
@@ -1122,6 +1146,7 @@ public sealed class TenderApplicationService(EProcurementDbContext db) : ITender
     {
         var tender = await IncludeTender(db.Tenders).SingleOrDefaultAsync(x => x.Id == id, ct); if (tender is null) return null;
         var now = DateTimeOffset.UtcNow;
+        if (publish) ValidatePublish(tender, now);
         AddStatus(tender, status, actor, now, note);
         if (publish)
         {
@@ -1129,11 +1154,32 @@ public sealed class TenderApplicationService(EProcurementDbContext db) : ITender
             db.Entry(tender).CurrentValues[nameof(Tender.PublishedAt)] = now;
             db.Entry(tender).CurrentValues[nameof(Tender.PublishedBy)] = actor;
             foreach (var invitation in tender.SupplierInvitations) db.Entry(invitation).CurrentValues[nameof(TenderSupplierInvitation.NotifiedAt)] = now;
+            await UpsertPublicPublication(tender, now, ct);
         }
         db.AuditEvents.Add(new AuditEvent(note, nameof(Tender), tender.Id, tender.TenderNumber, actor, note, now));
         await db.SaveChangesAsync(ct);
         return await GetTenderAsync(id, ct);
     }
+
+    static void ValidatePublish(Tender tender, DateTimeOffset now)
+    {
+        if (tender.Status is TenderStatus.Cancelled or TenderStatus.Closed) throw new InvalidOperationException("Cancelled or closed tenders cannot be published.");
+        if (string.IsNullOrWhiteSpace(tender.Title) || string.IsNullOrWhiteSpace(tender.Description)) throw new InvalidOperationException("Tender title and description are required before publication.");
+        if (tender.ClosingDate <= now) throw new InvalidOperationException("Tender closing date must be in the future before publication.");
+    }
+
+    async Task UpsertPublicPublication(Tender tender, DateTimeOffset now, CancellationToken ct)
+    {
+        var reference = tender.TenderNumber;
+        var slug = Slug(reference + " " + tender.Title);
+        var publication = await db.PublicTenderPublications.Include(x => x.Documents).Include(x => x.Clarifications).SingleOrDefaultAsync(x => x.TenderId == tender.Id, ct);
+        if (publication is null) { publication = new PublicTenderPublication(tender.Id, tender.TenderNumber, reference, tender.Title, tender.Description, tender.TenderType, tender.ProcurementMethod, tender.Category, now, tender.ClosingDate, TenderStatus.Published, true, slug, now, now); db.PublicTenderPublications.Add(publication); await db.SaveChangesAsync(ct); }
+        else { db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.TenderNumber)] = tender.TenderNumber; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Reference)] = reference; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Title)] = tender.Title; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Description)] = tender.Description; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.TenderType)] = tender.TenderType; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.ProcurementMethod)] = tender.ProcurementMethod; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Category)] = tender.Category; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.PublishedAt)] = now; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.ClosingDate)] = tender.ClosingDate; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Status)] = TenderStatus.Published; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.IsVisible)] = true; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Slug)] = slug; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.UpdatedAt)] = now; db.PublicTenderDocuments.RemoveRange(publication.Documents); db.PublicTenderClarifications.RemoveRange(publication.Clarifications); }
+        foreach (var doc in tender.Documents.Where(d => d.IsPublic && !string.IsNullOrWhiteSpace(d.PublicUrl))) db.PublicTenderDocuments.Add(new PublicTenderDocument(publication.Id, doc.DocumentType, doc.FileName, doc.PublicUrl!, doc.IsDownloadable, now));
+        foreach (var c in tender.Clarifications.Where(c => c.IsPublic)) foreach (var r in c.Responses) db.PublicTenderClarifications.Add(new PublicTenderClarification(publication.Id, c.Id, c.Question, r.Response, now));
+    }
+
+    static string Slug(string value) => string.Join("-", new string(value.ToLowerInvariant().Select(ch => char.IsLetterOrDigit(ch) ? ch : ' ').ToArray()).Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
     void AddStatus(Tender tender, TenderStatus to, string actor, DateTimeOffset now, string note)
     {
@@ -1320,4 +1366,19 @@ public sealed class ContractApplicationService(EProcurementDbContext db, IWorkfl
     async Task Advance(Contract c,string action,string actor,CancellationToken ct){var i=await db.WorkflowInstances.Where(x=>x.EntityType==nameof(Contract)&&x.EntityId==c.Id).OrderByDescending(x=>x.StartedAt).FirstOrDefaultAsync(ct); if(i!=null)try{await workflows.ExecuteActionAsync(i.Id,action,actor,ct);}catch{}}
     Task Move(Contract c,ContractStatus to,string actor,string evt,CancellationToken ct){var from=c.Status; db.Entry(c).CurrentValues[nameof(Contract.Status)]=to; db.ContractStatusHistories.Add(new(c.Id,from,to,actor,DateTimeOffset.UtcNow,evt)); Hist(c,evt,actor,evt); Audit(evt,c,actor,evt); return Task.CompletedTask;}
     void Hist(Contract c,string type,string actor,string details)=>db.ContractHistories.Add(new(c.Id,type,actor,details,DateTimeOffset.UtcNow)); void Audit(string type,Contract c,string actor,string details)=>db.AuditEvents.Add(new(type,nameof(Contract),c.Id,c.ContractNumber,actor,details,DateTimeOffset.UtcNow));
+}
+
+
+public sealed class PublicTenderApplicationService(EProcurementDbContext db) : IPublicTenderApplicationService
+{
+    public Task<List<PublicTenderSummaryDto>> GetTendersAsync(CancellationToken ct = default) => Visible().OrderBy(x => x.ClosingDate).Select(x => new PublicTenderSummaryDto(x.Reference, x.Title, x.TenderType.ToString(), x.ProcurementMethod, x.Category, x.PublishedAt, x.ClosingDate, x.Status.ToString(), x.Slug)).ToListAsync(ct);
+    public async Task<PublicTenderDetailDto?> GetTenderAsync(string reference, CancellationToken ct = default)
+    {
+        var tender = await Visible().Include(x => x.Documents).Include(x => x.Clarifications).SingleOrDefaultAsync(x => x.Reference == reference || x.Slug == reference, ct);
+        return tender is null ? null : new PublicTenderDetailDto(tender, tender.Documents.OrderBy(x => x.DocumentType).ToList(), tender.Clarifications.OrderByDescending(x => x.PublishedAt).ToList());
+    }
+    public Task<List<PublicTenderCategoryDto>> GetCategoriesAsync(CancellationToken ct = default) => Visible().GroupBy(x => x.Category).OrderBy(x => x.Key).Select(x => new PublicTenderCategoryDto(x.Key, x.Count())).ToListAsync(ct);
+    public Task<List<PublicTenderCalendarItemDto>> GetCalendarAsync(CancellationToken ct = default) => Visible().OrderBy(x => x.ClosingDate).Select(x => new PublicTenderCalendarItemDto(x.Reference, x.Title, x.PublishedAt, x.ClosingDate, x.Category, x.Status.ToString())).ToListAsync(ct);
+    public Task<List<PublicTenderSummaryDto>> GetLatestAsync(int count = 5, CancellationToken ct = default) => Visible().OrderByDescending(x => x.PublishedAt).Take(count).Select(x => new PublicTenderSummaryDto(x.Reference, x.Title, x.TenderType.ToString(), x.ProcurementMethod, x.Category, x.PublishedAt, x.ClosingDate, x.Status.ToString(), x.Slug)).ToListAsync(ct);
+    IQueryable<PublicTenderPublication> Visible() => db.PublicTenderPublications.AsNoTracking().Where(x => x.IsVisible && x.Status == TenderStatus.Published);
 }
