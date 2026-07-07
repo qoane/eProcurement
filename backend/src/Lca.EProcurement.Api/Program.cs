@@ -31,6 +31,7 @@ builder.Services.AddScoped<IRequisitionApplicationService, RequisitionApplicatio
 builder.Services.AddScoped<ITenderApplicationService, TenderApplicationService>();
 builder.Services.AddScoped<IBidSubmissionApplicationService, BidSubmissionApplicationService>();
 builder.Services.AddScoped<IBidOpeningApplicationService, BidOpeningApplicationService>();
+builder.Services.AddScoped<IEvaluationApplicationService, EvaluationApplicationService>();
 
 var app = builder.Build();
 

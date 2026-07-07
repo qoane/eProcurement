@@ -1,0 +1,22 @@
+import { apiGet, apiPost } from "./apiClient";
+
+const actor = { actor: "evaluator@lca.org.ls" };
+export type EvaluationSummary = { id:string; sessionNumber:string; tenderNumber:string; tenderTitle:string; currentStage:string; status:string; chairperson:string; submissionsCount:number };
+export type EvaluationDetail = { session:any; tender:any; bidOpeningSession:any; committee:any[]; submissions:any[]; scores:any[]; consensusScores:any[]; declarations:any[]; recommendations:any[]; reports:any[]; auditTimeline:any[]; workflowInstance?:any };
+export type EvaluationTemplate = { id:string; code:string; name:string; description:string; tenderType:string; totalWeight:number; status:string; criteria:any[] };
+export const getEvaluations=()=>apiGet<EvaluationSummary[]>("/api/evaluations",[]);
+export const getEvaluation=(id:string)=>apiGet<EvaluationDetail>(`/api/evaluations/${id}`,null as unknown as EvaluationDetail);
+export const createEvaluation=(body:unknown)=>apiPost<EvaluationDetail>("/api/evaluations",body);
+export const scheduleEvaluation=(id:string)=>apiPost<EvaluationDetail>(`/api/evaluations/${id}/schedule`,actor);
+export const startEvaluation=(id:string)=>apiPost<EvaluationDetail>(`/api/evaluations/${id}/start`,actor);
+export const declareConflict=(id:string, body:unknown)=>apiPost(`/api/evaluations/${id}/declare-conflict`,body);
+export const scoreEvaluation=(id:string, body:unknown)=>apiPost<EvaluationDetail>(`/api/evaluations/${id}/score`,body);
+export const consensusEvaluation=(id:string, body:unknown)=>apiPost<EvaluationDetail>(`/api/evaluations/${id}/consensus`,body);
+export const recommendEvaluation=(id:string, body:unknown)=>apiPost<EvaluationDetail>(`/api/evaluations/${id}/recommend`,body);
+export const completeEvaluation=(id:string)=>apiPost<EvaluationDetail>(`/api/evaluations/${id}/complete`,actor);
+export const referEvaluation=(id:string)=>apiPost<EvaluationDetail>(`/api/evaluations/${id}/refer-to-award`,actor);
+export const cancelEvaluation=(id:string)=>apiPost<EvaluationDetail>(`/api/evaluations/${id}/cancel`,actor);
+export const getEvaluationTemplates=()=>apiGet<EvaluationTemplate[]>("/api/evaluation-templates",[]);
+export const getEvaluationTemplate=(id:string)=>apiGet<EvaluationTemplate>(`/api/evaluation-templates/${id}`,null as unknown as EvaluationTemplate);
+export const createEvaluationTemplate=(body:unknown)=>apiPost<EvaluationTemplate>("/api/evaluation-templates",body);
+export const publishEvaluationTemplate=(id:string)=>apiPost<EvaluationTemplate>(`/api/evaluation-templates/${id}/publish`,actor);
