@@ -18,7 +18,23 @@ public static class SeedData
         tender.StatusHistory.Add(new TenderStatusHistory(tender.Id, TenderStatus.Draft, TenderStatus.Published, "system", DateTimeOffset.UtcNow.AddDays(-2), "Seed tender published"));
         return tender;
     }
-    public static List<BusinessRuleDefinition> Rules() => [new("SUP-HAS-REG", "Supplier must have company registration document", "Supplier", "Supplier.Documents.Any(DocumentType == \"CompanyRegistration\")"), new("SUP-HAS-TAX", "Supplier must have tax clearance document", "Supplier", "Supplier.Documents.Any(DocumentType == \"TaxClearance\")"), new("SUP-HAS-CATEGORY", "Supplier must be assigned at least one category before approval", "Supplier", "Supplier.Categories.Any()", Category: "Eligibility", Status: BusinessRuleStatus.Published, FailureMessage: "At least one supplier category is required.", PublishedAt: DateTimeOffset.UtcNow, PublishedBy: "seed")];
+    public static List<BusinessRuleDefinition> Rules() =>
+    [
+        PublishedRule("SUP-HAS-REG", "Supplier must have company registration document", "Supplier.Documents.Any(DocumentType == \"CompanyRegistration\")", "Company registration document is required."),
+        PublishedRule("SUP-HAS-TAX", "Supplier must have tax clearance document", "Supplier.Documents.Any(DocumentType == \"TaxClearance\")", "Tax clearance document is required."),
+        PublishedRule("SUP-HAS-CATEGORY", "Supplier must be assigned at least one category before approval", "Supplier.Categories.Any()", "At least one supplier category is required.")
+    ];
+
+    private static BusinessRuleDefinition PublishedRule(string code, string name, string expression, string failureMessage) => new(
+        code,
+        name,
+        nameof(Supplier),
+        expression,
+        Category: "Eligibility",
+        Status: BusinessRuleStatus.Published,
+        FailureMessage: failureMessage,
+        PublishedAt: DateTimeOffset.UtcNow,
+        PublishedBy: "seed");
     public static WorkflowDefinition SupplierOnboardingWorkflow()
     {
         var wf = new WorkflowDefinition("SUPPLIER-ONBOARDING", "Supplier onboarding", nameof(Supplier));
@@ -136,7 +152,24 @@ public static class SeedData
         await db.SaveChangesAsync(cancellationToken);
 
         foreach (var rule in Rules())
-            if (!await db.BusinessRuleDefinitions.AnyAsync(x => x.Code == rule.Code, cancellationToken)) db.BusinessRuleDefinitions.Add(rule);
+        {
+            var existing = await db.BusinessRuleDefinitions.SingleOrDefaultAsync(x => x.Code == rule.Code, cancellationToken);
+            if (existing is null)
+            {
+                db.BusinessRuleDefinitions.Add(rule);
+                continue;
+            }
+
+            db.Entry(existing).CurrentValues[nameof(BusinessRuleDefinition.Name)] = rule.Name;
+            db.Entry(existing).CurrentValues[nameof(BusinessRuleDefinition.AppliesTo)] = rule.AppliesTo;
+            db.Entry(existing).CurrentValues[nameof(BusinessRuleDefinition.Expression)] = rule.Expression;
+            db.Entry(existing).CurrentValues[nameof(BusinessRuleDefinition.IsActive)] = true;
+            db.Entry(existing).CurrentValues[nameof(BusinessRuleDefinition.Category)] = rule.Category;
+            db.Entry(existing).CurrentValues[nameof(BusinessRuleDefinition.Status)] = BusinessRuleStatus.Published;
+            db.Entry(existing).CurrentValues[nameof(BusinessRuleDefinition.FailureMessage)] = rule.FailureMessage;
+            db.Entry(existing).CurrentValues[nameof(BusinessRuleDefinition.PublishedAt)] = rule.PublishedAt;
+            db.Entry(existing).CurrentValues[nameof(BusinessRuleDefinition.PublishedBy)] = rule.PublishedBy;
+        }
 
         if (!await db.WorkflowDefinitions.AnyAsync(x => x.Code == "SUPPLIER-ONBOARDING", cancellationToken)) db.WorkflowDefinitions.Add(SupplierOnboardingWorkflow());
         await db.SaveChangesAsync(cancellationToken);
