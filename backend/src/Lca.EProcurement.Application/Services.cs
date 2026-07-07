@@ -71,6 +71,7 @@ public interface IPlatformConfigurationApplicationService
     Task<List<LookupValue>> GetLookupValuesAsync(string? lookupType = null, CancellationToken ct = default);
     Task<LookupValue> CreateLookupValueAsync(LookupValueDto dto, CancellationToken ct = default);
     Task<SupplierCategory> CreateSupplierCategoryAsync(SupplierCategoryDto dto, CancellationToken ct = default);
+    Task<List<SupplierCategory>> GetSupplierCategoriesAsync(CancellationToken ct = default);
 }
 
 public sealed record CreateWorkflowDto(string Code, string Name, string EntityType, List<WorkflowNodeDto> Nodes, List<WorkflowTransitionDto> Transitions, List<WorkflowTransitionEffectDto>? Effects = null);
@@ -98,8 +99,8 @@ public sealed record DocumentTypeRequirementDto(string EntityType, string Docume
 public sealed record LookupValueDto(string LookupType, string Code, string Name, int DisplayOrder = 0, bool IsActive = true);
 public sealed record SupplierCategoryDto(string Name);
 public sealed record SupplierDocumentUploadDto(string DocumentType, string FileName);
-public sealed record RegisterSupplierDto(string ReferenceNumber, string Actor, Dictionary<string, string?> Values, List<SupplierDocumentUploadDto> Documents);
-public sealed record SupplierRegistrationConfigurationDto(BusinessProcessDefinition Process, FormDefinition Form, DocumentRequirementSet DocumentRequirements, ApprovalMatrix? ApprovalMatrix, WorkflowDefinition Workflow);
+public sealed record RegisterSupplierDto(string ReferenceNumber, string Actor, Dictionary<string, string?> Values, List<SupplierDocumentUploadDto> Documents, List<string>? Categories = null);
+public sealed record SupplierRegistrationConfigurationDto(BusinessProcessDefinition Process, FormDefinition Form, DocumentRequirementSet DocumentRequirements, ApprovalMatrix? ApprovalMatrix, WorkflowDefinition Workflow, List<SupplierCategory> SupplierCategories);
 public sealed record SupplierRegistrationResultDto(string ReferenceNumber, Guid SupplierId, Guid FormSubmissionId, Guid WorkflowInstanceId, string CurrentNodeCode, string Status);
 public sealed record SupplierDetailDto(Supplier Supplier, WorkflowInstance? WorkflowInstance, string? ActiveWorkflowStage, List<SupplierDocument> Documents, List<FormSubmission> FormSubmissions, List<AuditEvent> AuditTimeline, List<WorkflowTransition> AvailableActions);
 public sealed record WorkflowTaskSummaryDto(Guid Id, Guid WorkflowInstanceId, string NodeCode, string? AssignedRole, string? AssignedTo, string Status, DateTimeOffset CreatedAt, string? EntityType, Guid? EntityId, string? EntityReference, string? EntityName);
@@ -451,17 +452,19 @@ public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkfl
             .Include(x => x.Versions.Where(v => (publishedWorkflowVersionId != null && v.Id == publishedWorkflowVersionId) || (publishedWorkflowVersionId == null && v.Status == WorkflowVersionStatus.Published)))
             .ThenInclude(v => v.Transitions)
             .SingleAsync(x => x.Id == process.ActiveWorkflowDefinitionId, ct);
-        return new(process, form, docs, matrix, workflow);
+        var categories = await db.SupplierCategories.AsNoTracking().OrderBy(x => x.Name).ToListAsync(ct);
+        return new(process, form, docs, matrix, workflow, categories);
     }
 
     public async Task<SupplierRegistrationResultDto?> RegisterAsync(RegisterSupplierDto dto, CancellationToken ct = default)
     {
         var config = await GetRegistrationConfigurationAsync(ct); if (config is null) return null;
         var legalName = dto.Values.TryGetValue("legalName", out var name) && !string.IsNullOrWhiteSpace(name) ? name! : dto.ReferenceNumber;
-        var supplier = await db.Suppliers.Include(x => x.Documents).SingleOrDefaultAsync(x => x.ReferenceNumber == dto.ReferenceNumber, ct);
+        var supplier = await db.Suppliers.Include(x => x.Documents).Include(x => x.Categories).SingleOrDefaultAsync(x => x.ReferenceNumber == dto.ReferenceNumber, ct);
         if (supplier is null) { supplier = new Supplier(dto.ReferenceNumber, legalName, SupplierStatus.Draft); db.Suppliers.Add(supplier); await db.SaveChangesAsync(ct); }
         else db.Entry(supplier).CurrentValues[nameof(Supplier.LegalName)] = legalName;
         foreach (var doc in dto.Documents) if (!supplier.Documents.Any(x => x.DocumentType == doc.DocumentType && x.FileName == doc.FileName)) db.SupplierDocuments.Add(new SupplierDocument(supplier.Id, doc.DocumentType, doc.FileName, dto.Actor, DateTimeOffset.UtcNow));
+        await AssignSupplierCategoriesAsync(supplier, dto.Categories ?? CategoryValues(dto.Values), ct);
         db.AuditEvents.Add(new AuditEvent("Supplier registration submitted", nameof(Supplier), supplier.Id, supplier.ReferenceNumber, dto.Actor, config.Process.Code, DateTimeOffset.UtcNow));
         await db.SaveChangesAsync(ct);
         var ruleResults = await rules.EvaluatePublishedAsync("SupplierRegistration", nameof(Supplier), supplier.Id, dto.Actor, dto.Values, ct);
@@ -503,6 +506,24 @@ public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkfl
         var config = await GetRegistrationConfigurationAsync(ct); if (config is null) return null;
         return await workflows.StartAsync(config.Workflow.Code, nameof(Supplier), supplier.Id, actor, ct);
     }
+
+    async Task AssignSupplierCategoriesAsync(Supplier supplier, IEnumerable<string> categoryNames, CancellationToken ct)
+    {
+        foreach (var name in categoryNames.Select(x => x.Trim()).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (supplier.Categories.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))) continue;
+            var category = await db.SupplierCategories.SingleOrDefaultAsync(x => x.Name == name, ct);
+            if (category is null)
+            {
+                category = new SupplierCategory(name);
+                db.SupplierCategories.Add(category);
+            }
+            supplier.Categories.Add(category);
+        }
+    }
+    static IEnumerable<string> CategoryValues(Dictionary<string, string?> values) => values
+        .Where(x => string.Equals(x.Key, "category", StringComparison.OrdinalIgnoreCase) || string.Equals(x.Key, "supplierCategory", StringComparison.OrdinalIgnoreCase) || string.Equals(x.Key, "categories", StringComparison.OrdinalIgnoreCase))
+        .SelectMany(x => (x.Value ?? string.Empty).Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 
     async Task<BusinessProcessDefinition?> ActiveSupplierProcess(CancellationToken ct) => await db.BusinessProcessDefinitions.AsNoTracking().OrderBy(x => x.Code).FirstOrDefaultAsync(p => p.EntityType == nameof(Supplier) && p.Status == BusinessProcessStatus.Published, ct);
     async Task<SupplierDetailDto> BuildSupplierDetail(Supplier supplier, CancellationToken ct) { var instance = await db.WorkflowInstances.AsNoTracking().Where(x => x.EntityType == nameof(Supplier) && x.EntityId == supplier.Id).OrderByDescending(x => x.StartedAt).FirstOrDefaultAsync(ct); return new(supplier, instance, instance?.CurrentNodeCode, supplier.Documents, await db.FormSubmissions.AsNoTracking().Include(x => x.Values).Where(x => x.EntityType == nameof(Supplier) && x.EntityId == supplier.Id).OrderByDescending(x => x.SubmittedAt).ToListAsync(ct), await db.AuditEvents.AsNoTracking().Where(x => x.EntityType == nameof(Supplier) && x.EntityId == supplier.Id).OrderBy(x => x.OccurredAt).ToListAsync(ct), instance is null ? [] : await AvailableActions(instance, ct)); }
@@ -589,6 +610,7 @@ public sealed class PlatformConfigurationApplicationService(EProcurementDbContex
     public Task<List<LookupValue>> GetLookupValuesAsync(string? lookupType = null, CancellationToken ct = default) => db.LookupValues.AsNoTracking().Where(x => lookupType == null || x.LookupType == lookupType).OrderBy(x => x.LookupType).ThenBy(x => x.DisplayOrder).ToListAsync(ct);
     public async Task<LookupValue> CreateLookupValueAsync(LookupValueDto dto, CancellationToken ct = default) { var item = new LookupValue(dto.LookupType, dto.Code, dto.Name, dto.DisplayOrder, dto.IsActive); db.LookupValues.Add(item); await db.SaveChangesAsync(ct); return item; }
     public async Task<SupplierCategory> CreateSupplierCategoryAsync(SupplierCategoryDto dto, CancellationToken ct = default) { var item = new SupplierCategory(dto.Name); db.SupplierCategories.Add(item); await db.SaveChangesAsync(ct); return item; }
+    public Task<List<SupplierCategory>> GetSupplierCategoriesAsync(CancellationToken ct = default) => db.SupplierCategories.AsNoTracking().OrderBy(x => x.Name).ToListAsync(ct);
 }
 
 

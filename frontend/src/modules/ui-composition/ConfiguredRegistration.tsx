@@ -13,6 +13,7 @@ import type {
   BusinessProcessDefinition,
   DocumentRequirementSet,
   FormDefinition,
+  SupplierCategory,
   WorkflowDefinition,
 } from "../../types/api";
 
@@ -22,6 +23,7 @@ type RegistrationConfiguration = {
   documentRequirements?: DocumentRequirementSet;
   approvalMatrix?: ApprovalMatrix | null;
   workflow?: WorkflowDefinition;
+  supplierCategories?: SupplierCategory[];
 };
 
 type RegistrationComponentConfiguration = {
@@ -38,7 +40,9 @@ function asConfiguration(value: unknown): RegistrationComponentConfiguration {
 }
 
 function publishedSections(form?: FormDefinition) {
-  const active = form?.versions?.find((version) => version.status === "Published");
+  const active = form?.versions?.find(
+    (version) => version.status === "Published",
+  );
   return [...(active?.sections ?? [])].sort(
     (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
   );
@@ -54,7 +58,9 @@ function inputType(fieldType: string) {
 function filesForRequirement(formData: FormData, documentType: string) {
   return formData
     .getAll(`doc_${documentType}`)
-    .filter((value): value is File => value instanceof File && value.name.length > 0);
+    .filter(
+      (value): value is File => value instanceof File && value.name.length > 0,
+    );
 }
 
 export function ConfiguredRegistration({
@@ -71,7 +77,9 @@ export function ConfiguredRegistration({
   useEffect(() => {
     setLoading(true);
     void getSupplierRegistrationConfiguration().then((result) => {
-      setMetadata((result.data as RegistrationConfiguration | null) ?? undefined);
+      setMetadata(
+        (result.data as RegistrationConfiguration | null) ?? undefined,
+      );
       setError(result.error);
       setLoading(false);
     });
@@ -79,9 +87,14 @@ export function ConfiguredRegistration({
 
   const sections = useMemo(() => publishedSections(metadata?.form), [metadata]);
   const requirements = metadata?.documentRequirements?.requirements ?? [];
-  const workflow = metadata?.workflow?.versions?.find(
-    (version) => version.id === metadata.workflow?.publishedVersionId,
-  ) ?? metadata?.workflow?.versions?.find((version) => version.status === "Published");
+  const supplierCategories = metadata?.supplierCategories ?? [];
+  const workflow =
+    metadata?.workflow?.versions?.find(
+      (version) => version.id === metadata.workflow?.publishedVersionId,
+    ) ??
+    metadata?.workflow?.versions?.find(
+      (version) => version.status === "Published",
+    );
   const generatedReference = `${options.referencePrefix ?? "SUP-LCA"}-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
 
   if (loading) return <LoadingState />;
@@ -105,11 +118,18 @@ export function ConfiguredRegistration({
           const fd = new FormData(event.currentTarget);
           const fields = sections.flatMap((section) => section.fields ?? []);
           const values = Object.fromEntries(
-            fields.map((field) => [field.code, String(fd.get(field.code) ?? "")]),
+            fields.map((field) => [
+              field.code,
+              String(fd.get(field.code) ?? ""),
+            ]),
           );
           const referenceNumber = String(
             fd.get("referenceNumber") || generatedReference,
           );
+          const selectedCategories = fd
+            .getAll("supplierCategories")
+            .map((value) => String(value))
+            .filter(Boolean);
           const documents = requirements.flatMap((requirement) =>
             filesForRequirement(fd, requirement.documentType).map((file) => ({
               documentType: requirement.documentType,
@@ -131,8 +151,9 @@ export function ConfiguredRegistration({
           const result = await registerSupplier({
             referenceNumber,
             actor: options.actor ?? "supplier@demo.co.ls",
-            values,
+            values: { ...values, categories: selectedCategories.join(", ") },
             documents,
+            categories: selectedCategories,
           });
           const workflowInstanceId = (
             result.data as { workflowInstanceId?: string } | null
@@ -174,6 +195,25 @@ export function ConfiguredRegistration({
               ))}
           </fieldset>
         ))}
+        <label>
+          Supplier categories *
+          <select
+            className="input"
+            multiple
+            name="supplierCategories"
+            required
+            size={Math.min(Math.max(supplierCategories.length, 3), 6)}
+          >
+            {supplierCategories.map((category) => (
+              <option key={category.id ?? category.name} value={category.name}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+          <small>
+            Select at least one category so the approval rule can pass.
+          </small>
+        </label>
         {requirements.map((requirement) => (
           <label key={`upload-${requirement.documentType}`}>
             Upload {requirement.documentType}
@@ -186,8 +226,8 @@ export function ConfiguredRegistration({
               type="file"
             />
             <small>
-              {requirement.minimumFiles}-{requirement.maximumFiles} file(s), {" "}
-              {requirement.allowedExtensions}, max {" "}
+              {requirement.minimumFiles}-{requirement.maximumFiles} file(s),{" "}
+              {requirement.allowedExtensions}, max{" "}
               {Math.round(requirement.maximumFileSize / 1048576)}MB
             </small>
           </label>
@@ -201,14 +241,16 @@ export function ConfiguredRegistration({
           <h2>{metadata.process.name}</h2>
           <p>{metadata.process.description}</p>
           <p>
-            <strong>Process:</strong> {metadata.process.code} · {metadata.process.status}
+            <strong>Process:</strong> {metadata.process.code} ·{" "}
+            {metadata.process.status}
           </p>
         </Card>
         <Card>
           <h2>Workflow and approval matrix</h2>
           <p>
             <strong>Workflow:</strong> {metadata.workflow?.name} (
-            {workflow?.nodes?.length ?? 0} nodes, {workflow?.transitions?.length ?? 0} transitions)
+            {workflow?.nodes?.length ?? 0} nodes,{" "}
+            {workflow?.transitions?.length ?? 0} transitions)
           </p>
           {(metadata.approvalMatrix?.steps ?? []).map((step) => (
             <p key={`${step.sequence}-${step.role}`}>
@@ -218,11 +260,18 @@ export function ConfiguredRegistration({
           ))}
         </Card>
         <Card>
+          <h2>Supplier categories</h2>
+          {supplierCategories.map((category) => (
+            <p key={category.id ?? category.name}>{category.name}</p>
+          ))}
+        </Card>
+        <Card>
           <h2>Document types</h2>
           {requirements.map((requirement) => (
             <p key={requirement.documentType}>
-              <strong>{requirement.documentType}</strong>: {requirement.minimumFiles}-
-              {requirement.maximumFiles} file(s), {requirement.allowedExtensions}, max {" "}
+              <strong>{requirement.documentType}</strong>:{" "}
+              {requirement.minimumFiles}-{requirement.maximumFiles} file(s),{" "}
+              {requirement.allowedExtensions}, max{" "}
               {Math.round(requirement.maximumFileSize / 1048576)}MB
               {requirement.ruleCode ? ` · rule ${requirement.ruleCode}` : ""}
             </p>

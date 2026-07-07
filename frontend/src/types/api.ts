@@ -38,6 +38,10 @@ export type WorkflowDefinition = {
   publishedVersionId?: string;
   versions?: WorkflowVersion[];
 };
+export type SupplierCategory = {
+  id?: string;
+  name: string;
+};
 export type Supplier = {
   id?: string;
   referenceNumber: string;
@@ -82,7 +86,11 @@ export type Rule = {
   failureMessage?: string;
   publishedAt?: string;
 };
-export type FormFieldValidation = { validationType: string; configurationJson?: string; message?: string };
+export type FormFieldValidation = {
+  validationType: string;
+  configurationJson?: string;
+  message?: string;
+};
 export type FormFieldVisibilityRule = { expression: string };
 export type FormField = {
   code: string;
@@ -366,7 +374,27 @@ export type ComponentDefinition = {
   status?: string;
   version?: number;
 };
-export type RuleDesignerMetadata = { categories: string[]; fields: string[]; functions: string[]; operators: string[] };
-export type RuleValidationResult = { isValid: boolean; errors: string[]; warnings: string[] };
-export type RuleSimulationResult = { passed: boolean; validation: RuleValidationResult; trace: Record<string, unknown> };
-export type RuleExecutionLog = { ruleCode: string; entityType: string; entityId: string; outcome: string; resultJson: string; executedAt: string };
+export type RuleDesignerMetadata = {
+  categories: string[];
+  fields: string[];
+  functions: string[];
+  operators: string[];
+};
+export type RuleValidationResult = {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+};
+export type RuleSimulationResult = {
+  passed: boolean;
+  validation: RuleValidationResult;
+  trace: Record<string, unknown>;
+};
+export type RuleExecutionLog = {
+  ruleCode: string;
+  entityType: string;
+  entityId: string;
+  outcome: string;
+  resultJson: string;
+  executedAt: string;
+};
