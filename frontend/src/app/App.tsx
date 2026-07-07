@@ -56,6 +56,7 @@ import { ContractDetailPage, ContractListPage, ContractMilestonesPage, ContractP
 import { PageHeader } from "../components/ui/PageHeader";
 import { AuthProvider } from "../auth/AuthContext";
 import { SecurityPage, RolesPage, UsersPage } from "../modules/security/SecurityPages";
+import { NotificationsPage, NotificationTemplatesPage, NotificationLogsPage, NotificationPreferencesPage, ProfilePage, SettingsPage } from "../modules/notifications/NotificationPages";
 function NotConfiguredPage({ title }: { title: string }) {
   return (
     <>
@@ -123,7 +124,12 @@ function route(p: string) {
   else if (p === "/app/reporting") page = <ReportingPage />;
   else if (p === "/app/dashboards")
     page = <NotConfiguredPage title="Dashboards" />;
-  else if (p === "/app/settings") page = <ConfigurationPage />;
+  else if (p === "/app/settings") page = <SettingsPage />;
+  else if (p === "/app/notifications") page = <NotificationsPage />;
+  else if (p === "/app/notification-templates") page = <NotificationTemplatesPage />;
+  else if (p === "/app/notification-logs") page = <NotificationLogsPage />;
+  else if (p === "/app/notification-preferences") page = <NotificationPreferencesPage />;
+  else if (p === "/app/profile") page = <ProfilePage />;
   else if (p === "/app/planning") page = <PlanningPage />;
   else if (p === "/app/planning/new") page = <NewPlanningPage />;
   else if (p.startsWith("/app/planning/"))
