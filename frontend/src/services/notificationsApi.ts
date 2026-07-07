@@ -20,4 +20,4 @@ export const getSettings = () => apiGet<Setting[]>("/api/settings", []);
 export const saveSetting = (s: Setting) => apiPut(`/api/settings/${encodeURIComponent(s.key)}`, s, s);
 export const deleteSetting = (key: string) => apiDelete(`/api/settings/${encodeURIComponent(key)}`);
 export const testEmailSettings = (to: string) => apiPost("/api/settings/test-email", { to }, { success: false, response: "" });
-export const testSmsSettings = (phoneNumber: string) => apiPost("/api/settings/test-sms", { phoneNumber }, { success: false, response: "" });
+export const testSmsSettings = (destinationAddress: string) => apiPost("/api/settings/test-sms", { destinationAddress }, { success: false, response: "" });
