@@ -1341,3 +1341,54 @@ textarea.input {
 .admin-card .apexcharts-canvas {
   margin: 10px 12px 4px;
 }
+.document-review-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.document-review-row:last-child {
+  border-bottom: 0;
+}
+.document-verification-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 20px;
+}
+.document-preview-card {
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--component-radius);
+  background: var(--color-surface-soft);
+  padding: 20px;
+}
+.document-preview-icon {
+  display: inline-flex;
+  width: 64px;
+  height: 80px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 900;
+  margin-bottom: 12px;
+}
+.document-checklist,
+.verification-summary {
+  display: grid;
+  gap: 12px;
+}
+.document-checklist label,
+.verification-summary label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 700;
+}
+@media (max-width: 1000px) {
+  .document-verification-layout {
+    grid-template-columns: 1fr;
+  }
+}
