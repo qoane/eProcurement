@@ -198,6 +198,38 @@ public static class SeedData
         if (!await db.BusinessProcessDefinitions.AnyAsync(x => x.Code == "SUPPLIER-REGISTRATION", cancellationToken))
             db.BusinessProcessDefinitions.Add(new BusinessProcessDefinition("SUPPLIER-REGISTRATION", "Supplier Registration", "End-to-end supplier onboarding assembled from workflow, form, document, rule, and approval configuration.", nameof(Supplier), activeWorkflowId, activeFormId, documentSetId, approvalMatrixId, BusinessProcessStatus.Published));
         await db.SaveChangesAsync(cancellationToken);
+        if (!await db.WorkflowDefinitions.AnyAsync(x => x.Code == "PURCHASE-ORDER-WORKFLOW", cancellationToken))
+        {
+            var wf = new WorkflowDefinition("PURCHASE-ORDER-WORKFLOW", "Purchase Order Workflow", nameof(PurchaseOrder));
+            var version = new WorkflowVersion(wf.Id, 1, WorkflowVersionStatus.Published, DateTimeOffset.UtcNow, "system");
+            version.Nodes.AddRange([new(version.Id, "Draft", "Draft", WorkflowNodeKind.Start, IsStart: true), new(version.Id, "Issued", "Issued", WorkflowNodeKind.Task), new(version.Id, "SupplierAcknowledged", "Supplier Acknowledged", WorkflowNodeKind.Task), new(version.Id, "PartiallyDelivered", "Partially Delivered", WorkflowNodeKind.Task), new(version.Id, "Delivered", "Delivered", WorkflowNodeKind.Task), new(version.Id, "Closed", "Closed", WorkflowNodeKind.End, IsTerminal: true), new(version.Id, "Cancelled", "Cancelled", WorkflowNodeKind.End, IsTerminal: true)]);
+            version.Transitions.AddRange([new(version.Id, "Draft", "Generate", "Generate", "Draft"), new(version.Id, "Draft", "Issue", "Issue", "Issued"), new(version.Id, "Issued", "SupplierAcknowledge", "Supplier Acknowledge", "SupplierAcknowledged"), new(version.Id, "SupplierAcknowledged", "RecordDelivery", "Record Delivery", "PartiallyDelivered"), new(version.Id, "PartiallyDelivered", "RecordDelivery", "Record Delivery", "Delivered"), new(version.Id, "Delivered", "Close", "Close", "Closed"), new(version.Id, "Draft", "Cancel", "Cancel", "Cancelled"), new(version.Id, "Issued", "Cancel", "Cancel", "Cancelled"), new(version.Id, "SupplierAcknowledged", "Cancel", "Cancel", "Cancelled")]);
+            wf = wf with { PublishedVersionId = version.Id }; wf.Versions.Add(version); db.WorkflowDefinitions.Add(wf);
+        }
+        foreach (var rule in new[] {
+            new BusinessRuleDefinition("PO-AWARD-APPROVED", "Award must be approved", nameof(PurchaseOrder), "PurchaseOrder.AwardApproved()", Category: "Purchase Order", Status: BusinessRuleStatus.Published, FailureMessage: "Award must be approved.", PublishedAt: DateTimeOffset.UtcNow, PublishedBy: "system"),
+            new BusinessRuleDefinition("PO-SUPPLIER-EXISTS", "Supplier must exist", nameof(PurchaseOrder), "PurchaseOrder.SupplierExists()", Category: "Purchase Order", Status: BusinessRuleStatus.Published, FailureMessage: "Supplier must exist.", PublishedAt: DateTimeOffset.UtcNow, PublishedBy: "system"),
+            new BusinessRuleDefinition("PO-BUDGET-COMMITMENT", "Budget commitment must exist", nameof(PurchaseOrder), "PurchaseOrder.BudgetCommitmentExists()", Category: "Purchase Order", Status: BusinessRuleStatus.Published, FailureMessage: "Budget commitment must exist.", PublishedAt: DateTimeOffset.UtcNow, PublishedBy: "system"),
+            new BusinessRuleDefinition("PO-TOTAL-EQUALS-AWARD", "PO total must equal award", nameof(PurchaseOrder), "PurchaseOrder.TotalEqualsAward()", Category: "Purchase Order", Status: BusinessRuleStatus.Published, FailureMessage: "PO total must equal award.", PublishedAt: DateTimeOffset.UtcNow, PublishedBy: "system"),
+            new BusinessRuleDefinition("PO-NOT-EXCEED-AWARD", "PO cannot exceed award", nameof(PurchaseOrder), "PurchaseOrder.DoesNotExceedAward()", Category: "Purchase Order", Status: BusinessRuleStatus.Published, FailureMessage: "PO cannot exceed award.", PublishedAt: DateTimeOffset.UtcNow, PublishedBy: "system"),
+            new BusinessRuleDefinition("PO-NOT-CANCELLED", "Cancelled PO cannot be delivered", nameof(PurchaseOrder), "PurchaseOrder.NotCancelled()", Category: "Purchase Order", Status: BusinessRuleStatus.Published, FailureMessage: "Cancelled PO cannot be delivered.", PublishedAt: DateTimeOffset.UtcNow, PublishedBy: "system"),
+            new BusinessRuleDefinition("PO-NOT-CLOSED", "Closed PO cannot be amended", nameof(PurchaseOrder), "PurchaseOrder.NotClosed()", Category: "Purchase Order", Status: BusinessRuleStatus.Published, FailureMessage: "Closed PO cannot be amended.", PublishedAt: DateTimeOffset.UtcNow, PublishedBy: "system") })
+            if (!await db.BusinessRuleDefinitions.AnyAsync(x => x.Code == rule.Code, cancellationToken)) db.BusinessRuleDefinitions.Add(rule);
+        await db.SaveChangesAsync(cancellationToken);
+        var poWorkflowId = await db.WorkflowDefinitions.Where(x => x.Code == "PURCHASE-ORDER-WORKFLOW").Select(x => x.Id).SingleAsync(cancellationToken);
+        if (!await db.FormDefinitions.AnyAsync(x => x.Code == "PURCHASE-ORDER-FORM", cancellationToken))
+        {
+            var form = new FormDefinition("PURCHASE-ORDER-FORM", "Purchase Order Form", nameof(PurchaseOrder));
+            var version = new FormVersion(form.Id, 1, WorkflowVersionStatus.Published, DateTimeOffset.UtcNow, "system");
+            var section = new FormSection(version.Id, "details", "Purchase order details", 1);
+            section.Fields.Add(new FormField(section.Id, "expectedDeliveryDate", "Expected delivery date", "date", 1, true)); section.Fields.Add(new FormField(section.Id, "currency", "Currency", "text", 2, true));
+            version.Sections.Add(section); form = form with { ActiveVersionId = version.Id }; form.Versions.Add(version); db.FormDefinitions.Add(form); await db.SaveChangesAsync(cancellationToken);
+        }
+        var poFormId = await db.FormDefinitions.Where(x => x.Code == "PURCHASE-ORDER-FORM").Select(x => x.Id).SingleAsync(cancellationToken);
+        if (!await db.BusinessProcessDefinitions.AnyAsync(x => x.Code == "PURCHASE-ORDER", cancellationToken)) db.BusinessProcessDefinitions.Add(new BusinessProcessDefinition("PURCHASE-ORDER", "Purchase Order", "Purchase order generation, issue, delivery, receipt, closure, and cancellation process.", nameof(PurchaseOrder), poWorkflowId, poFormId, null, null, BusinessProcessStatus.Published));
+        if (!await db.WorkflowMappings.AnyAsync(x => x.EntityType == nameof(PurchaseOrder) && x.ActionCode == "Generate", cancellationToken)) db.WorkflowMappings.Add(new WorkflowMapping(nameof(PurchaseOrder), "Generate", "PURCHASE-ORDER-WORKFLOW"));
+        await db.SaveChangesAsync(cancellationToken);
+
         if (!await db.Applications.AnyAsync(x => x.Code == "PROCUREMENT", cancellationToken))
             db.Applications.Add(new Application("PROCUREMENT", "Procurement", "Procurement workspace containing governed source-to-contract modules.", "Briefcase", "LCA Indigo", "/app/suppliers", "/app", @"[""Supplier Management"",""Requisitions"",""Tenders"",""Evaluation"",""Contracts"",""Reports"",""Studio""]", Status: MetadataStatus.Active, CreatedBy: "system"));
         await db.SaveChangesAsync(cancellationToken);

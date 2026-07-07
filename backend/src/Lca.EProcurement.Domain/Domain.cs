@@ -20,6 +20,7 @@ public enum EvaluationStage { Administrative, Technical, Financial, Consensus }
 public enum EvaluationSubmissionStatus { Pending, Responsive, NonResponsive, Evaluated, Recommended, Rejected }
 public enum AwardStatus { Draft, Recommended, UnderApproval, Approved, Rejected, Published, Cancelled, ConvertedToPurchaseOrder, ConvertedToContract }
 public enum AwardDecisionStatus { Pending, Approved, Rejected, Deferred }
+public enum PurchaseOrderStatus { Draft, Issued, Acknowledged, PartiallyDelivered, Delivered, Closed, Cancelled }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }
@@ -156,6 +157,23 @@ public record AwardApproval(Guid AwardId, string Role, string ApproverEmail, boo
 public record AwardNotification(Guid AwardId, Guid SupplierId, string SupplierName, string SupplierEmail, string NotificationType, string Subject, string Message, DateTimeOffset? SentAt, string Status) : Entity(Guid.NewGuid());
 public record AwardHistory(Guid AwardId, AwardStatus FromStatus, AwardStatus ToStatus, string Actor, string Notes, DateTimeOffset ChangedAt) : Entity(Guid.NewGuid());
 public record AwardReport(Guid AwardId, string ReportNumber, DateTimeOffset GeneratedAt, string GeneratedBy, string SummaryJson) : Entity(Guid.NewGuid());
+
+
+public record PurchaseOrder(string PurchaseOrderNumber, Guid AwardId, Guid SupplierId, string SupplierName, DateTimeOffset? IssueDate, DateTimeOffset ExpectedDeliveryDate, string Currency, decimal TotalAmount, PurchaseOrderStatus Status, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? IssuedAt = null, DateTimeOffset? ClosedAt = null, DateTimeOffset? CancelledAt = null) : Entity(Guid.NewGuid())
+{
+    public List<PurchaseOrderLine> Lines { get; init; } = [];
+    public List<PurchaseOrderAmendment> Amendments { get; init; } = [];
+    public List<PurchaseOrderDelivery> Deliveries { get; init; } = [];
+    public List<GoodsReceipt> GoodsReceipts { get; init; } = [];
+    public List<PurchaseOrderHistory> History { get; init; } = [];
+    public List<PurchaseOrderStatusHistory> StatusHistory { get; init; } = [];
+}
+public record PurchaseOrderLine(Guid PurchaseOrderId, int ItemNumber, string Description, decimal Quantity, decimal UnitPrice, decimal Total, decimal DeliveredQuantity, decimal OutstandingQuantity) : Entity(Guid.NewGuid());
+public record PurchaseOrderAmendment(Guid PurchaseOrderId, string Reason, string OldValue, string NewValue, string ApprovedBy, DateTimeOffset ApprovedAt) : Entity(Guid.NewGuid());
+public record PurchaseOrderDelivery(Guid PurchaseOrderId, DateTimeOffset DeliveryDate, string DeliveredBy, string ReceivedBy, string Notes) : Entity(Guid.NewGuid());
+public record GoodsReceipt(Guid PurchaseOrderId, string ReceiptNumber, DateTimeOffset ReceivedAt, string ReceivedBy, string Status) : Entity(Guid.NewGuid());
+public record PurchaseOrderHistory(Guid PurchaseOrderId, string EventType, string Actor, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
+public record PurchaseOrderStatusHistory(Guid PurchaseOrderId, PurchaseOrderStatus FromStatus, PurchaseOrderStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
 
 public record WorkflowDefinition(string Code, string Name, string EntityType, bool IsActive = true, Guid? PublishedVersionId = null) : Entity(Guid.NewGuid())
 {

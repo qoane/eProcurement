@@ -51,6 +51,7 @@ import { BidSubmissionDetailPage, BidSubmissionListPage, NewBidSubmissionPage } 
 import { BidOpeningDetailPage, BidOpeningListPage, NewBidOpeningPage } from "../modules/bid-opening/BidOpeningPages";
 import { EvaluationDetailPage, EvaluationListPage, EvaluationTemplateDetailPage, EvaluationTemplateListPage, NewEvaluationPage, NewEvaluationTemplatePage } from "../modules/evaluation/EvaluationPages";
 import { AwardDetailPage, AwardListPage, NewAwardPage } from "../modules/awards/AwardPages";
+import { NewPurchaseOrderPage, PurchaseOrderDetailPage, PurchaseOrderListPage } from "../modules/purchase-orders/PurchaseOrderPages";
 import { PageHeader } from "../components/ui/PageHeader";
 function NotConfiguredPage({ title }: { title: string }) {
   return (
@@ -163,8 +164,9 @@ function route(p: string) {
   else if (p === "/app/awards") page = <AwardListPage />;
   else if (p === "/app/awards/new") page = <NewAwardPage />;
   else if (p.startsWith("/app/awards/")) page = <AwardDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
-  else if (p === "/app/purchase-orders")
-    page = <NotConfiguredPage title="Purchase Orders" />;
+  else if (p === "/app/purchase-orders") page = <PurchaseOrderListPage />;
+  else if (p === "/app/purchase-orders/new") page = <NewPurchaseOrderPage />;
+  else if (p.startsWith("/app/purchase-orders/")) page = <PurchaseOrderDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/contracts")
     page = <NotConfiguredPage title="Contracts" />;
   else if (p === "/app/security") page = <NotConfiguredPage title="Security" />;
