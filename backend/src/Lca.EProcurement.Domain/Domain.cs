@@ -312,3 +312,15 @@ public record RolePermission(Guid RoleId, Guid PermissionId) : Entity(Guid.NewGu
 public record UserRole(Guid UserId, Guid RoleId) : Entity(Guid.NewGuid());
 public record UserProfile(Guid UserId, string Department, string JobTitle, string PreferencesJson = "{}") : Entity(Guid.NewGuid());
 public record SupplierUserLink(Guid UserId, Guid SupplierId, bool IsPrimaryContact = false, DateTimeOffset LinkedAt = default) : Entity(Guid.NewGuid());
+
+public enum NotificationChannel { InApp, Email, Sms }
+public enum NotificationStatus { Pending, Sent, Failed, Cancelled, Read, Unread }
+public enum NotificationPriority { Low, Normal, High, Critical }
+
+public record NotificationTemplate(string Code, string Name, string Description, string EventCode, NotificationChannel Channel, string SubjectTemplate, string BodyTemplate, bool IsActive = true, DateTimeOffset CreatedAt = default, DateTimeOffset? UpdatedAt = null) : Entity(Guid.NewGuid());
+public record NotificationMessage(string EventCode, string EntityType, Guid? EntityId, NotificationChannel Channel, string Subject, string Body, NotificationPriority Priority, NotificationStatus Status, DateTimeOffset CreatedAt, DateTimeOffset? SentAt = null, string? FailureReason = null, string? RelatedUrl = null) : Entity(Guid.NewGuid()) { public List<NotificationRecipient> Recipients { get; init; } = []; }
+public record NotificationRecipient(Guid NotificationMessageId, string UserId, string RecipientType, string Name, string? Email, string? PhoneNumber, string? RoleCode, NotificationStatus Status, DateTimeOffset? ReadAt = null) : Entity(Guid.NewGuid());
+public record NotificationDeliveryLog(Guid NotificationMessageId, NotificationChannel Channel, string RequestPayload, string ResponsePayload, NotificationStatus Status, DateTimeOffset SentAt, string? Error = null) : Entity(Guid.NewGuid());
+public record NotificationPreference(string UserId, string EventCode, bool InAppEnabled = true, bool EmailEnabled = true, bool SmsEnabled = true) : Entity(Guid.NewGuid());
+public record NotificationEventMapping(string EventCode, string TemplateCode, NotificationChannel Channel, string EntityType, string? RecipientRoleCode, bool IsActive = true) : Entity(Guid.NewGuid());
+public record SystemSettingOverride(string Key, string Value, bool IsSecret, string Category, string UpdatedBy, DateTimeOffset UpdatedAt) : Entity(Guid.NewGuid());

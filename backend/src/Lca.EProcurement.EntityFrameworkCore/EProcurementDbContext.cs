@@ -10,6 +10,13 @@ namespace Lca.EProcurement.EntityFrameworkCore;
 public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext> options) : DbContext(options)
 {
     public DbSet<SeedMetadata> SeedMetadata => Set<SeedMetadata>();
+    public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
+    public DbSet<NotificationMessage> NotificationMessages => Set<NotificationMessage>();
+    public DbSet<NotificationRecipient> NotificationRecipients => Set<NotificationRecipient>();
+    public DbSet<NotificationDeliveryLog> NotificationDeliveryLogs => Set<NotificationDeliveryLog>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+    public DbSet<NotificationEventMapping> NotificationEventMappings => Set<NotificationEventMapping>();
+    public DbSet<SystemSettingOverride> SystemSettingOverrides => Set<SystemSettingOverride>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<SupplierDocument> SupplierDocuments => Set<SupplierDocument>();
     public DbSet<SupplierCategory> SupplierCategories => Set<SupplierCategory>();
@@ -143,6 +150,14 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
         modelBuilder.Entity<UserRole>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.UserId, x.RoleId }).IsUnique(); });
         modelBuilder.Entity<UserProfile>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.UserId).IsUnique(); b.Property(x => x.Department).HasMaxLength(128); b.Property(x => x.JobTitle).HasMaxLength(128); b.Property(x => x.PreferencesJson).HasColumnType("nvarchar(max)"); });
         modelBuilder.Entity<SupplierUserLink>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.UserId, x.SupplierId }).IsUnique(); });
+
+        modelBuilder.Entity<NotificationTemplate>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Code).IsUnique(); b.Property(x => x.Code).HasMaxLength(128); b.Property(x => x.Name).HasMaxLength(256); b.Property(x => x.Description).HasMaxLength(2000); b.Property(x => x.EventCode).HasMaxLength(128); b.Property(x => x.Channel).HasConversion<string>().HasMaxLength(32); b.Property(x => x.SubjectTemplate).HasMaxLength(512); b.Property(x => x.BodyTemplate).HasColumnType("nvarchar(max)"); });
+        modelBuilder.Entity<NotificationMessage>(b => { b.HasKey(x => x.Id); b.Property(x => x.EventCode).HasMaxLength(128); b.Property(x => x.EntityType).HasMaxLength(128); b.Property(x => x.Channel).HasConversion<string>().HasMaxLength(32); b.Property(x => x.Subject).HasMaxLength(512); b.Property(x => x.Body).HasColumnType("nvarchar(max)"); b.Property(x => x.Priority).HasConversion<string>().HasMaxLength(32); b.Property(x => x.Status).HasConversion<string>().HasMaxLength(32); b.Property(x => x.FailureReason).HasMaxLength(2000); b.Property(x => x.RelatedUrl).HasMaxLength(512); b.HasMany(x => x.Recipients).WithOne().HasForeignKey(x => x.NotificationMessageId).OnDelete(DeleteBehavior.Cascade); });
+        modelBuilder.Entity<NotificationRecipient>(b => { b.HasKey(x => x.Id); b.Property(x => x.UserId).HasMaxLength(256); b.Property(x => x.RecipientType).HasMaxLength(64); b.Property(x => x.Name).HasMaxLength(256); b.Property(x => x.Email).HasMaxLength(256); b.Property(x => x.PhoneNumber).HasMaxLength(64); b.Property(x => x.RoleCode).HasMaxLength(128); b.Property(x => x.Status).HasConversion<string>().HasMaxLength(32); });
+        modelBuilder.Entity<NotificationDeliveryLog>(b => { b.HasKey(x => x.Id); b.Property(x => x.Channel).HasConversion<string>().HasMaxLength(32); b.Property(x => x.RequestPayload).HasColumnType("nvarchar(max)"); b.Property(x => x.ResponsePayload).HasColumnType("nvarchar(max)"); b.Property(x => x.Status).HasConversion<string>().HasMaxLength(32); b.Property(x => x.Error).HasMaxLength(2000); });
+        modelBuilder.Entity<NotificationPreference>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.UserId, x.EventCode }).IsUnique(); b.Property(x => x.UserId).HasMaxLength(256); b.Property(x => x.EventCode).HasMaxLength(128); });
+        modelBuilder.Entity<NotificationEventMapping>(b => { b.HasKey(x => x.Id); b.Property(x => x.EventCode).HasMaxLength(128); b.Property(x => x.TemplateCode).HasMaxLength(128); b.Property(x => x.Channel).HasConversion<string>().HasMaxLength(32); b.Property(x => x.EntityType).HasMaxLength(128); b.Property(x => x.RecipientRoleCode).HasMaxLength(128); });
+        modelBuilder.Entity<SystemSettingOverride>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Key).IsUnique(); b.Property(x => x.Key).HasMaxLength(256); b.Property(x => x.Value).HasColumnType("nvarchar(max)"); b.Property(x => x.Category).HasMaxLength(128); b.Property(x => x.UpdatedBy).HasMaxLength(256); });
         modelBuilder.Entity<SeedMetadata>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.Kind, x.Code }).IsUnique(); b.Property(x => x.Kind).HasMaxLength(64); b.Property(x => x.Code).HasMaxLength(128); b.Property(x => x.Name).HasMaxLength(256); });
         modelBuilder.Entity<Supplier>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.ReferenceNumber).IsUnique(); b.Property(x => x.ReferenceNumber).HasMaxLength(64); b.Property(x => x.LegalName).HasMaxLength(256); b.Property(x => x.Status).HasConversion<string>().HasMaxLength(64); b.HasMany(x => x.Documents).WithOne().HasForeignKey(x => x.SupplierId); b.HasMany(x => x.PerformanceRatings).WithOne().HasForeignKey(x => x.SupplierId); b.HasMany(x => x.Categories).WithMany().UsingEntity("SupplierCategoryAssignments"); });
         modelBuilder.Entity<SupplierDocument>(b => { b.HasKey(x => x.Id); b.Property(x => x.DocumentType).HasMaxLength(128); b.Property(x => x.FileName).HasMaxLength(256); b.Property(x => x.UploadedBy).HasMaxLength(256); });
