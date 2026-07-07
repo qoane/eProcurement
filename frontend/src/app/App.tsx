@@ -28,6 +28,7 @@ import { FormDesignerPage } from "../modules/forms/FormDesignerPage";
 import { ConfigurationPage } from "../modules/configuration/ConfigurationPage";
 import { ReportingPage } from "../modules/reporting/ReportingPage";
 import { TendersPage } from "../modules/tenders/TendersPage";
+import { PlanningPage, NewPlanningPage, PlanningDetailPage, BudgetsPage, CostCentresPage, ProcurementCategoriesPage } from "../modules/planning/PlanningPages";
 import { StudioModulePage, StudioPage } from "../modules/studio/StudioPage";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -98,7 +99,12 @@ function route(p: string) {
   else if (p === "/app/dashboards")
     page = <NotConfiguredPage title="Dashboards" />;
   else if (p === "/app/settings") page = <ConfigurationPage />;
-  else if (p === "/app/planning") page = <NotConfiguredPage title="Planning" />;
+  else if (p === "/app/planning") page = <PlanningPage />;
+  else if (p === "/app/planning/new") page = <NewPlanningPage />;
+  else if (p.startsWith("/app/planning/")) page = <PlanningDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p === "/app/budgets") page = <BudgetsPage />;
+  else if (p === "/app/cost-centres") page = <CostCentresPage />;
+  else if (p === "/app/procurement-categories") page = <ProcurementCategoriesPage />;
   else if (p === "/app/requisitions")
     page = <NotConfiguredPage title="Requisitions" />;
   else if (p === "/app/tenders") page = <TendersPage />;

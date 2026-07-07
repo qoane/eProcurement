@@ -58,6 +58,13 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
     public DbSet<LookupDefinition> LookupDefinitions => Set<LookupDefinition>();
     public DbSet<DocumentTypeDefinition> DocumentTypeDefinitions => Set<DocumentTypeDefinition>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+    public DbSet<AnnualProcurementPlan> AnnualProcurementPlans => Set<AnnualProcurementPlan>();
+    public DbSet<ProcurementPlanItem> ProcurementPlanItems => Set<ProcurementPlanItem>();
+    public DbSet<Budget> Budgets => Set<Budget>();
+    public DbSet<BudgetLine> BudgetLines => Set<BudgetLine>();
+    public DbSet<CostCentre> CostCentres => Set<CostCentre>();
+    public DbSet<ProcurementCategory> ProcurementCategories => Set<ProcurementCategory>();
+    public DbSet<FinancialYear> FinancialYears => Set<FinancialYear>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -123,6 +130,13 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
         modelBuilder.Entity<LookupDefinition>(ConfigureMetadata);
         modelBuilder.Entity<DocumentTypeDefinition>(ConfigureMetadata);
         modelBuilder.Entity<SystemSetting>(ConfigureMetadata);
+        modelBuilder.Entity<AnnualProcurementPlan>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.PlanNumber).IsUnique(); b.Property(x => x.PlanNumber).HasMaxLength(64); b.Property(x => x.Title).HasMaxLength(256); b.Property(x => x.Department).HasMaxLength(128); b.Property(x => x.Status).HasMaxLength(64); b.Property(x => x.CreatedBy).HasMaxLength(256); b.HasMany(x => x.Items).WithOne().HasForeignKey(x => x.AnnualProcurementPlanId).OnDelete(DeleteBehavior.Cascade); });
+        modelBuilder.Entity<ProcurementPlanItem>(b => { b.HasKey(x => x.Id); b.Property(x => x.ItemCode).HasMaxLength(64); b.Property(x => x.Description).HasMaxLength(1000); b.Property(x => x.EstimatedAmount).HasPrecision(18,2); b.Property(x => x.PlannedQuarter).HasMaxLength(32); b.Property(x => x.ProcurementMethod).HasMaxLength(128); b.Property(x => x.Status).HasMaxLength(64); });
+        modelBuilder.Entity<Budget>(b => { b.HasKey(x => x.Id); b.Property(x => x.Department).HasMaxLength(128); b.Property(x => x.TotalAmount).HasPrecision(18,2); b.Property(x => x.CommittedAmount).HasPrecision(18,2); b.Property(x => x.AvailableAmount).HasPrecision(18,2); b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.BudgetId).OnDelete(DeleteBehavior.Cascade); });
+        modelBuilder.Entity<BudgetLine>(b => { b.HasKey(x => x.Id); b.Property(x => x.AllocatedAmount).HasPrecision(18,2); b.Property(x => x.CommittedAmount).HasPrecision(18,2); b.Property(x => x.AvailableAmount).HasPrecision(18,2); });
+        modelBuilder.Entity<CostCentre>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Code).IsUnique(); b.Property(x => x.Code).HasMaxLength(64); b.Property(x => x.Name).HasMaxLength(256); b.Property(x => x.Department).HasMaxLength(128); });
+        modelBuilder.Entity<ProcurementCategory>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Code).IsUnique(); b.Property(x => x.Code).HasMaxLength(64); b.Property(x => x.Name).HasMaxLength(256); });
+        modelBuilder.Entity<FinancialYear>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Code).IsUnique(); b.Property(x => x.Code).HasMaxLength(32); });
     }
 }
 
