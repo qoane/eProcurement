@@ -25,6 +25,6 @@ public sealed class SystemSettingsController(ISystemSettingsApplicationService s
     public Task<IActionResult> TestEmail(Dictionary<string,string> dto, CancellationToken ct) => OkAsync(settings.TestEmailSettingsAsync(dto.GetValueOrDefault("to") ?? "admin@example.test", ct));
     [Authorize(Policy = "Settings.Manage")]
     [HttpPost("test-sms")]
-    public Task<IActionResult> TestSms(Dictionary<string,string> dto, CancellationToken ct) => OkAsync(settings.TestSmsSettingsAsync(dto.GetValueOrDefault("phoneNumber") ?? "+26600000000", ct));
+    public Task<IActionResult> TestSms(Dictionary<string,string> dto, CancellationToken ct) => OkAsync(settings.TestSmsSettingsAsync(dto.GetValueOrDefault("destinationAddress") ?? dto.GetValueOrDefault("phoneNumber") ?? "+26600000000", ct));
     static async Task<IActionResult> OkAsync<T>(Task<T> task) => new OkObjectResult(await task);
 }
