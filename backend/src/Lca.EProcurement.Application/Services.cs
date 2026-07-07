@@ -723,10 +723,20 @@ public interface IBudgetApplicationService
     Task<List<Budget>> GetAsync(CancellationToken ct = default);
     Task<Budget?> GetAsync(Guid id, CancellationToken ct = default);
     Task<Budget> CreateAsync(CreateBudgetDto dto, CancellationToken ct = default);
-    Task<List<CostCentre>> GetCostCentresAsync(CancellationToken ct = default);
-    Task<CostCentre> CreateCostCentreAsync(CreateCostCentreDto dto, CancellationToken ct = default);
-    Task<List<ProcurementCategory>> GetProcurementCategoriesAsync(CancellationToken ct = default);
-    Task<ProcurementCategory> CreateProcurementCategoryAsync(CreateProcurementCategoryDto dto, CancellationToken ct = default);
+}
+public interface ICostCentreApplicationService
+{
+    Task<List<CostCentre>> GetAsync(CancellationToken ct = default);
+    Task<CostCentre> CreateAsync(CreateCostCentreDto dto, CancellationToken ct = default);
+}
+public interface IProcurementCategoryApplicationService
+{
+    Task<List<ProcurementCategory>> GetAsync(CancellationToken ct = default);
+    Task<ProcurementCategory> CreateAsync(CreateProcurementCategoryDto dto, CancellationToken ct = default);
+}
+public interface IFinancialYearApplicationService
+{
+    Task<List<FinancialYear>> GetAsync(CancellationToken ct = default);
 }
 public sealed record CreateBudgetDto(Guid FinancialYearId, string Department, decimal TotalAmount, decimal CommittedAmount, List<CreateBudgetLineDto>? Lines = null);
 public sealed record CreateBudgetLineDto(Guid CostCentreId, Guid ProcurementCategoryId, decimal AllocatedAmount, decimal CommittedAmount);
@@ -773,8 +783,18 @@ public sealed class BudgetApplicationService(EProcurementDbContext db) : IBudget
     public Task<List<Budget>> GetAsync(CancellationToken ct = default) => db.Budgets.AsNoTracking().Include(x => x.Lines).OrderBy(x => x.Department).ToListAsync(ct);
     public Task<Budget?> GetAsync(Guid id, CancellationToken ct = default) => db.Budgets.AsNoTracking().Include(x => x.Lines).SingleOrDefaultAsync(x => x.Id == id, ct);
     public async Task<Budget> CreateAsync(CreateBudgetDto dto, CancellationToken ct = default) { var budget = new Budget(dto.FinancialYearId, dto.Department, dto.TotalAmount, dto.CommittedAmount, dto.TotalAmount - dto.CommittedAmount); foreach (var l in dto.Lines ?? []) budget.Lines.Add(new BudgetLine(budget.Id, l.CostCentreId, l.ProcurementCategoryId, l.AllocatedAmount, l.CommittedAmount, l.AllocatedAmount - l.CommittedAmount)); db.Budgets.Add(budget); db.AuditEvents.Add(new AuditEvent("Budget created", nameof(Budget), budget.Id, dto.Department, "system", "Budget foundation", DateTimeOffset.UtcNow)); await db.SaveChangesAsync(ct); return budget; }
-    public Task<List<CostCentre>> GetCostCentresAsync(CancellationToken ct = default) => db.CostCentres.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
-    public async Task<CostCentre> CreateCostCentreAsync(CreateCostCentreDto dto, CancellationToken ct = default) { var c = new CostCentre(dto.Code, dto.Name, dto.Department); db.CostCentres.Add(c); await db.SaveChangesAsync(ct); return c; }
-    public Task<List<ProcurementCategory>> GetProcurementCategoriesAsync(CancellationToken ct = default) => db.ProcurementCategories.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
-    public async Task<ProcurementCategory> CreateProcurementCategoryAsync(CreateProcurementCategoryDto dto, CancellationToken ct = default) { var c = new ProcurementCategory(dto.Code, dto.Name); db.ProcurementCategories.Add(c); await db.SaveChangesAsync(ct); return c; }
+}
+public sealed class CostCentreApplicationService(EProcurementDbContext db) : ICostCentreApplicationService
+{
+    public Task<List<CostCentre>> GetAsync(CancellationToken ct = default) => db.CostCentres.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
+    public async Task<CostCentre> CreateAsync(CreateCostCentreDto dto, CancellationToken ct = default) { var c = new CostCentre(dto.Code, dto.Name, dto.Department); db.CostCentres.Add(c); db.AuditEvents.Add(new AuditEvent("Cost centre created", nameof(CostCentre), c.Id, c.Code, "system", c.Department, DateTimeOffset.UtcNow)); await db.SaveChangesAsync(ct); return c; }
+}
+public sealed class ProcurementCategoryApplicationService(EProcurementDbContext db) : IProcurementCategoryApplicationService
+{
+    public Task<List<ProcurementCategory>> GetAsync(CancellationToken ct = default) => db.ProcurementCategories.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
+    public async Task<ProcurementCategory> CreateAsync(CreateProcurementCategoryDto dto, CancellationToken ct = default) { var c = new ProcurementCategory(dto.Code, dto.Name); db.ProcurementCategories.Add(c); db.AuditEvents.Add(new AuditEvent("Procurement category created", nameof(ProcurementCategory), c.Id, c.Code, "system", c.Name, DateTimeOffset.UtcNow)); await db.SaveChangesAsync(ct); return c; }
+}
+public sealed class FinancialYearApplicationService(EProcurementDbContext db) : IFinancialYearApplicationService
+{
+    public Task<List<FinancialYear>> GetAsync(CancellationToken ct = default) => db.FinancialYears.AsNoTracking().OrderByDescending(x => x.StartDate).ToListAsync(ct);
 }
