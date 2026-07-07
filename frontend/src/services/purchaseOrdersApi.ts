@@ -1,0 +1,12 @@
+import { apiGet, apiPost } from "./apiClient";
+const actor = { actor: "procurement@lca.org.ls" };
+export type PurchaseOrderSummary = { id:string; purchaseOrderNumber:string; supplierName:string; totalAmount:number; status:string; createdAt:string; issueDate?:string; expectedDeliveryDate:string };
+export type PurchaseOrderDetail = { purchaseOrder:any; award:any; lines:any[]; deliveries:any[]; goodsReceipts:any[]; history:any[]; statusHistory:any[]; amendments:any[]; auditTimeline:any[]; workflowInstance?:any };
+export const getPurchaseOrders=()=>apiGet<PurchaseOrderSummary[]>("/api/purchase-orders",[]);
+export const getPurchaseOrder=(id:string)=>apiGet<PurchaseOrderDetail>(`/api/purchase-orders/${id}`,null as unknown as PurchaseOrderDetail);
+export const createPurchaseOrderFromAward=(awardId:string)=>apiPost<PurchaseOrderDetail>(`/api/purchase-orders/from-award/${awardId}`,actor);
+export const issuePurchaseOrder=(id:string)=>apiPost<PurchaseOrderDetail>(`/api/purchase-orders/${id}/issue`,actor);
+export const acknowledgePurchaseOrder=(id:string)=>apiPost<PurchaseOrderDetail>(`/api/purchase-orders/${id}/acknowledge`,{ actor:"supplier@example.co.ls" });
+export const recordPurchaseOrderDelivery=(id:string, lines:any[])=>apiPost<PurchaseOrderDetail>(`/api/purchase-orders/${id}/record-delivery`,{ actor:"stores@lca.org.ls", deliveredBy:"Supplier courier", receivedBy:"stores@lca.org.ls", notes:"Delivery recorded", deliveredQuantities:Object.fromEntries(lines.map((l:any)=>[l.id, Math.max(0, Number(l.outstandingQuantity)||0)])) });
+export const closePurchaseOrder=(id:string)=>apiPost<PurchaseOrderDetail>(`/api/purchase-orders/${id}/close`,actor);
+export const cancelPurchaseOrder=(id:string)=>apiPost<PurchaseOrderDetail>(`/api/purchase-orders/${id}/cancel`,actor);
