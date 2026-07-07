@@ -206,7 +206,8 @@ public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : I
     }
     public async Task<RuleResult> EvaluateAsync(string ruleCode, string entityType, Guid entityId, string actor, CancellationToken ct = default)
     {
-        var rule = await db.BusinessRuleDefinitions.SingleAsync(r => r.Code == ruleCode && r.IsActive && r.Status == BusinessRuleStatus.Published, ct);
+        var rule = await db.BusinessRuleDefinitions.SingleOrDefaultAsync(r => r.Code == ruleCode && r.IsActive && r.Status == BusinessRuleStatus.Published, ct)
+            ?? throw new InvalidOperationException($"Active published business rule '{ruleCode}' was not found. Check the workflow transition rule configuration and publish the rule before executing the action.");
         return (await EvaluateRules([rule], entityType, entityId, actor, null, ct)).Single();
     }
     public async Task<List<RuleResult>> EvaluatePublishedAsync(string appliesTo, string entityType, Guid entityId, string actor, Dictionary<string, string?>? values = null, CancellationToken ct = default)
@@ -217,7 +218,7 @@ public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : I
     public RuleDesignerMetadataDto GetDesignerMetadata(string appliesTo = nameof(Supplier)) => new(["Registration", "Compliance", "Risk", "Documents", "Eligibility"], Fields.ToList(), Functions.ToList(), ["&&", "||", "!", "==", "!="]);
     async Task<List<RuleResult>> EvaluateRules(List<BusinessRuleDefinition> rules, string entityType, Guid entityId, string actor, Dictionary<string, string?>? values, CancellationToken ct)
     {
-        object entity = entityType == nameof(Supplier) ? await db.Suppliers.Include(s => s.Documents).Include(s => s.Categories).SingleAsync(s => s.Id == entityId, ct) : entityType == nameof(Requisition) ? await db.Requisitions.Include(r => r.Items).SingleAsync(r => r.Id == entityId, ct) : entityType == nameof(BidSubmission) ? await db.BidSubmissions.Include(b => b.Documents).Include(b => b.Declarations).Include(b => b.Items).SingleAsync(b => b.Id == entityId, ct) : entityType == nameof(BidOpeningSession) ? await db.BidOpeningSessions.Include(b => b.CommitteeMembers).Include(b => b.Submissions).SingleAsync(b => b.Id == entityId, ct) : entityType == nameof(EvaluationSession) ? await db.EvaluationSessions.Include(e => e.CommitteeMembers).Include(e => e.Submissions).Include(e => e.Recommendations).SingleAsync(e => e.Id == entityId, ct) : entityType == nameof(Award) ? await db.Awards.Include(a => a.Items).Include(a => a.Notifications).SingleAsync(a => a.Id == entityId, ct) : entityType == nameof(PurchaseOrder) ? await db.PurchaseOrders.Include(p => p.Lines).Include(p => p.Deliveries).Include(p => p.GoodsReceipts).SingleAsync(p => p.Id == entityId, ct) : entityType == nameof(Contract) ? await db.Contracts.Include(c => c.Lines).Include(c => c.Milestones).SingleAsync(c => c.Id == entityId, ct) : throw new NotSupportedException($"Rules for entity type '{entityType}' are not configured.");
+        var entity = await LoadRuleEntity(entityType, entityId, ct);
         var results = new List<RuleResult>();
         foreach (var rule in rules)
         {
@@ -230,6 +231,21 @@ public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : I
         await db.SaveChangesAsync(ct); return results;
     }
     static string EntityReference(object e) => e is Supplier s ? s.ReferenceNumber : e is Requisition r ? r.RequisitionNumber : e is BidSubmission b ? b.SubmissionNumber : e is BidOpeningSession bo ? bo.SessionNumber : e is EvaluationSession ev ? ev.SessionNumber : e is Award a ? a.AwardNumber : e is PurchaseOrder po ? po.PurchaseOrderNumber : e is Contract c ? c.ContractNumber : e.ToString() ?? string.Empty;
+
+    async Task<object> LoadRuleEntity(string entityType, Guid entityId, CancellationToken ct)
+    {
+        object? entity = entityType == nameof(Supplier) ? await db.Suppliers.Include(s => s.Documents).Include(s => s.Categories).SingleOrDefaultAsync(s => s.Id == entityId, ct)
+            : entityType == nameof(Requisition) ? await db.Requisitions.Include(r => r.Items).SingleOrDefaultAsync(r => r.Id == entityId, ct)
+            : entityType == nameof(BidSubmission) ? await db.BidSubmissions.Include(b => b.Documents).Include(b => b.Declarations).Include(b => b.Items).SingleOrDefaultAsync(b => b.Id == entityId, ct)
+            : entityType == nameof(BidOpeningSession) ? await db.BidOpeningSessions.Include(b => b.CommitteeMembers).Include(b => b.Submissions).SingleOrDefaultAsync(b => b.Id == entityId, ct)
+            : entityType == nameof(EvaluationSession) ? await db.EvaluationSessions.Include(e => e.CommitteeMembers).Include(e => e.Submissions).Include(e => e.Recommendations).SingleOrDefaultAsync(e => e.Id == entityId, ct)
+            : entityType == nameof(Award) ? await db.Awards.Include(a => a.Items).Include(a => a.Notifications).SingleOrDefaultAsync(a => a.Id == entityId, ct)
+            : entityType == nameof(PurchaseOrder) ? await db.PurchaseOrders.Include(p => p.Lines).Include(p => p.Deliveries).Include(p => p.GoodsReceipts).SingleOrDefaultAsync(p => p.Id == entityId, ct)
+            : entityType == nameof(Contract) ? await db.Contracts.Include(c => c.Lines).Include(c => c.Milestones).SingleOrDefaultAsync(c => c.Id == entityId, ct)
+            : throw new NotSupportedException($"Rules for entity type '{entityType}' are not configured.");
+
+        return entity ?? throw new InvalidOperationException($"Cannot evaluate business rules because {entityType} '{entityId}' was not found.");
+    }
 }
 
 public sealed record RuleEvaluationContext(object Entity, Dictionary<string, string?> Values);
