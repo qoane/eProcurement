@@ -13,6 +13,8 @@ public enum RequisitionStatus { Draft, Submitted, BudgetValidation, ManagerAppro
 public enum TenderType { RFP, RFQ, RFI }
 public enum TenderStatus { Draft, Published, Clarification, Cancelled, Closed }
 public enum BidSubmissionStatus { Draft, Submitted, Locked, Withdrawn, Opened, Evaluated, Awarded, Rejected }
+public enum BidOpeningSessionStatus { Draft, Scheduled, InProgress, Completed, ReferredToEvaluation, Cancelled }
+public enum BidOpeningSubmissionStatus { Pending, Opened, Late, Disqualified, ReferredToEvaluation }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }
@@ -93,6 +95,21 @@ public record BidSubmissionHistory(Guid BidSubmissionId, string EventType, strin
 public record BidSubmissionDeclaration(Guid BidSubmissionId, string DeclarationType, bool Accepted, string AcceptedBy, DateTimeOffset AcceptedAt) : Entity(Guid.NewGuid());
 public record BidSubmissionVersion(Guid BidSubmissionId, int VersionNumber, DateTimeOffset CreatedAt, string CreatedBy) : Entity(Guid.NewGuid());
 public record BidSubmissionStatusHistory(Guid BidSubmissionId, BidSubmissionStatus FromStatus, BidSubmissionStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
+
+
+public record BidOpeningSession(string SessionNumber, Guid TenderId, string Title, DateTimeOffset ScheduledAt, BidOpeningSessionStatus Status, string CreatedBy, DateTimeOffset CreatedAt, string Chairperson, string? Notes = null, DateTimeOffset? StartedAt = null, DateTimeOffset? CompletedAt = null) : Entity(Guid.NewGuid())
+{
+    public List<BidOpeningCommitteeMember> CommitteeMembers { get; init; } = [];
+    public List<BidOpeningSubmission> Submissions { get; init; } = [];
+    public List<BidOpeningMinute> Minutes { get; init; } = [];
+    public List<BidOpeningChecklistItem> ChecklistItems { get; init; } = [];
+    public List<BidOpeningReport> Reports { get; init; } = [];
+}
+public record BidOpeningCommitteeMember(Guid BidOpeningSessionId, string Name, string Email, string Role, bool AttendanceConfirmed = false, DateTimeOffset? ConfirmedAt = null) : Entity(Guid.NewGuid());
+public record BidOpeningSubmission(Guid BidOpeningSessionId, Guid BidSubmissionId, Guid SupplierId, string SupplierName, string SubmissionNumber, DateTimeOffset? SubmittedAt, BidOpeningSubmissionStatus Status, DateTimeOffset? OpenedAt = null, string? OpenedBy = null, string? Notes = null, string? SealedDocumentHash = null, string? OpeningKeyReference = null, string? DigitalSignatureReference = null, string? TimestampAuthorityReference = null, string? SecureVaultReference = null) : Entity(Guid.NewGuid());
+public record BidOpeningMinute(Guid BidOpeningSessionId, string MinuteText, string RecordedBy, DateTimeOffset RecordedAt) : Entity(Guid.NewGuid());
+public record BidOpeningChecklistItem(Guid BidOpeningSessionId, string Description, bool Completed = false, string? CompletedBy = null, DateTimeOffset? CompletedAt = null) : Entity(Guid.NewGuid());
+public record BidOpeningReport(Guid BidOpeningSessionId, string ReportNumber, DateTimeOffset GeneratedAt, string GeneratedBy, string SummaryJson) : Entity(Guid.NewGuid());
 
 public record WorkflowDefinition(string Code, string Name, string EntityType, bool IsActive = true, Guid? PublishedVersionId = null) : Entity(Guid.NewGuid())
 {

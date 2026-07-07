@@ -48,6 +48,7 @@ import {
 import { StudioModulePage, StudioPage } from "../modules/studio/StudioPage";
 import { EmptyState } from "../components/ui/EmptyState";
 import { BidSubmissionDetailPage, BidSubmissionListPage, NewBidSubmissionPage } from "../modules/bids/BidSubmissionPages";
+import { BidOpeningDetailPage, BidOpeningListPage, NewBidOpeningPage } from "../modules/bid-opening/BidOpeningPages";
 import { PageHeader } from "../components/ui/PageHeader";
 function NotConfiguredPage({ title }: { title: string }) {
   return (
@@ -147,8 +148,10 @@ function route(p: string) {
   else if (p === "/app/bids/new") page = <NewBidSubmissionPage />;
   else if (p.startsWith("/app/bids/"))
     page = <BidSubmissionDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
-  else if (p === "/app/bid-opening")
-    page = <NotConfiguredPage title="Bid Opening" />;
+  else if (p === "/app/bid-opening") page = <BidOpeningListPage />;
+  else if (p === "/app/bid-opening/new") page = <NewBidOpeningPage />;
+  else if (p.startsWith("/app/bid-opening/"))
+    page = <BidOpeningDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/evaluation")
     page = <NotConfiguredPage title="Evaluation" />;
   else if (p === "/app/awards") page = <NotConfiguredPage title="Awards" />;

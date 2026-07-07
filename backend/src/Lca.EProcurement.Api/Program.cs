@@ -30,6 +30,7 @@ builder.Services.AddScoped<IFinancialYearApplicationService, FinancialYearApplic
 builder.Services.AddScoped<IRequisitionApplicationService, RequisitionApplicationService>();
 builder.Services.AddScoped<ITenderApplicationService, TenderApplicationService>();
 builder.Services.AddScoped<IBidSubmissionApplicationService, BidSubmissionApplicationService>();
+builder.Services.AddScoped<IBidOpeningApplicationService, BidOpeningApplicationService>();
 
 var app = builder.Build();
 
