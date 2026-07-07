@@ -21,6 +21,8 @@ public enum EvaluationSubmissionStatus { Pending, Responsive, NonResponsive, Eva
 public enum AwardStatus { Draft, Recommended, UnderApproval, Approved, Rejected, Published, Cancelled, ConvertedToPurchaseOrder, ConvertedToContract }
 public enum AwardDecisionStatus { Pending, Approved, Rejected, Deferred }
 public enum PurchaseOrderStatus { Draft, Issued, Acknowledged, PartiallyDelivered, Delivered, Closed, Cancelled }
+public enum ContractStatus { Draft, PendingApproval, Active, Suspended, Expired, Completed, Terminated, Cancelled }
+public enum ContractType { FrameworkAgreement, ServiceContract, SupplyContract, Consultancy, WorksContract }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }
@@ -174,6 +176,29 @@ public record PurchaseOrderDelivery(Guid PurchaseOrderId, DateTimeOffset Deliver
 public record GoodsReceipt(Guid PurchaseOrderId, string ReceiptNumber, DateTimeOffset ReceivedAt, string ReceivedBy, string Status) : Entity(Guid.NewGuid());
 public record PurchaseOrderHistory(Guid PurchaseOrderId, string EventType, string Actor, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
 public record PurchaseOrderStatusHistory(Guid PurchaseOrderId, PurchaseOrderStatus FromStatus, PurchaseOrderStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
+
+
+public record Contract(string ContractNumber, Guid? AwardId, Guid? PurchaseOrderId, Guid SupplierId, string SupplierName, string Title, string Description, ContractType ContractType, DateTimeOffset StartDate, DateTimeOffset EndDate, decimal OriginalValue, decimal CurrentValue, ContractStatus Status, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? ActivatedAt = null, DateTimeOffset? CompletedAt = null) : Entity(Guid.NewGuid())
+{
+    public List<ContractLine> Lines { get; init; } = [];
+    public List<ContractDocument> Documents { get; init; } = [];
+    public List<ContractMilestone> Milestones { get; init; } = [];
+    public List<ContractDeliverable> Deliverables { get; init; } = [];
+    public List<ContractVariation> Variations { get; init; } = [];
+    public List<ContractRenewal> Renewals { get; init; } = [];
+    public List<ContractPerformanceReview> PerformanceReviews { get; init; } = [];
+    public List<ContractHistory> History { get; init; } = [];
+    public List<ContractStatusHistory> StatusHistory { get; init; } = [];
+}
+public record ContractLine(Guid ContractId, int ItemNumber, string Description, decimal Quantity, decimal UnitPrice, decimal Total) : Entity(Guid.NewGuid());
+public record ContractDocument(Guid ContractId, string DocumentType, string FileName, string StorageReference, string UploadedBy, DateTimeOffset UploadedAt) : Entity(Guid.NewGuid());
+public record ContractMilestone(Guid ContractId, string Name, string Description, DateTimeOffset DueDate, DateTimeOffset? CompletedDate, string Status) : Entity(Guid.NewGuid());
+public record ContractDeliverable(Guid ContractId, string Title, string Description, DateTimeOffset DueDate, string? AcceptedBy, DateTimeOffset? AcceptedAt, string Status) : Entity(Guid.NewGuid());
+public record ContractVariation(Guid ContractId, string VariationNumber, string Description, string Reason, decimal AmountAdjustment, string ApprovedBy, DateTimeOffset ApprovedAt, DateTimeOffset? NewEndDate = null) : Entity(Guid.NewGuid());
+public record ContractRenewal(Guid ContractId, string RenewalNumber, DateTimeOffset OldEndDate, DateTimeOffset NewEndDate, string Reason, string ApprovedBy, DateTimeOffset ApprovedAt) : Entity(Guid.NewGuid());
+public record ContractPerformanceReview(Guid ContractId, DateTimeOffset ReviewDate, string Reviewer, int SupplierScore, int QualityScore, int DeliveryScore, string Comments) : Entity(Guid.NewGuid());
+public record ContractHistory(Guid ContractId, string EventType, string Actor, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
+public record ContractStatusHistory(Guid ContractId, ContractStatus FromStatus, ContractStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
 
 public record WorkflowDefinition(string Code, string Name, string EntityType, bool IsActive = true, Guid? PublishedVersionId = null) : Entity(Guid.NewGuid())
 {

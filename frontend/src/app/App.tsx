@@ -52,6 +52,7 @@ import { BidOpeningDetailPage, BidOpeningListPage, NewBidOpeningPage } from "../
 import { EvaluationDetailPage, EvaluationListPage, EvaluationTemplateDetailPage, EvaluationTemplateListPage, NewEvaluationPage, NewEvaluationTemplatePage } from "../modules/evaluation/EvaluationPages";
 import { AwardDetailPage, AwardListPage, NewAwardPage } from "../modules/awards/AwardPages";
 import { NewPurchaseOrderPage, PurchaseOrderDetailPage, PurchaseOrderListPage } from "../modules/purchase-orders/PurchaseOrderPages";
+import { ContractDetailPage, ContractListPage, ContractMilestonesPage, ContractPerformancePage, NewContractPage } from "../modules/contracts/ContractPages";
 import { PageHeader } from "../components/ui/PageHeader";
 function NotConfiguredPage({ title }: { title: string }) {
   return (
@@ -167,8 +168,11 @@ function route(p: string) {
   else if (p === "/app/purchase-orders") page = <PurchaseOrderListPage />;
   else if (p === "/app/purchase-orders/new") page = <NewPurchaseOrderPage />;
   else if (p.startsWith("/app/purchase-orders/")) page = <PurchaseOrderDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
-  else if (p === "/app/contracts")
-    page = <NotConfiguredPage title="Contracts" />;
+  else if (p === "/app/contracts") page = <ContractListPage />;
+  else if (p === "/app/contracts/new") page = <NewContractPage />;
+  else if (p.endsWith("/milestones") && p.startsWith("/app/contracts/")) page = <ContractMilestonesPage id={decodeURIComponent(p.split("/")[p.split("/").length - 2] || "")} />;
+  else if (p.endsWith("/performance") && p.startsWith("/app/contracts/")) page = <ContractPerformancePage id={decodeURIComponent(p.split("/")[p.split("/").length - 2] || "")} />;
+  else if (p.startsWith("/app/contracts/")) page = <ContractDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/security") page = <NotConfiguredPage title="Security" />;
   else if (p === "/app/users") page = <NotConfiguredPage title="Users" />;
   else if (p === "/app/roles")

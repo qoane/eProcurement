@@ -1,0 +1,15 @@
+import { apiGet, apiPost } from "./apiClient";
+const actor = { actor: "procurement@lca.org.ls" };
+export type ContractSummary = { id:string; contractNumber:string; supplierName:string; title:string; currentValue:number; status:string; startDate:string; endDate:string };
+export type ContractDetail = { contract:any; lines:any[]; documents:any[]; milestones:any[]; deliverables:any[]; variations:any[]; renewals:any[]; performanceReviews:any[]; history:any[]; statusHistory:any[]; auditTimeline:any[]; workflowInstance?:any };
+export const getContracts=()=>apiGet<ContractSummary[]>("/api/contracts",[]);
+export const getContract=(id:string)=>apiGet<ContractDetail>(`/api/contracts/${id}`,null as unknown as ContractDetail);
+export const createContractFromAward=(awardId:string)=>apiPost<ContractDetail>(`/api/contracts/from-award/${awardId}`,{...actor,title:"Contract from award",description:"Generated from approved award"});
+export const createContractFromPurchaseOrder=(purchaseOrderId:string)=>apiPost<ContractDetail>(`/api/contracts/from-purchase-order/${purchaseOrderId}`,{...actor,title:"Contract from purchase order",description:"Generated from issued purchase order"});
+export const activateContract=(id:string)=>apiPost<ContractDetail>(`/api/contracts/${id}/activate`,actor);
+export const completeContract=(id:string)=>apiPost<ContractDetail>(`/api/contracts/${id}/complete`,actor);
+export const terminateContract=(id:string)=>apiPost<ContractDetail>(`/api/contracts/${id}/terminate`,actor);
+export const renewContract=(id:string,endDate:string)=>apiPost<ContractDetail>(`/api/contracts/${id}/renew`,{actor:actor.actor,newEndDate:endDate,reason:"Operational extension"});
+export const addVariation=(id:string)=>apiPost<ContractDetail>(`/api/contracts/${id}/variation`,{actor:actor.actor,description:"Approved variation",reason:"Scope adjustment",amountAdjustment:1000});
+export const addMilestone=(id:string)=>apiPost<any>(`/api/contracts/${id}/milestones`,{actor:actor.actor,name:"Governance review",description:"Contract governance review",dueDate:new Date(Date.now()+14*86400000).toISOString()});
+export const addPerformance=(id:string)=>apiPost<any>(`/api/contracts/${id}/performance`,{reviewer:actor.actor,supplierScore:85,qualityScore:88,deliveryScore:82,comments:"Supplier performance review recorded."});
