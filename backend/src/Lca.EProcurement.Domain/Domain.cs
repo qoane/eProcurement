@@ -121,3 +121,17 @@ public record FormSubmission(Guid FormDefinitionId, Guid FormVersionId, string E
     public List<FormSubmissionValue> Values { get; init; } = [];
 }
 public record FormSubmissionValue(Guid FormSubmissionId, string FieldCode, string? Value) : Entity(Guid.NewGuid());
+
+public record AnnualProcurementPlan(string PlanNumber, string Title, Guid FinancialYearId, string Department, string Status, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? SubmittedAt = null, DateTimeOffset? ApprovedAt = null) : Entity(Guid.NewGuid())
+{
+    public List<ProcurementPlanItem> Items { get; init; } = [];
+}
+public record ProcurementPlanItem(Guid AnnualProcurementPlanId, string ItemCode, string Description, Guid ProcurementCategoryId, decimal EstimatedAmount, string PlannedQuarter, string ProcurementMethod, string Status) : Entity(Guid.NewGuid());
+public record Budget(Guid FinancialYearId, string Department, decimal TotalAmount, decimal CommittedAmount, decimal AvailableAmount) : Entity(Guid.NewGuid())
+{
+    public List<BudgetLine> Lines { get; init; } = [];
+}
+public record BudgetLine(Guid BudgetId, Guid CostCentreId, Guid ProcurementCategoryId, decimal AllocatedAmount, decimal CommittedAmount, decimal AvailableAmount) : Entity(Guid.NewGuid());
+public record CostCentre(string Code, string Name, string Department, bool IsActive = true) : Entity(Guid.NewGuid());
+public record ProcurementCategory(string Code, string Name, bool IsActive = true) : Entity(Guid.NewGuid());
+public record FinancialYear(string Code, DateTimeOffset StartDate, DateTimeOffset EndDate, bool IsActive = true) : Entity(Guid.NewGuid());

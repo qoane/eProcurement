@@ -705,3 +705,76 @@ public sealed class EntityRecordApplicationService(EProcurementDbContext db) : I
     sealed record PageDatasourceMetadata(string Entity, string Mode = "Metadata", string? Endpoint = null, string? KeyField = null);
     sealed record PagePermissionMetadata(string Role, string Access = "View");
 }
+
+public interface IAnnualProcurementPlanApplicationService
+{
+    Task<List<AnnualProcurementPlan>> GetAsync(CancellationToken ct = default);
+    Task<AnnualProcurementPlan?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<AnnualProcurementPlan> CreateAsync(CreateAnnualProcurementPlanDto dto, CancellationToken ct = default);
+    Task<AnnualProcurementPlan?> SubmitAsync(Guid id, string actor, CancellationToken ct = default);
+    Task<AnnualProcurementPlan?> ApproveAsync(Guid id, string actor, CancellationToken ct = default);
+    Task<PlanningDashboardDto> DashboardAsync(CancellationToken ct = default);
+}
+public sealed record CreateAnnualProcurementPlanDto(string PlanNumber, string Title, Guid FinancialYearId, string Department, string CreatedBy, List<CreateProcurementPlanItemDto>? Items = null);
+public sealed record CreateProcurementPlanItemDto(string ItemCode, string Description, Guid ProcurementCategoryId, decimal EstimatedAmount, string PlannedQuarter, string ProcurementMethod);
+public sealed record PlanningDashboardDto(int Plans, int DraftPlans, int SubmittedPlans, int ApprovedPlans, decimal TotalPlannedValue, decimal TotalBudgetValue, decimal AvailableBudget);
+public interface IBudgetApplicationService
+{
+    Task<List<Budget>> GetAsync(CancellationToken ct = default);
+    Task<Budget?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<Budget> CreateAsync(CreateBudgetDto dto, CancellationToken ct = default);
+    Task<List<CostCentre>> GetCostCentresAsync(CancellationToken ct = default);
+    Task<CostCentre> CreateCostCentreAsync(CreateCostCentreDto dto, CancellationToken ct = default);
+    Task<List<ProcurementCategory>> GetProcurementCategoriesAsync(CancellationToken ct = default);
+    Task<ProcurementCategory> CreateProcurementCategoryAsync(CreateProcurementCategoryDto dto, CancellationToken ct = default);
+}
+public sealed record CreateBudgetDto(Guid FinancialYearId, string Department, decimal TotalAmount, decimal CommittedAmount, List<CreateBudgetLineDto>? Lines = null);
+public sealed record CreateBudgetLineDto(Guid CostCentreId, Guid ProcurementCategoryId, decimal AllocatedAmount, decimal CommittedAmount);
+public sealed record CreateCostCentreDto(string Code, string Name, string Department);
+public sealed record CreateProcurementCategoryDto(string Code, string Name);
+
+public sealed class AnnualProcurementPlanApplicationService(EProcurementDbContext db, IWorkflowApplicationService workflows) : IAnnualProcurementPlanApplicationService
+{
+    const string WorkflowCode = "ANNUAL-PROCUREMENT-PLAN";
+    public Task<List<AnnualProcurementPlan>> GetAsync(CancellationToken ct = default) => db.AnnualProcurementPlans.AsNoTracking().Include(x => x.Items).OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
+    public Task<AnnualProcurementPlan?> GetAsync(Guid id, CancellationToken ct = default) => db.AnnualProcurementPlans.AsNoTracking().Include(x => x.Items).SingleOrDefaultAsync(x => x.Id == id, ct);
+    public async Task<AnnualProcurementPlan> CreateAsync(CreateAnnualProcurementPlanDto dto, CancellationToken ct = default)
+    {
+        var plan = new AnnualProcurementPlan(dto.PlanNumber, dto.Title, dto.FinancialYearId, dto.Department, "Draft", dto.CreatedBy, DateTimeOffset.UtcNow);
+        foreach (var item in dto.Items ?? []) plan.Items.Add(new ProcurementPlanItem(plan.Id, item.ItemCode, item.Description, item.ProcurementCategoryId, item.EstimatedAmount, item.PlannedQuarter, item.ProcurementMethod, "Draft"));
+        db.AnnualProcurementPlans.Add(plan);
+        db.AuditEvents.Add(new AuditEvent("Annual procurement plan created", nameof(AnnualProcurementPlan), plan.Id, plan.PlanNumber, dto.CreatedBy, "Created through planning module", DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync(ct); return plan;
+    }
+    public async Task<AnnualProcurementPlan?> SubmitAsync(Guid id, string actor, CancellationToken ct = default)
+    {
+        var plan = await db.AnnualProcurementPlans.SingleOrDefaultAsync(x => x.Id == id, ct); if (plan is null) return null;
+        var instance = await db.WorkflowInstances.Where(x => x.EntityType == nameof(AnnualProcurementPlan) && x.EntityId == id && x.Status == WorkflowInstanceStatus.Running).OrderByDescending(x => x.StartedAt).FirstOrDefaultAsync(ct);
+        if (instance is null) instance = await workflows.StartAsync(WorkflowCode, nameof(AnnualProcurementPlan), id, actor, ct);
+        if (instance.CurrentNodeCode == "Draft") await workflows.ExecuteActionAsync(instance.Id, "Submit", actor, ct);
+        db.Entry(plan).CurrentValues[nameof(AnnualProcurementPlan.Status)] = "Submitted"; db.Entry(plan).CurrentValues[nameof(AnnualProcurementPlan.SubmittedAt)] = DateTimeOffset.UtcNow;
+        db.AuditEvents.Add(new AuditEvent("Annual procurement plan submitted", nameof(AnnualProcurementPlan), plan.Id, plan.PlanNumber, actor, WorkflowCode, DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync(ct); return plan with { Status = "Submitted", SubmittedAt = DateTimeOffset.UtcNow };
+    }
+    public async Task<AnnualProcurementPlan?> ApproveAsync(Guid id, string actor, CancellationToken ct = default)
+    {
+        var plan = await db.AnnualProcurementPlans.SingleOrDefaultAsync(x => x.Id == id, ct); if (plan is null) return null;
+        var instance = await db.WorkflowInstances.Where(x => x.EntityType == nameof(AnnualProcurementPlan) && x.EntityId == id && x.Status == WorkflowInstanceStatus.Running).OrderByDescending(x => x.StartedAt).FirstOrDefaultAsync(ct);
+        if (instance is null) { instance = await workflows.StartAsync(WorkflowCode, nameof(AnnualProcurementPlan), id, actor, ct); await workflows.ExecuteActionAsync(instance.Id, "Submit", actor, ct); instance = await db.WorkflowInstances.SingleAsync(x => x.Id == instance.Id, ct); }
+        foreach (var action in new[] { "ProcurementReview", "FinanceReview", "Approve" }) { instance = await db.WorkflowInstances.SingleAsync(x => x.Id == instance.Id, ct); if (instance.Status == WorkflowInstanceStatus.Running) await workflows.ExecuteActionAsync(instance.Id, action, actor, ct); }
+        db.Entry(plan).CurrentValues[nameof(AnnualProcurementPlan.Status)] = "Approved"; db.Entry(plan).CurrentValues[nameof(AnnualProcurementPlan.ApprovedAt)] = DateTimeOffset.UtcNow;
+        db.AuditEvents.Add(new AuditEvent("Annual procurement plan approved", nameof(AnnualProcurementPlan), plan.Id, plan.PlanNumber, actor, WorkflowCode, DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync(ct); return plan with { Status = "Approved", ApprovedAt = DateTimeOffset.UtcNow };
+    }
+    public async Task<PlanningDashboardDto> DashboardAsync(CancellationToken ct = default) => new(await db.AnnualProcurementPlans.CountAsync(ct), await db.AnnualProcurementPlans.CountAsync(x => x.Status == "Draft", ct), await db.AnnualProcurementPlans.CountAsync(x => x.Status == "Submitted", ct), await db.AnnualProcurementPlans.CountAsync(x => x.Status == "Approved", ct), await db.ProcurementPlanItems.SumAsync(x => (decimal?)x.EstimatedAmount, ct) ?? 0, await db.Budgets.SumAsync(x => (decimal?)x.TotalAmount, ct) ?? 0, await db.Budgets.SumAsync(x => (decimal?)x.AvailableAmount, ct) ?? 0);
+}
+public sealed class BudgetApplicationService(EProcurementDbContext db) : IBudgetApplicationService
+{
+    public Task<List<Budget>> GetAsync(CancellationToken ct = default) => db.Budgets.AsNoTracking().Include(x => x.Lines).OrderBy(x => x.Department).ToListAsync(ct);
+    public Task<Budget?> GetAsync(Guid id, CancellationToken ct = default) => db.Budgets.AsNoTracking().Include(x => x.Lines).SingleOrDefaultAsync(x => x.Id == id, ct);
+    public async Task<Budget> CreateAsync(CreateBudgetDto dto, CancellationToken ct = default) { var budget = new Budget(dto.FinancialYearId, dto.Department, dto.TotalAmount, dto.CommittedAmount, dto.TotalAmount - dto.CommittedAmount); foreach (var l in dto.Lines ?? []) budget.Lines.Add(new BudgetLine(budget.Id, l.CostCentreId, l.ProcurementCategoryId, l.AllocatedAmount, l.CommittedAmount, l.AllocatedAmount - l.CommittedAmount)); db.Budgets.Add(budget); db.AuditEvents.Add(new AuditEvent("Budget created", nameof(Budget), budget.Id, dto.Department, "system", "Budget foundation", DateTimeOffset.UtcNow)); await db.SaveChangesAsync(ct); return budget; }
+    public Task<List<CostCentre>> GetCostCentresAsync(CancellationToken ct = default) => db.CostCentres.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
+    public async Task<CostCentre> CreateCostCentreAsync(CreateCostCentreDto dto, CancellationToken ct = default) { var c = new CostCentre(dto.Code, dto.Name, dto.Department); db.CostCentres.Add(c); await db.SaveChangesAsync(ct); return c; }
+    public Task<List<ProcurementCategory>> GetProcurementCategoriesAsync(CancellationToken ct = default) => db.ProcurementCategories.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
+    public async Task<ProcurementCategory> CreateProcurementCategoryAsync(CreateProcurementCategoryDto dto, CancellationToken ct = default) { var c = new ProcurementCategory(dto.Code, dto.Name); db.ProcurementCategories.Add(c); await db.SaveChangesAsync(ct); return c; }
+}
