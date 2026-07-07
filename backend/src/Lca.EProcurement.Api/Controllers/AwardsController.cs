@@ -1,9 +1,11 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lca.EProcurement.Api.Controllers;
 
 [ApiController]
+[RequirePermission("Award.View")]
 [Route("api/awards")]
 public sealed class AwardsController(IAwardApplicationService awards) : ControllerBase
 {

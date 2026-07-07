@@ -1,9 +1,11 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lca.EProcurement.Api.Controllers;
 
 [ApiController]
+[RequirePermission("Budget.View")]
 [Route("api/budgets")]
 public sealed class BudgetsController(IBudgetApplicationService budgets) : ControllerBase
 {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Domain;
 using Lca.EProcurement.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +20,7 @@ public sealed record PagePermissionDto(string Role, string Access = "View");
 public sealed record PageNavigationDto(string Route, string? ParentRoute = null, string? MenuGroup = null, bool ShowInNavigation = true);
 public sealed record PageDesignerDto(Guid? Id, string Code, string Name, string Description, Guid? ApplicationId, PageType PageType, string Route, string Icon, PageDatasourceDto Datasource, Guid? LayoutId, PageLayoutDto Layout, List<PageToolbarItemDto> Toolbar, List<PageActionDto> Actions, List<PageFilterDto> Filters, List<PageColumnDto> Columns, List<PageComponentDto> Components, List<PagePermissionDto> Permissions, PageNavigationDto Navigation, MetadataStatus Status = MetadataStatus.Draft, int Version = 1, Guid? PublishedVersionId = null);
 
+[RequirePermission("Studio.Pages")]
 public sealed class DuplicatePageDefinitionCodeException(string code, Guid existingId) : InvalidOperationException($"A page definition with code '{code}' already exists.")
 {
     public string Code { get; } = code;

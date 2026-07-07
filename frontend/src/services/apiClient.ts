@@ -3,6 +3,9 @@ const bases = [
   "https://localhost:44313",
   "http://localhost:5000",
 ].filter(Boolean) as string[];
+let accessToken: string | undefined;
+export function setAccessToken(token: string | undefined) { accessToken = token; }
+function authHeaders(extra: Record<string, string> = {}) { return accessToken ? { ...extra, authorization: `Bearer ${accessToken}` } : extra; }
 export type ApiResult<T> = { data: T; error?: string; loading: false };
 async function responseError(response: Response) {
   try {
@@ -20,7 +23,7 @@ export async function apiGet<T>(
   let last = "";
   for (const b of bases) {
     try {
-      const r = await fetch(`${b}${path}`);
+      const r = await fetch(`${b}${path}`, { headers: authHeaders() });
       if (r.ok) return { data: (await r.json()) as T, loading: false };
       last = await responseError(r);
     } catch (e) {
@@ -39,7 +42,7 @@ export async function apiPost<T>(
     try {
       const r = await fetch(`${b}${path}`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: authHeaders({ "content-type": "application/json" }),
         body: JSON.stringify(body),
       });
       if (r.ok) return { data: (await r.json()) as T, loading: false };
@@ -55,7 +58,7 @@ export async function apiPut<T>(path: string, body: unknown, fallback: T): Promi
   let last = "";
   for (const b of bases) {
     try {
-      const r = await fetch(`${b}${path}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const r = await fetch(`${b}${path}`, { method: "PUT", headers: authHeaders({ "content-type": "application/json" }), body: JSON.stringify(body) });
       if (r.ok) return { data: (await r.json()) as T, loading: false };
       last = await responseError(r);
     } catch (e) { last = e instanceof Error ? e.message : String(e); }
@@ -66,7 +69,7 @@ export async function apiDelete(path: string): Promise<ApiResult<null>> {
   let last = "";
   for (const b of bases) {
     try {
-      const r = await fetch(`${b}${path}`, { method: "DELETE" });
+      const r = await fetch(`${b}${path}`, { method: "DELETE", headers: authHeaders() });
       if (r.ok) return { data: null, loading: false };
       last = await responseError(r);
     } catch (e) { last = e instanceof Error ? e.message : String(e); }

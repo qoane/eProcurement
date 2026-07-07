@@ -1,7 +1,9 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 namespace Lca.EProcurement.Api.Controllers;
 [ApiController, Route("api/configuration-studio")]
+[RequirePermission("Studio.View")]
 public sealed class ConfigurationStudioController(IConfigurationStudioApplicationService studio) : ControllerBase
 {
     [HttpGet] public async Task<IActionResult> Get(CancellationToken ct) => Ok(await studio.GetStudioAsync(ct));

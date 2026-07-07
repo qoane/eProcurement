@@ -1,9 +1,11 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lca.EProcurement.Api.Controllers;
 
 [ApiController]
+[RequirePermission("Requisition.View")]
 [Route("api/requisitions")]
 public sealed class RequisitionsController(IRequisitionApplicationService requisitions) : ControllerBase
 {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Domain;
 using DomainApplication = Lca.EProcurement.Domain.Application;
 using Lca.EProcurement.EntityFrameworkCore;
@@ -10,6 +11,7 @@ namespace Lca.EProcurement.Api.Controllers;
 public sealed record ApplicationDesignerDto(string Code, string Name, string Description, string Icon, string Theme, string DefaultLandingPage, string NavigationRoot, List<string> Modules, MetadataStatus Status = MetadataStatus.Draft);
 
 [ApiController, Route("api/applications")]
+[RequirePermission("Studio.Applications")]
 public sealed class ApplicationsController(EProcurementDbContext db) : ControllerBase
 {
     [HttpGet]

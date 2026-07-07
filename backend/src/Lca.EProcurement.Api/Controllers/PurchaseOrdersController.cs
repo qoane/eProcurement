@@ -1,9 +1,11 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lca.EProcurement.Api.Controllers;
 
 [ApiController]
+[RequirePermission("PurchaseOrder.View")]
 [Route("api/purchase-orders")]
 public sealed class PurchaseOrdersController(IPurchaseOrderApplicationService purchaseOrders) : ControllerBase
 {

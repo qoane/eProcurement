@@ -1,7 +1,9 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 namespace Lca.EProcurement.Api.Controllers;
 [ApiController, Route("api/workflows")]
+[RequirePermission("Studio.Workflows")]
 public sealed class WorkflowsController(IWorkflowApplicationService workflows) : ControllerBase
 {
     [HttpGet] public async Task<IActionResult> Get(CancellationToken ct) => Ok(await workflows.GetDefinitionsAsync(ct));

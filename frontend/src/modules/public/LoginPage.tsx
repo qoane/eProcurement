@@ -1,9 +1,15 @@
+import { useState } from "react";
 import { navigate } from "../../app/routes";
+import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Logo } from "../../components/ui/Logo";
 
 export function LoginPage() {
+  const auth = useAuth();
+  const [email, setEmail] = useState("admin@lca.org.ls");
+  const [password, setPassword] = useState("demo");
+  const [error, setError] = useState("");
   return (
     <main className="login-page">
       <section className="login-intro">
@@ -16,9 +22,11 @@ export function LoginPage() {
       </section>
       <form
         className="login-panel"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          navigate("/app/dashboard");
+          setError("");
+          if (await auth.login(email, password)) navigate("/app/dashboard");
+          else setError("Invalid email or password.");
         }}
       >
         <div>
@@ -27,11 +35,11 @@ export function LoginPage() {
         </div>
         <label>
           Email
-          <Input type="email" defaultValue="admin@lca.org.ls" required />
+          <Input type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} required />
         </label>
         <label>
           Password
-          <Input type="password" defaultValue="demo" required />
+          <Input type="password" value={password} onChange={(e) => setPassword(e.currentTarget.value)} required />
         </label>
         <div className="login-options">
           <label className="check-row">
@@ -39,6 +47,7 @@ export function LoginPage() {
           </label>
           <a href="#">Forgot password</a>
         </div>
+        {error && <p className="text-danger">{error}</p>}
         <Button>Sign in</Button>
         <p className="demo-credentials">
           Demo credentials: <strong>admin@lca.org.ls</strong> /{" "}

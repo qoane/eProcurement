@@ -1,11 +1,14 @@
 import { Bell, Building2, Mail, Menu, Search, UserCircle } from "lucide-react";
 import { Input } from "../components/ui/Input";
+import { useAuth } from "../auth/AuthContext";
+import { navigate } from "../app/routes";
 
 function toggleSidebar() {
   window.dispatchEvent(new Event("procuraflow:toggle-sidebar"));
 }
 
 export function TopBar() {
+  const { currentUser, roles, logout } = useAuth();
   return (
     <header className="topbar app-topbar">
       <button
@@ -47,8 +50,9 @@ export function TopBar() {
           aria-label="Organization and user menu"
         >
           <Building2 size={18} />
-          <span className="topbar-org">Lesotho Communications Authority</span>
+          <span className="topbar-org">{currentUser ? `${currentUser.fullName} · ${roles[0] || currentUser.userType}` : "Lesotho Communications Authority"}</span>
           <UserCircle size={24} />
+          {currentUser && <button className="btn btn-sm btn-outline-secondary" onClick={() => { logout(); navigate("/login"); }}>Logout</button>}
         </div>
       </div>
     </header>

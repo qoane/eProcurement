@@ -5,7 +5,7 @@ namespace Lca.EProcurement.EntityFrameworkCore;
 
 public static class SeedData
 {
-    public static readonly string[] Roles = ["Supplier", "ProcurementOfficer", "Evaluator", "Approver", "FinanceUser", "Auditor", "Administrator"];
+    public static readonly string[] Roles = ["Supplier", "Procurement Officer", "Evaluator", "Approver", "Finance User", "Auditor", "System Administrator"];
     public static readonly string[] Users = ["supplier@demo.co.ls", "procurement@lca.org.ls", "evaluator@lca.org.ls", "approver@lca.org.ls", "finance@lca.org.ls", "auditor@lca.org.ls", "admin@lca.org.ls"];
     public static List<SupplierCategory> Categories() => [new("ICT Equipment"), new("Consulting Services"), new("Office Supplies"), new("Telecommunications"), new("Facilities Management")];
     public static Supplier DemoSupplier(SupplierCategory category) => new("SUP-LCA-2026-0001", "Maseru ICT Supplies Pty Ltd", SupplierStatus.Draft) { Categories = [category] };
@@ -98,8 +98,33 @@ public static class SeedData
         ];
     }
 
+
+    public static readonly (string Code, string Name, string Category)[] Permissions = [
+        ("Dashboard.View","View dashboard","Dashboard"),("Supplier.View","View suppliers","SupplierManagement"),("Supplier.Create","Create suppliers","SupplierManagement"),("Supplier.Verify","Verify suppliers","SupplierManagement"),("Supplier.Approve","Approve suppliers","SupplierManagement"),("Supplier.Suspend","Suspend suppliers","SupplierManagement"),("Supplier.Blacklist","Blacklist suppliers","SupplierManagement"),("Planning.View","View plans","ProcurementPlanning"),("Planning.Create","Create plans","ProcurementPlanning"),("Planning.Submit","Submit plans","ProcurementPlanning"),("Planning.Approve","Approve plans","ProcurementPlanning"),("Budget.View","View budgets","Budgets"),("Budget.Create","Create budgets","Budgets"),("Budget.Approve","Approve budgets","Budgets"),("Requisition.View","View requisitions","Requisitions"),("Requisition.Create","Create requisitions","Requisitions"),("Requisition.Submit","Submit requisitions","Requisitions"),("Requisition.Approve","Approve requisitions","Requisitions"),("Requisition.Reject","Reject requisitions","Requisitions"),("Tender.View","View tenders","Tenders"),("Tender.Create","Create tenders","Tenders"),("Tender.Publish","Publish tenders","Tenders"),("Tender.Cancel","Cancel tenders","Tenders"),("Tender.Clarification.Respond","Respond to clarifications","Tenders"),("Bid.View","View bids","BidSubmissions"),("Bid.Create","Create bids","BidSubmissions"),("Bid.Submit","Submit bids","BidSubmissions"),("Bid.Withdraw","Withdraw bids","BidSubmissions"),("BidOpening.View","View bid openings","BidOpening"),("BidOpening.Create","Create bid openings","BidOpening"),("BidOpening.Start","Start bid openings","BidOpening"),("BidOpening.OpenSubmission","Open submissions","BidOpening"),("BidOpening.Complete","Complete bid openings","BidOpening"),("Evaluation.View","View evaluations","Evaluations"),("Evaluation.Create","Create evaluations","Evaluations"),("Evaluation.Score","Score evaluations","Evaluations"),("Evaluation.Consensus","Record consensus","Evaluations"),("Evaluation.Recommend","Recommend awards","Evaluations"),("Evaluation.Complete","Complete evaluations","Evaluations"),("Award.View","View awards","Awards"),("Award.Create","Create awards","Awards"),("Award.Approve","Approve awards","Awards"),("Award.Publish","Publish awards","Awards"),("PurchaseOrder.View","View purchase orders","PurchaseOrders"),("PurchaseOrder.Create","Create purchase orders","PurchaseOrders"),("PurchaseOrder.Issue","Issue purchase orders","PurchaseOrders"),("PurchaseOrder.Close","Close purchase orders","PurchaseOrders"),("Contract.View","View contracts","Contracts"),("Contract.Create","Create contracts","Contracts"),("Contract.Activate","Activate contracts","Contracts"),("Contract.Renew","Renew contracts","Contracts"),("Contract.Terminate","Terminate contracts","Contracts"),("Report.View","View reports","Reports"),("Dashboard.Configure","Configure dashboards","Dashboard"),("Audit.View","View audit","Audit"),("Studio.View","View studio","Studio"),("Studio.Applications","Manage applications","Studio"),("Studio.Pages","Manage pages","Studio"),("Studio.Entities","Manage entities","Studio"),("Studio.Workflows","Manage workflows","Studio"),("Studio.Forms","Manage forms","Studio"),("Studio.Rules","Manage rules","Studio"),("Studio.Navigation","Manage navigation","Studio"),("Studio.Dashboards","Manage dashboards","Studio"),("Security.View","View security","Security"),("Security.Users","Manage users","Security"),("Security.Roles","Manage roles","Security"),("Security.Permissions","Manage permissions","Security"),("Configuration.View","View configuration","Configuration"),("Integrations.View","View integrations","Integrations")
+    ];
+    private static async Task SeedIdentityAsync(EProcurementDbContext db, CancellationToken ct)
+    {
+        foreach (var (code,name,cat) in Permissions)
+            if (!await db.Permissions.AnyAsync(x => x.Code == code, ct)) db.Permissions.Add(new Permission(code, name, name, cat));
+        foreach (var role in Roles)
+            if (!await db.Roles.AnyAsync(x => x.Name == role, ct)) db.Roles.Add(new Role(role, role));
+        await db.SaveChangesAsync(ct);
+        var all = await db.Permissions.ToDictionaryAsync(x => x.Code, ct); var roles = await db.Roles.ToDictionaryAsync(x => x.Name, ct);
+        var rolePerms = new Dictionary<string,string[]> {
+            ["System Administrator"] = all.Keys.ToArray(), ["Procurement Officer"] = ["Supplier.View","Supplier.Create","Supplier.Verify","Planning.View","Planning.Create","Requisition.View","Requisition.Create","Tender.View","Tender.Create","Tender.Publish","BidOpening.View","BidOpening.Create","Evaluation.View","Award.View","PurchaseOrder.View","Contract.View","Audit.View"],
+            ["Finance User"] = ["Budget.View","Budget.Create","Planning.View","Planning.Approve","Requisition.View","Requisition.Approve","PurchaseOrder.View","Report.View"], ["Approver"] = ["Planning.Approve","Requisition.Approve","Award.Approve","PurchaseOrder.View","Contract.View","Report.View"],
+            ["Evaluator"] = ["Tender.View","BidOpening.View","Evaluation.View","Evaluation.Score","Evaluation.Consensus","Evaluation.Recommend"], ["Auditor"] = ["Dashboard.View","Supplier.View","Planning.View","Budget.View","Requisition.View","Tender.View","Bid.View","BidOpening.View","Evaluation.View","Award.View","PurchaseOrder.View","Contract.View","Audit.View","Report.View"],
+            ["Supplier"] = ["Supplier.View","Supplier.Create","Bid.View","Bid.Create","Bid.Submit","Bid.Withdraw","Tender.View"] };
+        foreach (var (role, perms) in rolePerms) foreach (var perm in perms) if (roles.TryGetValue(role, out var r) && all.TryGetValue(perm, out var p) && !await db.RolePermissions.AnyAsync(x => x.RoleId == r.Id && x.PermissionId == p.Id, ct)) db.RolePermissions.Add(new RolePermission(r.Id, p.Id));
+        await db.SaveChangesAsync(ct);
+        var users = new (string Email,string Name,UserType Type,bool External,string Role)[] { ("admin@lca.org.ls","System Administrator",UserType.SystemAdministrator,false,"System Administrator"),("procurement@lca.org.ls","Procurement Officer",UserType.ProcurementOfficer,false,"Procurement Officer"),("finance@lca.org.ls","Finance User",UserType.FinanceUser,false,"Finance User"),("approver@lca.org.ls","Approver Manager",UserType.Approver,false,"Approver"),("evaluator@lca.org.ls","Evaluator",UserType.Evaluator,false,"Evaluator"),("auditor@lca.org.ls","Auditor",UserType.Auditor,false,"Auditor"),("supplier@demo.co.ls","Demo Supplier User",UserType.Supplier,true,"Supplier") };
+        foreach (var u in users) if (!await db.ApplicationUsers.AnyAsync(x => x.Email == u.Email, ct)) { var user = new ApplicationUser(u.Email,u.Name,null,u.Type,true,u.External,null,DateTimeOffset.UtcNow,null,BCrypt.Net.BCrypt.HashPassword("demo")); db.ApplicationUsers.Add(user); await db.SaveChangesAsync(ct); db.UserRoles.Add(new UserRole(user.Id, roles[u.Role].Id)); }
+        await db.SaveChangesAsync(ct);
+    }
+
     public static async Task SeedAsync(EProcurementDbContext db, CancellationToken cancellationToken = default)
     {
+        await SeedIdentityAsync(db, cancellationToken);
         foreach (var role in Roles)
             if (!await db.SeedMetadata.AnyAsync(x => x.Kind == "Role" && x.Code == role, cancellationToken)) db.SeedMetadata.Add(new("Role", role, role));
         foreach (var user in Users)

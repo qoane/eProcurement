@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Domain;
 using Lca.EProcurement.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,7 @@ public sealed record EntityValidationDto(string Code, string Name, string Expres
 public sealed record EntityDesignerDto(Guid? Id, string Code, string Name, string Description, string DisplayName, string PluralName, string DefaultSearchField, List<EntityPropertyDto> Properties, List<EntityRelationshipDto> Relationships, List<EntityValidationDto> Validations, MetadataStatus Status = MetadataStatus.Draft, int Version = 1);
 
 [ApiController, Route("api/entity-definitions")]
+[RequirePermission("Studio.Entities")]
 public sealed class EntityDefinitionsController(EProcurementDbContext db) : ControllerBase
 {
     static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

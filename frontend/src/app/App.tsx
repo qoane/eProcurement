@@ -54,6 +54,8 @@ import { AwardDetailPage, AwardListPage, NewAwardPage } from "../modules/awards/
 import { NewPurchaseOrderPage, PurchaseOrderDetailPage, PurchaseOrderListPage } from "../modules/purchase-orders/PurchaseOrderPages";
 import { ContractDetailPage, ContractListPage, ContractMilestonesPage, ContractPerformancePage, NewContractPage } from "../modules/contracts/ContractPages";
 import { PageHeader } from "../components/ui/PageHeader";
+import { AuthProvider } from "../auth/AuthContext";
+import { SecurityPage, RolesPage, UsersPage } from "../modules/security/SecurityPages";
 function NotConfiguredPage({ title }: { title: string }) {
   return (
     <>
@@ -173,10 +175,9 @@ function route(p: string) {
   else if (p.endsWith("/milestones") && p.startsWith("/app/contracts/")) page = <ContractMilestonesPage id={decodeURIComponent(p.split("/")[p.split("/").length - 2] || "")} />;
   else if (p.endsWith("/performance") && p.startsWith("/app/contracts/")) page = <ContractPerformancePage id={decodeURIComponent(p.split("/")[p.split("/").length - 2] || "")} />;
   else if (p.startsWith("/app/contracts/")) page = <ContractDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
-  else if (p === "/app/security") page = <NotConfiguredPage title="Security" />;
-  else if (p === "/app/users") page = <NotConfiguredPage title="Users" />;
-  else if (p === "/app/roles")
-    page = <NotConfiguredPage title="Roles and Permissions" />;
+  else if (p === "/app/security") page = <SecurityPage />;
+  else if (p === "/app/users") page = <UsersPage />;
+  else if (p === "/app/roles") page = <RolesPage />;
   else if (p === "/app/integrations")
     page = <NotConfiguredPage title="Integrations" />;
   return <AppShell>{page}</AppShell>;
@@ -188,5 +189,5 @@ export function App() {
     addEventListener("popstate", h);
     return () => removeEventListener("popstate", h);
   }, []);
-  return route(p);
+  return <AuthProvider>{route(p)}</AuthProvider>;
 }

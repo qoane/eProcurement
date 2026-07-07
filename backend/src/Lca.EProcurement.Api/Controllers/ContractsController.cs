@@ -1,9 +1,11 @@
+using Lca.EProcurement.Api.Security;
 using Lca.EProcurement.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Lca.EProcurement.Api.Controllers;
 
 [ApiController, Route("api/contracts")]
+[RequirePermission("Contract.View")]
 public sealed class ContractsController(IContractApplicationService contracts) : ControllerBase
 {
     [HttpGet] public Task<List<ContractSummaryDto>> Get(CancellationToken ct) => contracts.GetAsync(ct);

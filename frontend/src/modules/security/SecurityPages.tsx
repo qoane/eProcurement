@@ -1,0 +1,11 @@
+import { useEffect, useState } from "react";
+import { Card } from "../../components/ui/Card";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { apiGet } from "../../services/apiClient";
+
+type Dashboard = { usersCount: number; rolesCount: number; permissionsCount: number; activeExternalSuppliers: number };
+type User = { id: string; email: string; fullName: string; userType: string; isActive: boolean; roles: string[] };
+type Role = { id: string; name: string; description: string; permissions: string[] };
+export function SecurityPage() { const [data,setData]=useState<Dashboard>(); useEffect(()=>{apiGet<Dashboard>("/api/security/dashboard", { usersCount:0, rolesCount:0, permissionsCount:0, activeExternalSuppliers:0 }).then(r=>setData(r.data));},[]); return <><PageHeader title="Security" description="Identity, role and permission dashboard."/><div className="grid-4"><Card><strong>Users</strong><br />{data?.usersCount ?? 0}</Card><Card><strong>Roles</strong><br />{data?.rolesCount ?? 0}</Card><Card><strong>Permissions</strong><br />{data?.permissionsCount ?? 0}</Card><Card><strong>External suppliers</strong><br />{data?.activeExternalSuppliers ?? 0}</Card></div></>; }
+export function UsersPage() { const [users,setUsers]=useState<User[]>([]); useEffect(()=>{apiGet<User[]>("/api/security/users", []).then(r=>setUsers(r.data));},[]); return <><PageHeader title="Users" description="Create users, activate or deactivate accounts, and assign roles."/><Card><table className="table"><thead><tr><th>Name</th><th>Email</th><th>User type</th><th>Roles</th><th>Status</th></tr></thead><tbody>{users.map(u=><tr key={u.id}><td>{u.fullName}</td><td>{u.email}</td><td>{u.userType}</td><td>{u.roles.join(", ")}</td><td>{u.isActive ? "Active" : "Inactive"}</td></tr>)}</tbody></table></Card></>; }
+export function RolesPage() { const [roles,setRoles]=useState<Role[]>([]); useEffect(()=>{apiGet<Role[]>("/api/security/roles", []).then(r=>setRoles(r.data));},[]); return <><PageHeader title="Roles and Permissions" description="Review roles and the permissions assigned to each role."/>{roles.map(r=><Card key={r.id}><h2>{r.name}</h2><p>{r.description}</p><p className="muted">{r.permissions.join(", ")}</p></Card>)}</>; }
