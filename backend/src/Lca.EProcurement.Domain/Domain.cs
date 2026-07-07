@@ -9,6 +9,7 @@ public enum WorkflowActionKind { Transition, TaskAssignment, TaskCompletion, Can
 public enum RuleOutcome { Passed, Failed }
 public enum BusinessProcessStatus { Draft, Published, Archived }
 public enum BusinessRuleStatus { Draft, Published, Archived }
+public enum RequisitionStatus { Draft, Submitted, BudgetValidation, ManagerApproval, ProcurementReview, Approved, Rejected }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }
@@ -135,3 +136,14 @@ public record BudgetLine(Guid BudgetId, Guid CostCentreId, Guid ProcurementCateg
 public record CostCentre(string Code, string Name, string Department, bool IsActive = true) : Entity(Guid.NewGuid());
 public record ProcurementCategory(string Code, string Name, bool IsActive = true) : Entity(Guid.NewGuid());
 public record FinancialYear(string Code, DateTimeOffset StartDate, DateTimeOffset EndDate, bool IsActive = true) : Entity(Guid.NewGuid());
+
+public record Requisition(string RequisitionNumber, string Title, string Description, string Department, Guid CostCentreId, Guid FinancialYearId, string RequestedBy, DateTimeOffset RequiredDate, string Priority, decimal EstimatedTotal, RequisitionStatus Status, DateTimeOffset CreatedAt, DateTimeOffset? SubmittedAt = null, DateTimeOffset? ApprovedAt = null, DateTimeOffset? RejectedAt = null) : Entity(Guid.NewGuid())
+{
+    public List<RequisitionItem> Items { get; init; } = [];
+    public List<RequisitionAttachment> Attachments { get; init; } = [];
+    public List<RequisitionStatusHistory> StatusHistory { get; init; } = [];
+}
+public record RequisitionItem(Guid RequisitionId, string Description, decimal Quantity, string UnitOfMeasure, decimal EstimatedUnitPrice, decimal EstimatedTotal, Guid ProcurementCategoryId, Guid? ProcurementPlanItemId = null) : Entity(Guid.NewGuid());
+public record RequisitionAttachment(Guid RequisitionId, string FileName, string ContentType, string UploadedBy, DateTimeOffset UploadedAt, string StorageReference) : Entity(Guid.NewGuid());
+public record RequisitionStatusHistory(Guid RequisitionId, RequisitionStatus FromStatus, RequisitionStatus ToStatus, string Actor, string Notes, DateTimeOffset ChangedAt) : Entity(Guid.NewGuid());
+public record BudgetCommitment(Guid RequisitionId, Guid BudgetId, Guid BudgetLineId, Guid FinancialYearId, Guid CostCentreId, Guid ProcurementCategoryId, decimal Amount, string CommittedBy, DateTimeOffset CommittedAt, string Reference) : Entity(Guid.NewGuid());
