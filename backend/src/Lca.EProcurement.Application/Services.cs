@@ -1105,7 +1105,7 @@ public sealed class TenderApplicationService(EProcurementDbContext db, INotifica
     public async Task<TenderDetailDto?> PublishTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default)
     {
         var detail = await ChangeStatus(id, TenderStatus.Published, dto.Actor, "Tender published", publish: true, ct);
-        if (detail is not null) await notifications.QueueAsync("TenderPublished", nameof(Tender), id, new { EntityReference = detail.Tender.TenderNumber, TenderNumber = detail.Tender.TenderNumber, TenderTitle = detail.Tender.Title, Status = detail.Tender.Status.ToString(), ClosingDate = detail.Tender.ClosingDate, RelatedUrl = $"/public/tenders/{detail.Tender.TenderNumber}" }, [new NotificationRecipientDto(dto.Actor, dto.Actor)], ct);
+        if (detail is not null) await notifications.SendAsync("TenderPublished", nameof(Tender), id, new { EntityReference = detail.Tender.TenderNumber, TenderNumber = detail.Tender.TenderNumber, TenderTitle = detail.Tender.Title, Status = detail.Tender.Status.ToString(), ClosingDate = detail.Tender.ClosingDate, RelatedUrl = $"/public/tenders/{detail.Tender.TenderNumber}" }, [new NotificationRecipientDto(dto.Actor, dto.Actor)], ct);
         return detail;
     }
     public Task<TenderDetailDto?> CancelTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default) => ChangeStatus(id, TenderStatus.Cancelled, dto.Actor, "Tender cancelled", publish: false, ct);
