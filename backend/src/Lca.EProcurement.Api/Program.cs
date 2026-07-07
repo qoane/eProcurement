@@ -24,6 +24,7 @@ builder.Services.AddScoped<IPageDefinitionApplicationService, PageDefinitionAppl
 builder.Services.AddScoped<IEntityRecordApplicationService, EntityRecordApplicationService>();
 builder.Services.AddScoped<IAnnualProcurementPlanApplicationService, AnnualProcurementPlanApplicationService>();
 builder.Services.AddScoped<IBudgetApplicationService, BudgetApplicationService>();
+builder.Services.AddScoped<ITenderApplicationService, TenderApplicationService>();
 
 var app = builder.Build();
 

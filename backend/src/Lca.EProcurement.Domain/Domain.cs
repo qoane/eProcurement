@@ -9,6 +9,8 @@ public enum WorkflowActionKind { Transition, TaskAssignment, TaskCompletion, Can
 public enum RuleOutcome { Passed, Failed }
 public enum BusinessProcessStatus { Draft, Published, Archived }
 public enum BusinessRuleStatus { Draft, Published, Archived }
+public enum TenderType { RFI, RFQ, RFP }
+public enum TenderStatus { Draft, Published, Clarification, Closed, Cancelled }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }
@@ -55,6 +57,24 @@ public record Supplier(string ReferenceNumber, string LegalName, SupplierStatus 
 public record SupplierDocument(Guid SupplierId, string DocumentType, string FileName, string UploadedBy, DateTimeOffset UploadedAt) : Entity(Guid.NewGuid());
 public record SupplierCategory(string Name) : Entity(Guid.NewGuid());
 public record SupplierPerformanceRating(Guid SupplierId, int Score, string Notes, DateTimeOffset RatedAt) : Entity(Guid.NewGuid());
+
+public record Tender(string TenderNumber, string Title, string Description, TenderType TenderType, string ProcurementMethod, TenderStatus Status, DateTimeOffset? PublicationDate, DateTimeOffset ClosingDate, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? PublishedAt = null, string? PublishedBy = null) : Entity(Guid.NewGuid())
+{
+    public List<TenderLot> Lots { get; init; } = [];
+    public List<TenderDocument> Documents { get; init; } = [];
+    public List<TenderSupplierInvitation> SupplierInvitations { get; init; } = [];
+    public List<TenderClarification> Clarifications { get; init; } = [];
+    public List<TenderStatusHistory> StatusHistory { get; init; } = [];
+}
+public record TenderLot(Guid TenderId, string LotNumber, string Title, string Description) : Entity(Guid.NewGuid());
+public record TenderDocument(Guid TenderId, string DocumentType, string FileName, string Description, bool IsRequired, DateTimeOffset CreatedAt, string CreatedBy) : Entity(Guid.NewGuid());
+public record TenderSupplierInvitation(Guid TenderId, Guid? SupplierId, string SupplierName, string SupplierEmail, DateTimeOffset InvitedAt, string InvitedBy, DateTimeOffset? NotifiedAt = null) : Entity(Guid.NewGuid());
+public record TenderClarification(Guid TenderId, string Question, string AskedBy, DateTimeOffset AskedAt, bool IsPublic = true) : Entity(Guid.NewGuid())
+{
+    public List<TenderClarificationResponse> Responses { get; init; } = [];
+}
+public record TenderClarificationResponse(Guid TenderClarificationId, string Response, string RespondedBy, DateTimeOffset RespondedAt) : Entity(Guid.NewGuid());
+public record TenderStatusHistory(Guid TenderId, TenderStatus FromStatus, TenderStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
 
 public record WorkflowDefinition(string Code, string Name, string EntityType, bool IsActive = true, Guid? PublishedVersionId = null) : Entity(Guid.NewGuid())
 {

@@ -778,3 +778,107 @@ public sealed class BudgetApplicationService(EProcurementDbContext db) : IBudget
     public Task<List<ProcurementCategory>> GetProcurementCategoriesAsync(CancellationToken ct = default) => db.ProcurementCategories.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
     public async Task<ProcurementCategory> CreateProcurementCategoryAsync(CreateProcurementCategoryDto dto, CancellationToken ct = default) { var c = new ProcurementCategory(dto.Code, dto.Name); db.ProcurementCategories.Add(c); await db.SaveChangesAsync(ct); return c; }
 }
+
+public interface ITenderApplicationService
+{
+    Task<List<TenderSummaryDto>> GetTendersAsync(CancellationToken ct = default);
+    Task<TenderDetailDto?> GetTenderAsync(Guid id, CancellationToken ct = default);
+    Task<TenderDetailDto> CreateTenderAsync(CreateTenderDto dto, CancellationToken ct = default);
+    Task<TenderDetailDto?> PublishTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default);
+    Task<TenderDetailDto?> CancelTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default);
+    Task<List<TenderClarification>> GetClarificationsAsync(Guid tenderId, CancellationToken ct = default);
+    Task<TenderClarification?> CreateClarificationAsync(Guid tenderId, CreateTenderClarificationDto dto, CancellationToken ct = default);
+    Task<TenderClarificationResponse?> RespondToClarificationAsync(Guid tenderId, Guid clarificationId, RespondToTenderClarificationDto dto, CancellationToken ct = default);
+}
+
+public sealed record TenderSummaryDto(Guid Id, string TenderNumber, string Title, string TenderType, string ProcurementMethod, string Status, DateTimeOffset? PublicationDate, DateTimeOffset ClosingDate);
+public sealed record TenderDetailDto(Tender Tender, List<TenderLot> Lots, List<TenderDocument> Documents, List<TenderSupplierInvitation> SupplierInvitations, List<TenderClarification> Clarifications, List<TenderStatusHistory> StatusHistory, List<AuditEvent> AuditTimeline);
+public sealed record TenderActorDto(string Actor);
+public sealed record CreateTenderLotDto(string LotNumber, string Title, string Description);
+public sealed record CreateTenderDocumentDto(string DocumentType, string FileName, string Description, bool IsRequired = true);
+public sealed record CreateTenderSupplierInvitationDto(Guid? SupplierId, string SupplierName, string SupplierEmail);
+public sealed record CreateTenderDto(string TenderNumber, string Title, string Description, TenderType TenderType, string ProcurementMethod, DateTimeOffset ClosingDate, string CreatedBy, List<CreateTenderLotDto>? Lots = null, List<CreateTenderDocumentDto>? Documents = null, List<CreateTenderSupplierInvitationDto>? SupplierInvitations = null);
+public sealed record CreateTenderClarificationDto(string Question, string AskedBy, bool IsPublic = true);
+public sealed record RespondToTenderClarificationDto(string Response, string RespondedBy);
+
+public sealed class TenderApplicationService(EProcurementDbContext db) : ITenderApplicationService
+{
+    public Task<List<TenderSummaryDto>> GetTendersAsync(CancellationToken ct = default) => db.Tenders.AsNoTracking().OrderByDescending(x => x.CreatedAt).Select(x => new TenderSummaryDto(x.Id, x.TenderNumber, x.Title, x.TenderType.ToString(), x.ProcurementMethod, x.Status.ToString(), x.PublicationDate, x.ClosingDate)).ToListAsync(ct);
+
+    public async Task<TenderDetailDto?> GetTenderAsync(Guid id, CancellationToken ct = default)
+    {
+        var tender = await IncludeTender(db.Tenders.AsNoTracking()).SingleOrDefaultAsync(x => x.Id == id, ct);
+        return tender is null ? null : await ToDetail(tender, ct);
+    }
+
+    public async Task<TenderDetailDto> CreateTenderAsync(CreateTenderDto dto, CancellationToken ct = default)
+    {
+        if (await db.Tenders.AnyAsync(x => x.TenderNumber == dto.TenderNumber, ct)) throw new InvalidOperationException($"Tender number '{dto.TenderNumber}' already exists.");
+        var now = DateTimeOffset.UtcNow;
+        var tender = new Tender(dto.TenderNumber, dto.Title, dto.Description, dto.TenderType, dto.ProcurementMethod, TenderStatus.Draft, null, dto.ClosingDate, dto.CreatedBy, now);
+        foreach (var lot in dto.Lots ?? []) tender.Lots.Add(new TenderLot(tender.Id, lot.LotNumber, lot.Title, lot.Description));
+        foreach (var doc in dto.Documents ?? []) tender.Documents.Add(new TenderDocument(tender.Id, doc.DocumentType, doc.FileName, doc.Description, doc.IsRequired, now, dto.CreatedBy));
+        foreach (var inv in dto.SupplierInvitations ?? []) tender.SupplierInvitations.Add(new TenderSupplierInvitation(tender.Id, inv.SupplierId, inv.SupplierName, inv.SupplierEmail, now, dto.CreatedBy));
+        tender.StatusHistory.Add(new TenderStatusHistory(tender.Id, TenderStatus.Draft, TenderStatus.Draft, dto.CreatedBy, now, "Tender created"));
+        db.Tenders.Add(tender);
+        db.AuditEvents.Add(new AuditEvent("Tender created", nameof(Tender), tender.Id, tender.TenderNumber, dto.CreatedBy, $"Created {tender.Title}", now));
+        await db.SaveChangesAsync(ct);
+        return (await GetTenderAsync(tender.Id, ct))!;
+    }
+
+    public Task<TenderDetailDto?> PublishTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default) => ChangeStatus(id, TenderStatus.Published, dto.Actor, "Tender published", publish: true, ct);
+    public Task<TenderDetailDto?> CancelTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default) => ChangeStatus(id, TenderStatus.Cancelled, dto.Actor, "Tender cancelled", publish: false, ct);
+
+    public Task<List<TenderClarification>> GetClarificationsAsync(Guid tenderId, CancellationToken ct = default) => db.TenderClarifications.AsNoTracking().Include(x => x.Responses).Where(x => x.TenderId == tenderId).OrderByDescending(x => x.AskedAt).ToListAsync(ct);
+
+    public async Task<TenderClarification?> CreateClarificationAsync(Guid tenderId, CreateTenderClarificationDto dto, CancellationToken ct = default)
+    {
+        var tender = await db.Tenders.SingleOrDefaultAsync(x => x.Id == tenderId, ct); if (tender is null) return null;
+        var now = DateTimeOffset.UtcNow;
+        var clarification = new TenderClarification(tenderId, dto.Question, dto.AskedBy, now, dto.IsPublic);
+        db.TenderClarifications.Add(clarification);
+        if (tender.Status == TenderStatus.Published) AddStatus(tender, TenderStatus.Clarification, dto.AskedBy, now, "Clarification opened");
+        db.AuditEvents.Add(new AuditEvent("Tender clarification created", nameof(Tender), tender.Id, tender.TenderNumber, dto.AskedBy, dto.Question, now));
+        await db.SaveChangesAsync(ct);
+        return await db.TenderClarifications.AsNoTracking().Include(x => x.Responses).SingleAsync(x => x.Id == clarification.Id, ct);
+    }
+
+    public async Task<TenderClarificationResponse?> RespondToClarificationAsync(Guid tenderId, Guid clarificationId, RespondToTenderClarificationDto dto, CancellationToken ct = default)
+    {
+        var tender = await db.Tenders.SingleOrDefaultAsync(x => x.Id == tenderId, ct); if (tender is null) return null;
+        if (!await db.TenderClarifications.AnyAsync(x => x.Id == clarificationId && x.TenderId == tenderId, ct)) return null;
+        var now = DateTimeOffset.UtcNow;
+        var response = new TenderClarificationResponse(clarificationId, dto.Response, dto.RespondedBy, now);
+        db.TenderClarificationResponses.Add(response);
+        db.AuditEvents.Add(new AuditEvent("Tender clarification responded", nameof(Tender), tender.Id, tender.TenderNumber, dto.RespondedBy, dto.Response, now));
+        await db.SaveChangesAsync(ct);
+        return response;
+    }
+
+    async Task<TenderDetailDto?> ChangeStatus(Guid id, TenderStatus status, string actor, string note, bool publish, CancellationToken ct)
+    {
+        var tender = await IncludeTender(db.Tenders).SingleOrDefaultAsync(x => x.Id == id, ct); if (tender is null) return null;
+        var now = DateTimeOffset.UtcNow;
+        AddStatus(tender, status, actor, now, note);
+        if (publish)
+        {
+            db.Entry(tender).CurrentValues[nameof(Tender.PublicationDate)] = now;
+            db.Entry(tender).CurrentValues[nameof(Tender.PublishedAt)] = now;
+            db.Entry(tender).CurrentValues[nameof(Tender.PublishedBy)] = actor;
+            foreach (var invitation in tender.SupplierInvitations) db.Entry(invitation).CurrentValues[nameof(TenderSupplierInvitation.NotifiedAt)] = now;
+        }
+        db.AuditEvents.Add(new AuditEvent(note, nameof(Tender), tender.Id, tender.TenderNumber, actor, note, now));
+        await db.SaveChangesAsync(ct);
+        return await GetTenderAsync(id, ct);
+    }
+
+    void AddStatus(Tender tender, TenderStatus to, string actor, DateTimeOffset now, string note)
+    {
+        var from = tender.Status;
+        db.Entry(tender).CurrentValues[nameof(Tender.Status)] = to;
+        tender.StatusHistory.Add(new TenderStatusHistory(tender.Id, from, to, actor, now, note));
+    }
+
+    static IQueryable<Tender> IncludeTender(IQueryable<Tender> query) => query.Include(x => x.Lots).Include(x => x.Documents).Include(x => x.SupplierInvitations).Include(x => x.Clarifications).ThenInclude(x => x.Responses).Include(x => x.StatusHistory);
+    async Task<TenderDetailDto> ToDetail(Tender tender, CancellationToken ct) => new(tender, tender.Lots.OrderBy(x => x.LotNumber).ToList(), tender.Documents.OrderBy(x => x.DocumentType).ToList(), tender.SupplierInvitations.OrderBy(x => x.SupplierName).ToList(), tender.Clarifications.OrderByDescending(x => x.AskedAt).ToList(), tender.StatusHistory.OrderBy(x => x.ChangedAt).ToList(), await db.AuditEvents.AsNoTracking().Where(x => x.EntityType == nameof(Tender) && x.EntityId == tender.Id).OrderBy(x => x.OccurredAt).ToListAsync(ct));
+}
