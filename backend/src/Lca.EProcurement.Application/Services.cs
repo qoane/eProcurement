@@ -260,10 +260,10 @@ public static class SimpleExpressionEvaluator
         if (e.StartsWith("IsNotEmpty(", StringComparison.Ordinal)) return !string.IsNullOrWhiteSpace(Value(e[11..^1], c));
         if (e.StartsWith("Contains(", StringComparison.Ordinal)) { var args = Args(e); return Value(args[0], c)?.Contains(Quoted(args[1]), StringComparison.OrdinalIgnoreCase) == true; }
         if (e.StartsWith("Equals(", StringComparison.Ordinal)) { var args = Args(e); return string.Equals(Value(args[0], c), Quoted(args[1]), StringComparison.OrdinalIgnoreCase); }
-        if (e.Contains(" != ")) { var parts = e.Split(" != ", 2, StringSplitOptions.TrimEntries); return !string.Equals(Value(parts[0], c), Quoted(parts[1]), StringComparison.OrdinalIgnoreCase); }
-        if (e.Contains(" == ")) { var parts = e.Split(" == ", 2, StringSplitOptions.TrimEntries); return string.Equals(Value(parts[0], c), Quoted(parts[1]), StringComparison.OrdinalIgnoreCase); }
         if (e.StartsWith("Supplier.Documents.Any(", StringComparison.Ordinal)) return Supplier(c).Documents.Any(d => string.Equals(d.DocumentType, Quoted(e.Split("==",2)[1].TrimEnd(')')), StringComparison.OrdinalIgnoreCase));
         if (e == "Supplier.Categories.Any()") return Supplier(c).Categories.Any();
+        if (e.Contains(" != ")) { var parts = e.Split(" != ", 2, StringSplitOptions.TrimEntries); return !string.Equals(Value(parts[0], c), Quoted(parts[1]), StringComparison.OrdinalIgnoreCase); }
+        if (e.Contains(" == ")) { var parts = e.Split(" == ", 2, StringSplitOptions.TrimEntries); return string.Equals(Value(parts[0], c), Quoted(parts[1]), StringComparison.OrdinalIgnoreCase); }
         throw new InvalidOperationException($"Expression '{e}' is not supported by the safe evaluator.");
     }
     static Supplier Supplier(RuleEvaluationContext c) => c.Entity as Supplier ?? throw new InvalidOperationException("Supplier rules require a Supplier context.");
