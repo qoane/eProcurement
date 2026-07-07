@@ -217,7 +217,7 @@ public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : I
     public RuleDesignerMetadataDto GetDesignerMetadata(string appliesTo = nameof(Supplier)) => new(["Registration", "Compliance", "Risk", "Documents", "Eligibility"], Fields.ToList(), Functions.ToList(), ["&&", "||", "!", "==", "!="]);
     async Task<List<RuleResult>> EvaluateRules(List<BusinessRuleDefinition> rules, string entityType, Guid entityId, string actor, Dictionary<string, string?>? values, CancellationToken ct)
     {
-        object entity = entityType == nameof(Supplier) ? await db.Suppliers.Include(s => s.Documents).Include(s => s.Categories).SingleAsync(s => s.Id == entityId, ct) : throw new NotSupportedException($"Rules for entity type '{entityType}' are not configured.");
+        object entity = entityType == nameof(Supplier) ? await db.Suppliers.Include(s => s.Documents).Include(s => s.Categories).SingleAsync(s => s.Id == entityId, ct) : entityType == nameof(Requisition) ? await db.Requisitions.Include(r => r.Items).SingleAsync(r => r.Id == entityId, ct) : throw new NotSupportedException($"Rules for entity type '{entityType}' are not configured.");
         var results = new List<RuleResult>();
         foreach (var rule in rules)
         {
@@ -229,7 +229,7 @@ public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : I
         }
         await db.SaveChangesAsync(ct); return results;
     }
-    static string EntityReference(object e) => e is Supplier s ? s.ReferenceNumber : e.ToString() ?? string.Empty;
+    static string EntityReference(object e) => e is Supplier s ? s.ReferenceNumber : e is Requisition r ? r.RequisitionNumber : e.ToString() ?? string.Empty;
 }
 
 public sealed record RuleEvaluationContext(object Entity, Dictionary<string, string?> Values);
@@ -261,12 +261,15 @@ public static class SimpleExpressionEvaluator
         if (e.StartsWith("Contains(", StringComparison.Ordinal)) { var args = Args(e); return Value(args[0], c)?.Contains(Quoted(args[1]), StringComparison.OrdinalIgnoreCase) == true; }
         if (e.StartsWith("Equals(", StringComparison.Ordinal)) { var args = Args(e); return string.Equals(Value(args[0], c), Quoted(args[1]), StringComparison.OrdinalIgnoreCase); }
         if (e.StartsWith("Supplier.Documents.Any(", StringComparison.Ordinal)) return Supplier(c).Documents.Any(d => string.Equals(d.DocumentType, Quoted(e.Split("==",2)[1].TrimEnd(')')), StringComparison.OrdinalIgnoreCase));
+        if (e == "Requisition.Items.Any()") return Requisition(c).Items.Any();
+        if (e == "Requisition.ItemsHaveEstimates()") return Requisition(c).Items.All(i => i.Quantity > 0 && i.EstimatedUnitPrice > 0 && i.EstimatedTotal > 0);
         if (e == "Supplier.Categories.Any()") return Supplier(c).Categories.Any();
         if (e.Contains(" != ")) { var parts = e.Split(" != ", 2, StringSplitOptions.TrimEntries); return !string.Equals(Value(parts[0], c), Quoted(parts[1]), StringComparison.OrdinalIgnoreCase); }
         if (e.Contains(" == ")) { var parts = e.Split(" == ", 2, StringSplitOptions.TrimEntries); return string.Equals(Value(parts[0], c), Quoted(parts[1]), StringComparison.OrdinalIgnoreCase); }
         throw new InvalidOperationException($"Expression '{e}' is not supported by the safe evaluator.");
     }
     static Supplier Supplier(RuleEvaluationContext c) => c.Entity as Supplier ?? throw new InvalidOperationException("Supplier rules require a Supplier context.");
+    static Requisition Requisition(RuleEvaluationContext c) => c.Entity as Requisition ?? throw new InvalidOperationException("Requisition rules require a Requisition context.");
     static string? Value(string token, RuleEvaluationContext c)
     {
         token = token.Trim(); var s = Supplier(c);
@@ -338,7 +341,7 @@ public sealed class WorkflowApplicationService(EProcurementDbContext db, IBusine
     static WorkflowVersion Published(WorkflowDefinition d) => d.Versions.Single(v => v.Id == d.PublishedVersionId || v.Status == WorkflowVersionStatus.Published);
     async Task CreateTask(WorkflowVersion v, WorkflowInstance i, string actor, CancellationToken ct) { var n = v.Nodes.Single(x => x.Code == i.CurrentNodeCode); if (!n.CreatesTask) return; db.WorkflowTasks.Add(new WorkflowTask(i.Id, n.Code, n.DefaultAssignedRole, CreatedAt: DateTimeOffset.UtcNow)); await Task.CompletedTask; }
     async Task ApplyEffects(Guid transitionId, string entityType, Guid entityId, CancellationToken ct) { foreach (var e in await db.WorkflowTransitionEffects.Where(x => x.TriggerTransitionId == transitionId && x.EntityType == entityType).ToListAsync(ct)) if (entityType == nameof(Supplier) && e.PropertyName == nameof(Supplier.Status)) { var s = await db.Suppliers.SingleAsync(x => x.Id == entityId, ct); db.Entry(s).CurrentValues[e.PropertyName] = Enum.Parse<SupplierStatus>(e.ValueExpression.Trim('"'), true); } }
-    async Task<string> Reference(string entityType, Guid entityId, CancellationToken ct) => entityType == nameof(Supplier) ? (await db.Suppliers.SingleAsync(s => s.Id == entityId, ct)).ReferenceNumber : entityId.ToString();
+    async Task<string> Reference(string entityType, Guid entityId, CancellationToken ct) => entityType == nameof(Supplier) ? (await db.Suppliers.SingleAsync(s => s.Id == entityId, ct)).ReferenceNumber : entityType == nameof(Requisition) ? (await db.Requisitions.SingleAsync(r => r.Id == entityId, ct)).RequisitionNumber : entityId.ToString();
 }
 
 public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkflowApplicationService workflows, IDynamicFormApplicationService forms, IBusinessRuleApplicationService rules) : ISupplierApplicationService
@@ -777,4 +780,69 @@ public sealed class BudgetApplicationService(EProcurementDbContext db) : IBudget
     public async Task<CostCentre> CreateCostCentreAsync(CreateCostCentreDto dto, CancellationToken ct = default) { var c = new CostCentre(dto.Code, dto.Name, dto.Department); db.CostCentres.Add(c); await db.SaveChangesAsync(ct); return c; }
     public Task<List<ProcurementCategory>> GetProcurementCategoriesAsync(CancellationToken ct = default) => db.ProcurementCategories.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
     public async Task<ProcurementCategory> CreateProcurementCategoryAsync(CreateProcurementCategoryDto dto, CancellationToken ct = default) { var c = new ProcurementCategory(dto.Code, dto.Name); db.ProcurementCategories.Add(c); await db.SaveChangesAsync(ct); return c; }
+}
+
+public interface IRequisitionApplicationService
+{
+    Task<List<Requisition>> GetAsync(CancellationToken ct = default);
+    Task<Requisition?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<Requisition> CreateAsync(CreateRequisitionDto dto, CancellationToken ct = default);
+    Task<Requisition?> SubmitAsync(Guid id, string actor, CancellationToken ct = default);
+    Task<Requisition?> ApproveAsync(Guid id, string actor, CancellationToken ct = default);
+    Task<Requisition?> RejectAsync(Guid id, string actor, string reason, CancellationToken ct = default);
+    Task<BudgetValidationDto> ValidateBudgetAsync(Guid id, CancellationToken ct = default);
+}
+public sealed record CreateRequisitionDto(string RequisitionNumber, string Title, string Description, string Department, Guid CostCentreId, Guid FinancialYearId, string RequestedBy, DateTimeOffset RequiredDate, string Priority, List<CreateRequisitionItemDto> Items);
+public sealed record CreateRequisitionItemDto(string Description, decimal Quantity, string UnitOfMeasure, decimal EstimatedUnitPrice, Guid ProcurementCategoryId, Guid? ProcurementPlanItemId = null);
+public sealed record BudgetValidationDto(bool BudgetExists, bool HasItems, bool ItemsHaveEstimates, bool BudgetAvailable, decimal RequiredAmount, decimal AvailableAmount, List<string> Messages);
+
+public sealed class RequisitionApplicationService(EProcurementDbContext db, IWorkflowApplicationService workflows, IBusinessRuleApplicationService rules) : IRequisitionApplicationService
+{
+    const string WorkflowCode = "REQUISITION-APPROVAL-WORKFLOW";
+    public Task<List<Requisition>> GetAsync(CancellationToken ct = default) => db.Requisitions.AsNoTracking().Include(x => x.Items).Include(x => x.Attachments).Include(x => x.StatusHistory).OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
+    public Task<Requisition?> GetAsync(Guid id, CancellationToken ct = default) => db.Requisitions.AsNoTracking().Include(x => x.Items).Include(x => x.Attachments).Include(x => x.StatusHistory).SingleOrDefaultAsync(x => x.Id == id, ct);
+    public async Task<Requisition> CreateAsync(CreateRequisitionDto dto, CancellationToken ct = default)
+    {
+        var total = dto.Items.Sum(i => i.Quantity * i.EstimatedUnitPrice);
+        var req = new Requisition(dto.RequisitionNumber, dto.Title, dto.Description, dto.Department, dto.CostCentreId, dto.FinancialYearId, dto.RequestedBy, dto.RequiredDate, dto.Priority, total, RequisitionStatus.Draft, DateTimeOffset.UtcNow);
+        foreach (var i in dto.Items) req.Items.Add(new RequisitionItem(req.Id, i.Description, i.Quantity, i.UnitOfMeasure, i.EstimatedUnitPrice, i.Quantity * i.EstimatedUnitPrice, i.ProcurementCategoryId, i.ProcurementPlanItemId));
+        req.StatusHistory.Add(new RequisitionStatusHistory(req.Id, RequisitionStatus.Draft, RequisitionStatus.Draft, dto.RequestedBy, "Requisition created", DateTimeOffset.UtcNow));
+        db.Requisitions.Add(req); db.AuditEvents.Add(new AuditEvent("Requisition created", nameof(Requisition), req.Id, req.RequisitionNumber, dto.RequestedBy, "Internal requisition created", DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync(ct); return req;
+    }
+    public async Task<BudgetValidationDto> ValidateBudgetAsync(Guid id, CancellationToken ct = default)
+    {
+        var req = await db.Requisitions.AsNoTracking().Include(x => x.Items).SingleAsync(x => x.Id == id, ct);
+        var lineChecks = new List<decimal>();
+        foreach (var item in req.Items)
+            lineChecks.Add(await db.BudgetLines.Where(l => l.CostCentreId == req.CostCentreId && l.ProcurementCategoryId == item.ProcurementCategoryId && db.Budgets.Any(b => b.Id == l.BudgetId && b.FinancialYearId == req.FinancialYearId)).SumAsync(l => (decimal?)l.AvailableAmount, ct) ?? 0);
+        var available = lineChecks.Sum(); var messages = new List<string>();
+        var exists = req.Items.Any() && lineChecks.All(x => x > 0); if (!exists) messages.Add("No matching budget lines exist.");
+        var hasItems = req.Items.Any(); if (!hasItems) messages.Add("Requisition must have items.");
+        var estimates = req.Items.All(i => i.Quantity > 0 && i.EstimatedUnitPrice > 0 && i.EstimatedTotal > 0); if (!estimates) messages.Add("All items must have positive estimates.");
+        var budgetAvailable = available >= req.EstimatedTotal; if (!budgetAvailable) messages.Add("Available budget is insufficient.");
+        return new(exists, hasItems, estimates, budgetAvailable, req.EstimatedTotal, available, messages);
+    }
+    public async Task<Requisition?> SubmitAsync(Guid id, string actor, CancellationToken ct = default)
+    {
+        var req = await db.Requisitions.Include(x => x.Items).SingleOrDefaultAsync(x => x.Id == id, ct); if (req is null) return null;
+        foreach (var result in await rules.EvaluatePublishedAsync(nameof(Requisition), nameof(Requisition), id, actor, null, ct)) if (!result.Passed) throw new InvalidOperationException(result.Message);
+        var validation = await ValidateBudgetAsync(id, ct); if (!validation.HasItems || !validation.ItemsHaveEstimates || !validation.BudgetExists) throw new InvalidOperationException(string.Join(" ", validation.Messages));
+        var instance = await db.WorkflowInstances.Where(x => x.EntityType == nameof(Requisition) && x.EntityId == id && x.Status == WorkflowInstanceStatus.Running).OrderByDescending(x => x.StartedAt).FirstOrDefaultAsync(ct) ?? await workflows.StartAsync(WorkflowCode, nameof(Requisition), id, actor, ct);
+        if (instance.CurrentNodeCode == "Draft") await workflows.ExecuteActionAsync(instance.Id, "Submit", actor, ct);
+        Change(req, RequisitionStatus.Submitted, actor, "Submitted for approval"); db.Entry(req).CurrentValues[nameof(Requisition.SubmittedAt)] = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct); return req with { Status = RequisitionStatus.Submitted, SubmittedAt = DateTimeOffset.UtcNow };
+    }
+    public async Task<Requisition?> ApproveAsync(Guid id, string actor, CancellationToken ct = default)
+    {
+        var req = await db.Requisitions.Include(x => x.Items).SingleOrDefaultAsync(x => x.Id == id, ct); if (req is null) return null;
+        var validation = await ValidateBudgetAsync(id, ct); if (!validation.BudgetAvailable) throw new InvalidOperationException(string.Join(" ", validation.Messages));
+        var instance = await db.WorkflowInstances.Where(x => x.EntityType == nameof(Requisition) && x.EntityId == id && x.Status == WorkflowInstanceStatus.Running).OrderByDescending(x => x.StartedAt).FirstOrDefaultAsync(ct) ?? await workflows.StartAsync(WorkflowCode, nameof(Requisition), id, actor, ct);
+        foreach (var action in new[] { "Submit", "ValidateBudget", "ManagerApprove", "ProcurementReview", "Approve" }) { instance = await db.WorkflowInstances.SingleAsync(x => x.Id == instance.Id, ct); if (instance.Status == WorkflowInstanceStatus.Running && db.WorkflowTransitions.Any(t => t.WorkflowVersionId == instance.WorkflowVersionId && t.FromNodeCode == instance.CurrentNodeCode && t.ActionCode == action)) await workflows.ExecuteActionAsync(instance.Id, action, actor, ct); }
+        foreach (var item in req.Items) { var line = await db.BudgetLines.Where(l => l.CostCentreId == req.CostCentreId && l.ProcurementCategoryId == item.ProcurementCategoryId).OrderByDescending(l => l.AvailableAmount).FirstAsync(ct); var budget = await db.Budgets.SingleAsync(b => b.Id == line.BudgetId, ct); db.Entry(line).CurrentValues[nameof(BudgetLine.CommittedAmount)] = line.CommittedAmount + item.EstimatedTotal; db.Entry(line).CurrentValues[nameof(BudgetLine.AvailableAmount)] = line.AvailableAmount - item.EstimatedTotal; db.Entry(budget).CurrentValues[nameof(Budget.CommittedAmount)] = budget.CommittedAmount + item.EstimatedTotal; db.Entry(budget).CurrentValues[nameof(Budget.AvailableAmount)] = budget.AvailableAmount - item.EstimatedTotal; db.BudgetCommitments.Add(new BudgetCommitment(req.Id, budget.Id, line.Id, req.FinancialYearId, req.CostCentreId, item.ProcurementCategoryId, item.EstimatedTotal, actor, DateTimeOffset.UtcNow, req.RequisitionNumber)); }
+        Change(req, RequisitionStatus.Approved, actor, "Approved and budget committed"); db.Entry(req).CurrentValues[nameof(Requisition.ApprovedAt)] = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct); return req with { Status = RequisitionStatus.Approved, ApprovedAt = DateTimeOffset.UtcNow };
+    }
+    public async Task<Requisition?> RejectAsync(Guid id, string actor, string reason, CancellationToken ct = default) { var req = await db.Requisitions.SingleOrDefaultAsync(x => x.Id == id, ct); if (req is null) return null; Change(req, RequisitionStatus.Rejected, actor, reason); db.Entry(req).CurrentValues[nameof(Requisition.RejectedAt)] = DateTimeOffset.UtcNow; await db.SaveChangesAsync(ct); return req with { Status = RequisitionStatus.Rejected, RejectedAt = DateTimeOffset.UtcNow }; }
+    void Change(Requisition req, RequisitionStatus status, string actor, string notes) { var from = req.Status; db.Entry(req).CurrentValues[nameof(Requisition.Status)] = status; db.RequisitionStatusHistories.Add(new RequisitionStatusHistory(req.Id, from, status, actor, notes, DateTimeOffset.UtcNow)); db.AuditEvents.Add(new AuditEvent($"Requisition {status}", nameof(Requisition), req.Id, req.RequisitionNumber, actor, notes, DateTimeOffset.UtcNow)); }
 }

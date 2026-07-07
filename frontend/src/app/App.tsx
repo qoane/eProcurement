@@ -29,6 +29,7 @@ import { ConfigurationPage } from "../modules/configuration/ConfigurationPage";
 import { ReportingPage } from "../modules/reporting/ReportingPage";
 import { TendersPage } from "../modules/tenders/TendersPage";
 import { PlanningPage, NewPlanningPage, PlanningDetailPage, BudgetsPage, CostCentresPage, ProcurementCategoriesPage } from "../modules/planning/PlanningPages";
+import { RequisitionListPage, NewRequisitionPage, RequisitionDetailPage } from "../modules/requisitions/RequisitionPages";
 import { StudioModulePage, StudioPage } from "../modules/studio/StudioPage";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -105,8 +106,9 @@ function route(p: string) {
   else if (p === "/app/budgets") page = <BudgetsPage />;
   else if (p === "/app/cost-centres") page = <CostCentresPage />;
   else if (p === "/app/procurement-categories") page = <ProcurementCategoriesPage />;
-  else if (p === "/app/requisitions")
-    page = <NotConfiguredPage title="Requisitions" />;
+  else if (p === "/app/requisitions") page = <RequisitionListPage />;
+  else if (p === "/app/requisitions/new") page = <NewRequisitionPage />;
+  else if (p.startsWith("/app/requisitions/")) page = <RequisitionDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/tenders") page = <TendersPage />;
   else if (p === "/app/evaluation")
     page = <NotConfiguredPage title="Evaluation" />;
