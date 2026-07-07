@@ -12,6 +12,7 @@ public enum BusinessRuleStatus { Draft, Published, Archived }
 public enum RequisitionStatus { Draft, Submitted, BudgetValidation, ManagerApproval, ProcurementReview, Approved, Rejected }
 public enum TenderType { RFP, RFQ, RFI }
 public enum TenderStatus { Draft, Published, Clarification, Cancelled, Closed }
+public enum BidSubmissionStatus { Draft, Submitted, Locked, Withdrawn, Opened, Evaluated, Awarded, Rejected }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }
@@ -76,6 +77,22 @@ public record TenderClarification(Guid TenderId, string Question, string AskedBy
 }
 public record TenderClarificationResponse(Guid TenderClarificationId, string Response, string RespondedBy, DateTimeOffset RespondedAt) : Entity(Guid.NewGuid());
 public record TenderStatusHistory(Guid TenderId, TenderStatus FromStatus, TenderStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
+
+public record BidSubmission(string SubmissionNumber, Guid TenderId, Guid SupplierId, BidSubmissionStatus Status, DateTimeOffset? SubmissionDate, string SubmittedBy, DateTimeOffset? SubmittedAt = null, DateTimeOffset? WithdrawnAt = null, DateTimeOffset? LockedAt = null, DateTimeOffset? OpenedAt = null, int CurrentVersion = 1) : Entity(Guid.NewGuid())
+{
+    public List<BidSubmissionItem> Items { get; init; } = [];
+    public List<BidSubmissionDocument> Documents { get; init; } = [];
+    public List<BidSubmissionHistory> History { get; init; } = [];
+    public List<BidSubmissionDeclaration> Declarations { get; init; } = [];
+    public List<BidSubmissionVersion> Versions { get; init; } = [];
+    public List<BidSubmissionStatusHistory> StatusHistory { get; init; } = [];
+}
+public record BidSubmissionItem(Guid BidSubmissionId, Guid? TenderLotId, string Description, decimal Quantity, decimal UnitPrice, decimal Total, string? Notes = null) : Entity(Guid.NewGuid());
+public record BidSubmissionDocument(Guid BidSubmissionId, string DocumentType, string Filename, string StorageReference, string UploadedBy, DateTimeOffset UploadedAt, int Version = 1) : Entity(Guid.NewGuid());
+public record BidSubmissionHistory(Guid BidSubmissionId, string EventType, string Actor, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
+public record BidSubmissionDeclaration(Guid BidSubmissionId, string DeclarationType, bool Accepted, string AcceptedBy, DateTimeOffset AcceptedAt) : Entity(Guid.NewGuid());
+public record BidSubmissionVersion(Guid BidSubmissionId, int VersionNumber, DateTimeOffset CreatedAt, string CreatedBy) : Entity(Guid.NewGuid());
+public record BidSubmissionStatusHistory(Guid BidSubmissionId, BidSubmissionStatus FromStatus, BidSubmissionStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
 
 public record WorkflowDefinition(string Code, string Name, string EntityType, bool IsActive = true, Guid? PublishedVersionId = null) : Entity(Guid.NewGuid())
 {
