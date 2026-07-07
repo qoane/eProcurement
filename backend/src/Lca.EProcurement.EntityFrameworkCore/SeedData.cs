@@ -697,11 +697,25 @@ public static class SeedData
             ("WorkflowTaskAssignedEmail","WorkflowTaskAssigned",NotificationChannel.Email,"Workflow task assigned","{{WorkflowTask}} requires action: {{ActionRequired}}. {{PortalLink}}"),
             ("WorkflowTaskAssignedSms","WorkflowTaskAssigned",NotificationChannel.Sms,"Task assigned","{{WorkflowTask}} requires action."),
         };
-        foreach (var t in templates) if (!await db.NotificationTemplates.AnyAsync(x => x.Code == t.Code, ct)) db.NotificationTemplates.Add(new NotificationTemplate(t.Code, t.Code, "Seeded notification template", t.Event, t.Channel, t.Subject, t.Body, true, DateTimeOffset.UtcNow));
+        var notificationTemplateCodes = await db.NotificationTemplates
+            .Select(x => x.Code)
+            .ToHashSetAsync(ct);
+
+        foreach (var t in templates)
+        {
+            if (notificationTemplateCodes.Add(t.Code))
+            {
+                db.NotificationTemplates.Add(new NotificationTemplate(t.Code, t.Code, "Seeded notification template", t.Event, t.Channel, t.Subject, t.Body, true, DateTimeOffset.UtcNow));
+            }
+        }
+
         foreach (var ev in new[] { "SupplierRegistered","SupplierSubmitted","SupplierApproved","SupplierRejected","SupplierSuspended","SupplierBlacklisted","PlanSubmitted","PlanApproved","PlanRejected","RequisitionSubmitted","BudgetValidationFailed","ApprovalRequired","RequisitionApproved","RequisitionRejected","TenderPublished","SupplierInvited","TenderClosingReminder","TenderCancelled","BidSubmitted","BidWithdrawn","BidRejectedLate","RequiredDocumentMissing","BidOpeningScheduled","CommitteeMemberInvited","BidOpeningStarted","BidOpened","BidOpeningCompleted","EvaluationScheduled","EvaluatorAssigned","ConflictDeclarationRequired","ScoreRequired","RecommendationRecorded","EvaluationCompleted","AwardSubmittedForApproval","AwardApproved","AwardRejected","AwardPublished","AwardSuccessful","AwardUnsuccessful","PurchaseOrderGenerated","PurchaseOrderIssued","SupplierAcknowledgementRequired","SupplierAcknowledged","DeliveryRecorded","PoClosed","PoCancelled","WorkflowTaskAssigned","WorkflowTaskCompleted","WorkflowCompleted","WorkflowCancelled" })
         {
             var code = ev + "InApp";
-            if (!await db.NotificationTemplates.AnyAsync(x => x.Code == code, ct)) db.NotificationTemplates.Add(new NotificationTemplate(code, ev + " in-app", "Default in-app template", ev, NotificationChannel.InApp, ev, "{{EntityReference}} {{Status}} {{ActionRequired}}", true, DateTimeOffset.UtcNow));
+            if (notificationTemplateCodes.Add(code))
+            {
+                db.NotificationTemplates.Add(new NotificationTemplate(code, ev + " in-app", "Default in-app template", ev, NotificationChannel.InApp, ev, "{{EntityReference}} {{Status}} {{ActionRequired}}", true, DateTimeOffset.UtcNow));
+            }
         }
         await db.SaveChangesAsync(ct);
         var main = await db.NavigationDefinitions.FirstOrDefaultAsync(ct);
