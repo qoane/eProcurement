@@ -27,9 +27,24 @@ import { DynamicFormsPage } from "../modules/forms/DynamicFormsPage";
 import { FormDesignerPage } from "../modules/forms/FormDesignerPage";
 import { ConfigurationPage } from "../modules/configuration/ConfigurationPage";
 import { ReportingPage } from "../modules/reporting/ReportingPage";
-import { NewTenderPage, TenderDetailPage, TendersPage } from "../modules/tenders/TendersPage";
-import { PlanningPage, NewPlanningPage, PlanningDetailPage, BudgetsPage, CostCentresPage, ProcurementCategoriesPage } from "../modules/planning/PlanningPages";
-import { RequisitionListPage, NewRequisitionPage, RequisitionDetailPage } from "../modules/requisitions/RequisitionPages";
+import {
+  NewTenderPage,
+  TenderDetailPage,
+  TendersPage,
+} from "../modules/tenders/TendersPage";
+import {
+  PlanningPage,
+  NewPlanningPage,
+  PlanningDetailPage,
+  BudgetsPage,
+  CostCentresPage,
+  ProcurementCategoriesPage,
+} from "../modules/planning/PlanningPages";
+import {
+  RequisitionListPage,
+  NewRequisitionPage,
+  RequisitionDetailPage,
+} from "../modules/requisitions/RequisitionPages";
 import { StudioModulePage, StudioPage } from "../modules/studio/StudioPage";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -62,7 +77,8 @@ function route(p: string) {
       </AuthLayout>
     );
   let page: React.ReactNode = <DashboardPage />;
-  if (p === "/app/suppliers") page = <SupplierListPage />;
+  if (p === "/app" || p === "/app/dashboard") page = <DashboardPage />;
+  else if (p === "/app/suppliers") page = <SupplierListPage />;
   else if (p === "/app/suppliers/register") page = <SupplierRegistrationPage />;
   else if (p === "/app/suppliers/verification")
     page = <SupplierVerificationPage />;
@@ -102,16 +118,34 @@ function route(p: string) {
   else if (p === "/app/settings") page = <ConfigurationPage />;
   else if (p === "/app/planning") page = <PlanningPage />;
   else if (p === "/app/planning/new") page = <NewPlanningPage />;
-  else if (p.startsWith("/app/planning/")) page = <PlanningDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p.startsWith("/app/planning/"))
+    page = (
+      <PlanningDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />
+    );
   else if (p === "/app/budgets") page = <BudgetsPage />;
   else if (p === "/app/cost-centres") page = <CostCentresPage />;
-  else if (p === "/app/procurement-categories") page = <ProcurementCategoriesPage />;
+  else if (p === "/app/procurement-categories")
+    page = <ProcurementCategoriesPage />;
   else if (p === "/app/requisitions") page = <RequisitionListPage />;
   else if (p === "/app/requisitions/new") page = <NewRequisitionPage />;
-  else if (p.startsWith("/app/requisitions/")) page = <RequisitionDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p.startsWith("/app/requisitions/"))
+    page = (
+      <RequisitionDetailPage
+        id={decodeURIComponent(p.split("/").pop() || "")}
+      />
+    );
   else if (p === "/app/tenders") page = <TendersPage />;
   else if (p === "/app/tenders/new") page = <NewTenderPage />;
-  else if (p.startsWith("/app/tenders/")) page = <TenderDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p === "/app/tenders/clarifications")
+    page = <NotConfiguredPage title="Clarifications" />;
+  else if (p.startsWith("/app/tenders/"))
+    page = (
+      <TenderDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />
+    );
+  else if (p === "/app/bids")
+    page = <NotConfiguredPage title="Bid Submissions" />;
+  else if (p === "/app/bid-opening")
+    page = <NotConfiguredPage title="Bid Opening" />;
   else if (p === "/app/evaluation")
     page = <NotConfiguredPage title="Evaluation" />;
   else if (p === "/app/awards") page = <NotConfiguredPage title="Awards" />;
@@ -119,6 +153,12 @@ function route(p: string) {
     page = <NotConfiguredPage title="Purchase Orders" />;
   else if (p === "/app/contracts")
     page = <NotConfiguredPage title="Contracts" />;
+  else if (p === "/app/security") page = <NotConfiguredPage title="Security" />;
+  else if (p === "/app/users") page = <NotConfiguredPage title="Users" />;
+  else if (p === "/app/roles")
+    page = <NotConfiguredPage title="Roles and Permissions" />;
+  else if (p === "/app/integrations")
+    page = <NotConfiguredPage title="Integrations" />;
   return <AppShell>{page}</AppShell>;
 }
 export function App() {

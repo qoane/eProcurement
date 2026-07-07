@@ -5,6 +5,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { AdminCard } from "../../components/ui/AdminCard";
 import { CardToolLink, CardTools } from "../../components/ui/CardTools";
 import { InfoBox } from "../../components/ui/InfoBox";
+import { navigate } from "../../app/routes";
 import { getSuppliers } from "../../services/suppliersApi";
 import { getTasks } from "../../services/tasksApi";
 import { getAuditEvents } from "../../services/auditApi";
@@ -240,6 +241,44 @@ export function DashboardPage() {
           variant="info"
         />
       </div>
+
+      <AdminCard
+        title="Module launcher"
+        subtitle="Open seeded procurement workspaces and configured platform studios."
+        className="dashboard-section"
+      >
+        <div className="module-launcher">
+          {[
+            [
+              "Annual Planning",
+              "/app/planning",
+              "Plan annual procurement needs",
+            ],
+            ["Budgets", "/app/budgets", "Track funding availability"],
+            ["Requisitions", "/app/requisitions", "Manage internal requests"],
+            ["Tenders", "/app/tenders", "Publish sourcing events"],
+            ["Evaluation", "/app/evaluation", "Coordinate bid scoring"],
+            ["Awards", "/app/awards", "Prepare award decisions"],
+            [
+              "Purchase Orders",
+              "/app/purchase-orders",
+              "Manage order commitments",
+            ],
+            ["Contracts", "/app/contracts", "Monitor contract delivery"],
+            ["Reporting", "/app/reporting", "Review procurement insights"],
+            [
+              "ProcuraFlow Studio",
+              "/app/studio/applications",
+              "Configure metadata-driven apps",
+            ],
+          ].map(([label, href, description]) => (
+            <button key={href} type="button" onClick={() => navigate(href)}>
+              {label}
+              <small>{description}</small>
+            </button>
+          ))}
+        </div>
+      </AdminCard>
 
       <div className="dashboard-row dashboard-row-main dashboard-section">
         <AdminCard

@@ -24,7 +24,7 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
 }
 function visible(items: NavigationItem[]): NavigationItem[] {
   return items
-    .filter((x) => x.isVisible && !x.visibilityRule.trim())
+    .filter((x) => x.isVisible)
     .sort((a, b) => a.displayOrder - b.displayOrder)
     .map((x) => ({ ...x, children: visible(x.children || []) }));
 }

@@ -289,24 +289,102 @@ public static class SeedData
                 CreatedBy: "system"));
         await db.SaveChangesAsync(cancellationToken);
 
-        if (!await db.NavigationDefinitions.AnyAsync(x => x.Code == "MAIN", cancellationToken))
+        var mainNavigation = await db.NavigationDefinitions.Include(x => x.Items).SingleOrDefaultAsync(x => x.Code == "MAIN", cancellationToken);
+        if (mainNavigation is null)
         {
-            var nav = new NavigationDefinition("MAIN", "Main navigation", "Administrator-configured sidebar navigation for ProcuraFlow.", Status: MetadataStatus.Active, CreatedBy: "system");
-            var procurement = new NavigationItem(nav.Id, "procurement", "Procurement", "Group", null, "BriefcaseBusiness", 10, IsCollapsible: true);
-            procurement.Children.Add(new NavigationItem(nav.Id, "suppliers", "Suppliers", "Link", "/app/suppliers", "Users", 10, procurement.Id, PermissionsJson: @"[""SupplierManagement.View""]"));
-            procurement.Children.Add(new NavigationItem(nav.Id, "tenders", "Tenders", "Link", "/app/tenders", "ScrollText", 20, procurement.Id, PermissionsJson: @"[""Tender.View""]"));
-            var administration = new NavigationItem(nav.Id, "administration", "Administration", "Group", null, "Settings", 20, IsCollapsible: true);
-            administration.Children.Add(new NavigationItem(nav.Id, "workflows", "Workflows", "Link", "/app/workflows/designer", "Workflow", 10, administration.Id, PermissionsJson: @"[""Workflow.Admin""]"));
-            administration.Children.Add(new NavigationItem(nav.Id, "rules", "Rules", "Link", "/app/rules", "ShieldCheck", 20, administration.Id, PermissionsJson: @"[""Rules.Admin""]"));
-            var studio = new NavigationItem(nav.Id, "studio", "Studio", "Group", null, "Blocks", 30, IsCollapsible: true);
-            studio.Children.Add(new NavigationItem(nav.Id, "pages", "Pages", "Link", "/app/studio/pages", "PanelTop", 10, studio.Id, PermissionsJson: @"[""Studio.Pages""]"));
-            studio.Children.Add(new NavigationItem(nav.Id, "entities", "Entities", "Link", "/app/studio/entities", "Database", 20, studio.Id, PermissionsJson: @"[""Studio.Entities""]"));
-            studio.Children.Add(new NavigationItem(nav.Id, "dashboards", "Dashboards", "Link", "/app/dashboards", "LayoutDashboard", 30, studio.Id, PermissionsJson: @"[""Studio.Dashboards""]"));
-            nav.Items.AddRange([procurement, administration, studio]);
-            db.NavigationDefinitions.Add(nav);
+            mainNavigation = new NavigationDefinition("MAIN", "Main navigation", "Administrator-configured sidebar navigation for ProcuraFlow.", Status: MetadataStatus.Active, CreatedBy: "system");
+            db.NavigationDefinitions.Add(mainNavigation);
             await db.SaveChangesAsync(cancellationToken);
-            db.ChangeTracker.Clear();
         }
+
+        async Task<NavigationItem> UpsertNavigationItem(string code, string label, string itemType, string? url, string icon, int displayOrder, Guid? parentId = null, bool isCollapsible = false, bool isExpandedByDefault = true, string permissionsJson = @"[]")
+        {
+            var item = await db.NavigationItems.SingleOrDefaultAsync(x => x.NavigationDefinitionId == mainNavigation.Id && x.Code == code, cancellationToken);
+            if (item is null)
+            {
+                item = new NavigationItem(mainNavigation.Id, code, label, itemType, url, icon, displayOrder, parentId, isCollapsible, isExpandedByDefault, permissionsJson, IsVisible: true);
+                db.NavigationItems.Add(item);
+                await db.SaveChangesAsync(cancellationToken);
+                return item;
+            }
+
+            db.Entry(item).CurrentValues[nameof(NavigationItem.Label)] = label;
+            db.Entry(item).CurrentValues[nameof(NavigationItem.ItemType)] = itemType;
+            db.Entry(item).CurrentValues[nameof(NavigationItem.Url)] = url;
+            db.Entry(item).CurrentValues[nameof(NavigationItem.Icon)] = icon;
+            db.Entry(item).CurrentValues[nameof(NavigationItem.DisplayOrder)] = displayOrder;
+            db.Entry(item).CurrentValues[nameof(NavigationItem.ParentId)] = parentId;
+            db.Entry(item).CurrentValues[nameof(NavigationItem.IsCollapsible)] = isCollapsible;
+            db.Entry(item).CurrentValues[nameof(NavigationItem.IsExpandedByDefault)] = isExpandedByDefault;
+            db.Entry(item).CurrentValues[nameof(NavigationItem.PermissionsJson)] = permissionsJson;
+            db.Entry(item).CurrentValues[nameof(NavigationItem.VisibilityRule)] = string.Empty;
+            db.Entry(item).CurrentValues[nameof(NavigationItem.IsVisible)] = true;
+            await db.SaveChangesAsync(cancellationToken);
+            return item;
+        }
+
+        async Task AddNavigationLink(Guid parentId, string code, string label, string url, string icon, int displayOrder, string permissionsJson = @"[]") =>
+            await UpsertNavigationItem(code, label, "Link", url, icon, displayOrder, parentId, permissionsJson: permissionsJson);
+
+        var overview = await UpsertNavigationItem("overview", "Overview", "Group", null, "LayoutDashboard", 10, isCollapsible: true);
+        await AddNavigationLink(overview.Id, "dashboard", "Dashboard", "/app/dashboard", "Gauge", 10);
+
+        var procurement = await UpsertNavigationItem("procurement", "Procurement", "Group", null, "BriefcaseBusiness", 20, isCollapsible: true);
+        await AddNavigationLink(procurement.Id, "suppliers", "Suppliers", "/app/suppliers", "Users", 10, @"[""SupplierManagement.View""]");
+        await AddNavigationLink(procurement.Id, "supplier-registration", "Supplier Registration", "/app/suppliers/register", "UserPlus", 20);
+        await AddNavigationLink(procurement.Id, "supplier-verification", "Supplier Verification", "/app/suppliers/verification", "UserCheck", 30);
+        await AddNavigationLink(procurement.Id, "annual-planning", "Annual Planning", "/app/planning", "ClipboardList", 40);
+        await AddNavigationLink(procurement.Id, "budgets", "Budgets", "/app/budgets", "WalletCards", 50);
+        await AddNavigationLink(procurement.Id, "cost-centres", "Cost Centres", "/app/cost-centres", "Building2", 60);
+        await AddNavigationLink(procurement.Id, "procurement-categories", "Procurement Categories", "/app/procurement-categories", "Tags", 70);
+        await AddNavigationLink(procurement.Id, "requisitions", "Requisitions", "/app/requisitions", "ClipboardCheck", 80);
+        await AddNavigationLink(procurement.Id, "tenders", "Tenders", "/app/tenders", "ScrollText", 90, @"[""Tender.View""]");
+        await AddNavigationLink(procurement.Id, "workflow-tasks", "Workflow Tasks", "/app/tasks", "ListTodo", 100);
+        await AddNavigationLink(procurement.Id, "audit-explorer", "Audit Explorer", "/app/audit", "SearchCheck", 110);
+
+        var sourcing = await UpsertNavigationItem("sourcing", "Sourcing", "Group", null, "Landmark", 30, isCollapsible: true);
+        await AddNavigationLink(sourcing.Id, "tender-management", "Tender Management", "/app/tenders", "ScrollText", 10);
+        await AddNavigationLink(sourcing.Id, "clarifications", "Clarifications", "/app/tenders/clarifications", "MessagesSquare", 20);
+        await AddNavigationLink(sourcing.Id, "bid-submissions", "Bid Submissions", "/app/bids", "FileUp", 30);
+        await AddNavigationLink(sourcing.Id, "bid-opening", "Bid Opening", "/app/bid-opening", "MailOpen", 40);
+        await AddNavigationLink(sourcing.Id, "evaluation", "Evaluation", "/app/evaluation", "Scale", 50);
+        await AddNavigationLink(sourcing.Id, "awards", "Awards", "/app/awards", "Award", 60);
+
+        var manage = await UpsertNavigationItem("manage", "Manage", "Group", null, "FolderKanban", 40, isCollapsible: true);
+        await AddNavigationLink(manage.Id, "purchase-orders", "Purchase Orders", "/app/purchase-orders", "ShoppingCart", 10);
+        await AddNavigationLink(manage.Id, "contracts", "Contracts", "/app/contracts", "FileSignature", 20);
+
+        var insights = await UpsertNavigationItem("insights", "Insights", "Group", null, "ChartNoAxesCombined", 50, isCollapsible: true);
+        await AddNavigationLink(insights.Id, "reporting", "Reporting", "/app/reporting", "BarChart3", 10);
+        await AddNavigationLink(insights.Id, "dashboards", "Dashboards", "/app/dashboards", "LayoutDashboard", 20);
+
+        var studio = await UpsertNavigationItem("procuraflow-studio", "ProcuraFlow Studio", "Group", null, "Blocks", 60, isCollapsible: true);
+        await AddNavigationLink(studio.Id, "studio-applications", "Applications", "/app/studio/applications", "AppWindow", 10);
+        await AddNavigationLink(studio.Id, "pages", "Pages", "/app/studio/pages", "PanelTop", 20, @"[""Studio.Pages""]");
+        await AddNavigationLink(studio.Id, "entities", "Entities", "/app/studio/entities", "Database", 30, @"[""Studio.Entities""]");
+        await AddNavigationLink(studio.Id, "studio-components", "Components", "/app/studio/components", "Component", 40);
+        await AddNavigationLink(studio.Id, "studio-navigation", "Navigation", "/app/studio/navigation", "Navigation", 50);
+        await AddNavigationLink(studio.Id, "workflows", "Workflows", "/app/workflows/designer", "Workflow", 60, @"[""Workflow.Admin""]");
+        await AddNavigationLink(studio.Id, "rules", "Business Rules", "/app/rules", "ShieldCheck", 70, @"[""Rules.Admin""]");
+        await AddNavigationLink(studio.Id, "forms", "Dynamic Forms", "/app/forms", "FormInput", 80);
+        await AddNavigationLink(studio.Id, "configuration", "Configuration", "/app/configuration", "Settings2", 90);
+
+        var system = await UpsertNavigationItem("system", "System", "Group", null, "Settings", 70, isCollapsible: true);
+        await AddNavigationLink(system.Id, "security", "Security", "/app/security", "LockKeyhole", 10);
+        await AddNavigationLink(system.Id, "users", "Users", "/app/users", "UserCog", 20);
+        await AddNavigationLink(system.Id, "roles-permissions", "Roles and Permissions", "/app/roles", "Shield", 30);
+        await AddNavigationLink(system.Id, "integrations", "Integrations", "/app/integrations", "Cable", 40);
+        await AddNavigationLink(system.Id, "settings", "Settings", "/app/settings", "SlidersHorizontal", 50);
+
+        foreach (var obsoleteCode in new[] { "administration", "studio" })
+        {
+            var obsolete = await db.NavigationItems.SingleOrDefaultAsync(x => x.NavigationDefinitionId == mainNavigation.Id && x.Code == obsoleteCode, cancellationToken);
+            if (obsolete is not null)
+            {
+                db.Entry(obsolete).CurrentValues[nameof(NavigationItem.IsVisible)] = false;
+            }
+        }
+        await db.SaveChangesAsync(cancellationToken);
 
         var supplierTransitions = await db.WorkflowTransitions.AsNoTracking().Where(x => x.WorkflowVersionId == supplierVersionId).ToListAsync(cancellationToken);
         var configuredEffects = new Dictionary<string, string>
