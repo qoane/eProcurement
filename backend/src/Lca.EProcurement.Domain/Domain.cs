@@ -70,7 +70,7 @@ public record SupplierDocument(Guid SupplierId, string DocumentType, string File
 public record SupplierCategory(string Name) : Entity(Guid.NewGuid());
 public record SupplierPerformanceRating(Guid SupplierId, int Score, string Notes, DateTimeOffset RatedAt) : Entity(Guid.NewGuid());
 
-public record Tender(string TenderNumber, string Title, string Description, TenderType TenderType, string ProcurementMethod, TenderStatus Status, DateTimeOffset? PublicationDate, DateTimeOffset ClosingDate, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? PublishedAt = null, string? PublishedBy = null) : Entity(Guid.NewGuid())
+public record Tender(string TenderNumber, string Title, string Description, TenderType TenderType, string ProcurementMethod, TenderStatus Status, DateTimeOffset? PublicationDate, DateTimeOffset ClosingDate, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? PublishedAt = null, string? PublishedBy = null, string Category = "General") : Entity(Guid.NewGuid())
 {
     public List<TenderLot> Lots { get; init; } = [];
     public List<TenderDocument> Documents { get; init; } = [];
@@ -79,7 +79,14 @@ public record Tender(string TenderNumber, string Title, string Description, Tend
     public List<TenderStatusHistory> StatusHistory { get; init; } = [];
 }
 public record TenderLot(Guid TenderId, string LotNumber, string Title, string Description) : Entity(Guid.NewGuid());
-public record TenderDocument(Guid TenderId, string DocumentType, string FileName, string Description, bool IsRequired, DateTimeOffset CreatedAt, string CreatedBy) : Entity(Guid.NewGuid());
+public record TenderDocument(Guid TenderId, string DocumentType, string FileName, string Description, bool IsRequired, DateTimeOffset CreatedAt, string CreatedBy, bool IsPublic = false, string? PublicUrl = null, bool IsDownloadable = true) : Entity(Guid.NewGuid());
+public record PublicTenderPublication(Guid TenderId, string TenderNumber, string Reference, string Title, string Description, TenderType TenderType, string ProcurementMethod, string Category, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, TenderStatus Status, bool IsVisible, string Slug, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt) : Entity(Guid.NewGuid())
+{
+    public List<PublicTenderDocument> Documents { get; init; } = [];
+    public List<PublicTenderClarification> Clarifications { get; init; } = [];
+}
+public record PublicTenderDocument(Guid PublicTenderPublicationId, string DocumentType, string FileName, string PublicUrl, bool IsDownloadable, DateTimeOffset PublishedAt) : Entity(Guid.NewGuid());
+public record PublicTenderClarification(Guid PublicTenderPublicationId, Guid TenderClarificationId, string Question, string Response, DateTimeOffset PublishedAt) : Entity(Guid.NewGuid());
 public record TenderSupplierInvitation(Guid TenderId, Guid? SupplierId, string SupplierName, string SupplierEmail, DateTimeOffset InvitedAt, string InvitedBy, DateTimeOffset? NotifiedAt = null) : Entity(Guid.NewGuid());
 public record TenderClarification(Guid TenderId, string Question, string AskedBy, DateTimeOffset AskedAt, bool IsPublic = true) : Entity(Guid.NewGuid())
 {
