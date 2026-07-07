@@ -78,6 +78,22 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        if (exception is InvalidOperationException invalidOperation)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await Results.Problem(title: "Action cannot be completed", detail: invalidOperation.Message, statusCode: StatusCodes.Status400BadRequest).ExecuteAsync(context);
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await Results.Problem(title: "An unexpected error occurred", detail: app.Environment.IsDevelopment() ? exception?.Message : null, statusCode: StatusCodes.Status500InternalServerError).ExecuteAsync(context);
+    });
+});
 app.UseCors(FrontendCors);
 app.UseAuthentication();
 app.UseAuthorization();
