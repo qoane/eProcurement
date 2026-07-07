@@ -15,6 +15,9 @@ public enum TenderStatus { Draft, Published, Clarification, Cancelled, Closed }
 public enum BidSubmissionStatus { Draft, Submitted, Locked, Withdrawn, Opened, Evaluated, Awarded, Rejected }
 public enum BidOpeningSessionStatus { Draft, Scheduled, InProgress, Completed, ReferredToEvaluation, Cancelled }
 public enum BidOpeningSubmissionStatus { Pending, Opened, Late, Disqualified, ReferredToEvaluation }
+public enum EvaluationSessionStatus { Draft, Scheduled, InProgress, Consensus, Completed, Cancelled, ReferredToAward }
+public enum EvaluationStage { Administrative, Technical, Financial, Consensus }
+public enum EvaluationSubmissionStatus { Pending, Responsive, NonResponsive, Evaluated, Recommended, Rejected }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }
@@ -110,6 +113,31 @@ public record BidOpeningSubmission(Guid BidOpeningSessionId, Guid BidSubmissionI
 public record BidOpeningMinute(Guid BidOpeningSessionId, string MinuteText, string RecordedBy, DateTimeOffset RecordedAt) : Entity(Guid.NewGuid());
 public record BidOpeningChecklistItem(Guid BidOpeningSessionId, string Description, bool Completed = false, string? CompletedBy = null, DateTimeOffset? CompletedAt = null) : Entity(Guid.NewGuid());
 public record BidOpeningReport(Guid BidOpeningSessionId, string ReportNumber, DateTimeOffset GeneratedAt, string GeneratedBy, string SummaryJson) : Entity(Guid.NewGuid());
+
+
+public record EvaluationSession(string SessionNumber, Guid TenderId, Guid BidOpeningSessionId, string Title, EvaluationSessionStatus Status, EvaluationStage CurrentStage, string CreatedBy, DateTimeOffset CreatedAt, string Chairperson, string? Notes = null, DateTimeOffset? StartedAt = null, DateTimeOffset? CompletedAt = null) : Entity(Guid.NewGuid())
+{
+    public List<EvaluationCommitteeMember> CommitteeMembers { get; init; } = [];
+    public List<EvaluationSubmission> Submissions { get; init; } = [];
+    public List<EvaluationDeclaration> Declarations { get; init; } = [];
+    public List<EvaluationScore> Scores { get; init; } = [];
+    public List<EvaluationConsensusScore> ConsensusScores { get; init; } = [];
+    public List<EvaluationRecommendation> Recommendations { get; init; } = [];
+    public List<EvaluationReport> Reports { get; init; } = [];
+    public List<EvaluationHistory> History { get; init; } = [];
+}
+public record EvaluationCommitteeMember(Guid EvaluationSessionId, string Name, string Email, string Role, bool IsChairperson = false, bool HasAcceptedDeclaration = false, DateTimeOffset? DeclarationAcceptedAt = null) : Entity(Guid.NewGuid());
+public record EvaluationTemplate(string Code, string Name, string Description, TenderType TenderType, decimal TotalWeight, MetadataStatus Status, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? PublishedAt = null, string? PublishedBy = null) : Entity(Guid.NewGuid())
+{ public List<EvaluationTemplateCriterion> Criteria { get; init; } = []; }
+public record EvaluationCriterion(string Code, string Name, string Description, EvaluationStage Stage, decimal Weight, decimal MaximumScore, decimal MinimumPassingScore, int DisplayOrder) : Entity(Guid.NewGuid());
+public record EvaluationTemplateCriterion(Guid EvaluationTemplateId, Guid EvaluationCriterionId, int DisplayOrder, bool IsMandatory = true) : Entity(Guid.NewGuid());
+public record EvaluationSubmission(Guid EvaluationSessionId, Guid BidSubmissionId, Guid SupplierId, string SupplierName, string SubmissionNumber, EvaluationSubmissionStatus Status, bool AdministrativePassed = false, decimal TechnicalScore = 0, decimal FinancialScore = 0, decimal TotalScore = 0, int Rank = 0, string? Notes = null) : Entity(Guid.NewGuid());
+public record EvaluationScore(Guid EvaluationSessionId, Guid EvaluationSubmissionId, Guid EvaluationCriterionId, string EvaluatorEmail, EvaluationStage Stage, decimal Score, string Comments, DateTimeOffset ScoredAt) : Entity(Guid.NewGuid());
+public record EvaluationConsensusScore(Guid EvaluationSessionId, Guid EvaluationSubmissionId, Guid EvaluationCriterionId, EvaluationStage Stage, decimal ConsensusScore, string ConsensusComments, string RecordedBy, DateTimeOffset RecordedAt) : Entity(Guid.NewGuid());
+public record EvaluationDeclaration(Guid EvaluationSessionId, string EvaluatorEmail, string DeclarationType, bool Accepted, DateTimeOffset AcceptedAt, string? Notes = null) : Entity(Guid.NewGuid());
+public record EvaluationRecommendation(Guid EvaluationSessionId, Guid RecommendedBidSubmissionId, Guid SupplierId, string SupplierName, string RecommendationText, decimal RecommendedAmount, string RecommendedBy, DateTimeOffset RecommendedAt, string Status) : Entity(Guid.NewGuid());
+public record EvaluationReport(Guid EvaluationSessionId, string ReportNumber, DateTimeOffset GeneratedAt, string GeneratedBy, string SummaryJson) : Entity(Guid.NewGuid());
+public record EvaluationHistory(Guid EvaluationSessionId, string EventType, string Actor, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
 
 public record WorkflowDefinition(string Code, string Name, string EntityType, bool IsActive = true, Guid? PublishedVersionId = null) : Entity(Guid.NewGuid())
 {
