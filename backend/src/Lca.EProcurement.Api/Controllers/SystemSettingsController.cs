@@ -6,7 +6,7 @@ namespace Lca.EProcurement.Api.Controllers;
 
 [ApiController]
 [Route("api/settings")]
-public sealed class SystemSettingsController(ISystemSettingsApplicationService settings, ISmsSender smsSender) : ControllerBase
+public sealed class SystemSettingsController(ISystemSettingsApplicationService settings, IEmailSender emailSender, ISmsSender smsSender) : ControllerBase
 {
     [Authorize(Policy = "Settings.View")]
     [HttpGet]
@@ -22,7 +22,7 @@ public sealed class SystemSettingsController(ISystemSettingsApplicationService s
     public async Task<IActionResult> Delete(string key, CancellationToken ct) { await settings.DeleteSettingOverrideAsync(Uri.UnescapeDataString(key), ct); return Ok(new { success = true }); }
     [Authorize(Policy = "Settings.Manage")]
     [HttpPost("test-email")]
-    public Task<IActionResult> TestEmail(Dictionary<string,string> dto, CancellationToken ct) => OkAsync(settings.TestEmailSettingsAsync(dto.GetValueOrDefault("to") ?? "admin@example.test", ct));
+    public Task<IActionResult> TestEmail(Dictionary<string,string> dto, CancellationToken ct) => OkAsync(emailSender.SendEmailAsync(dto.GetValueOrDefault("to") ?? "", "LCA eProcurement email settings test", "<p>This is a test email from LCA eProcurement settings.</p>", ct));
     [Authorize(Policy = "Settings.Manage")]
     [HttpPost("test-sms")]
     public Task<IActionResult> TestSms(Dictionary<string,string> dto, CancellationToken ct) => OkAsync(smsSender.SendSmsAsync(dto.GetValueOrDefault("destinationAddress") ?? dto.GetValueOrDefault("phoneNumber") ?? "+26600000000", dto.GetValueOrDefault("message") ?? "LCA eProcurement SMS test", ct));

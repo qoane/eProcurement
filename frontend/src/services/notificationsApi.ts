@@ -19,6 +19,6 @@ export const savePreferences = (p: NotificationPreference[]) => apiPut("/api/not
 export const getSettings = () => apiGet<Setting[]>("/api/settings", []);
 export const saveSetting = (s: Setting) => apiPut(`/api/settings/${encodeURIComponent(s.key)}`, s, s);
 export const deleteSetting = (key: string) => apiDelete(`/api/settings/${encodeURIComponent(key)}`);
-export const testEmailSettings = (to: string) => apiPost("/api/settings/test-email", { to }, { success: false, response: "" });
 export type SendResult = { success: boolean; response: string; error?: string | null; rawJson?: unknown | null };
+export const testEmailSettings = (to: string) => apiPost<SendResult>("/api/settings/test-email", { to }, { success: false, response: "", rawJson: null });
 export const testSmsSettings = (destinationAddress: string) => apiPost<SendResult>("/api/settings/test-sms", { destinationAddress }, { success: false, response: "", rawJson: null });
