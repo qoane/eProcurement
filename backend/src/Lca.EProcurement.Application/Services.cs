@@ -217,7 +217,7 @@ public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : I
     public RuleDesignerMetadataDto GetDesignerMetadata(string appliesTo = nameof(Supplier)) => new(["Registration", "Compliance", "Risk", "Documents", "Eligibility"], Fields.ToList(), Functions.ToList(), ["&&", "||", "!", "==", "!="]);
     async Task<List<RuleResult>> EvaluateRules(List<BusinessRuleDefinition> rules, string entityType, Guid entityId, string actor, Dictionary<string, string?>? values, CancellationToken ct)
     {
-        object entity = entityType == nameof(Supplier) ? await db.Suppliers.Include(s => s.Documents).Include(s => s.Categories).SingleAsync(s => s.Id == entityId, ct) : entityType == nameof(Requisition) ? await db.Requisitions.Include(r => r.Items).SingleAsync(r => r.Id == entityId, ct) : throw new NotSupportedException($"Rules for entity type '{entityType}' are not configured.");
+        object entity = entityType == nameof(Supplier) ? await db.Suppliers.Include(s => s.Documents).Include(s => s.Categories).SingleAsync(s => s.Id == entityId, ct) : entityType == nameof(Requisition) ? await db.Requisitions.Include(r => r.Items).SingleAsync(r => r.Id == entityId, ct) : entityType == nameof(BidSubmission) ? await db.BidSubmissions.Include(b => b.Documents).Include(b => b.Declarations).Include(b => b.Items).SingleAsync(b => b.Id == entityId, ct) : throw new NotSupportedException($"Rules for entity type '{entityType}' are not configured.");
         var results = new List<RuleResult>();
         foreach (var rule in rules)
         {
@@ -229,7 +229,7 @@ public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : I
         }
         await db.SaveChangesAsync(ct); return results;
     }
-    static string EntityReference(object e) => e is Supplier s ? s.ReferenceNumber : e is Requisition r ? r.RequisitionNumber : e.ToString() ?? string.Empty;
+    static string EntityReference(object e) => e is Supplier s ? s.ReferenceNumber : e is Requisition r ? r.RequisitionNumber : e is BidSubmission b ? b.SubmissionNumber : e.ToString() ?? string.Empty;
 }
 
 public sealed record RuleEvaluationContext(object Entity, Dictionary<string, string?> Values);
@@ -263,6 +263,12 @@ public static class SimpleExpressionEvaluator
         if (e.StartsWith("Supplier.Documents.Any(", StringComparison.Ordinal)) return Supplier(c).Documents.Any(d => string.Equals(d.DocumentType, Quoted(e.Split("==",2)[1].TrimEnd(')')), StringComparison.OrdinalIgnoreCase));
         if (e == "Requisition.Items.Any()") return Requisition(c).Items.Any();
         if (e == "Requisition.ItemsHaveEstimates()") return Requisition(c).Items.All(i => i.Quantity > 0 && i.EstimatedUnitPrice > 0 && i.EstimatedTotal > 0);
+        if (e == "BidSubmission.TenderIsPublished()") return string.Equals(c.Values.GetValueOrDefault("TenderStatus"), "Published", StringComparison.OrdinalIgnoreCase);
+        if (e == "BidSubmission.TenderHasNotClosed()") return DateTimeOffset.TryParse(c.Values.GetValueOrDefault("TenderClosingDate"), out var closing) && closing > DateTimeOffset.UtcNow;
+        if (e == "BidSubmission.SupplierIsApproved()") return string.Equals(c.Values.GetValueOrDefault("SupplierStatus"), "Approved", StringComparison.OrdinalIgnoreCase);
+        if (e == "BidSubmission.RequiredDocumentsUploaded()") return string.Equals(c.Values.GetValueOrDefault("RequiredDocumentsUploaded"), "true", StringComparison.OrdinalIgnoreCase);
+        if (e == "BidSubmission.MandatoryDeclarationAccepted()") return BidSubmission(c).Declarations.Any(d => d.Accepted);
+        if (e == "BidSubmission.SubmissionBeforeClosingDate()") return DateTimeOffset.TryParse(c.Values.GetValueOrDefault("TenderClosingDate"), out var bidClosing) && DateTimeOffset.UtcNow < bidClosing;
         if (e == "Supplier.Categories.Any()") return Supplier(c).Categories.Any();
         if (e.Contains(" != ")) { var parts = e.Split(" != ", 2, StringSplitOptions.TrimEntries); return !string.Equals(Value(parts[0], c), Quoted(parts[1]), StringComparison.OrdinalIgnoreCase); }
         if (e.Contains(" == ")) { var parts = e.Split(" == ", 2, StringSplitOptions.TrimEntries); return string.Equals(Value(parts[0], c), Quoted(parts[1]), StringComparison.OrdinalIgnoreCase); }
@@ -270,6 +276,7 @@ public static class SimpleExpressionEvaluator
     }
     static Supplier Supplier(RuleEvaluationContext c) => c.Entity as Supplier ?? throw new InvalidOperationException("Supplier rules require a Supplier context.");
     static Requisition Requisition(RuleEvaluationContext c) => c.Entity as Requisition ?? throw new InvalidOperationException("Requisition rules require a Requisition context.");
+    static BidSubmission BidSubmission(RuleEvaluationContext c) => c.Entity as BidSubmission ?? throw new InvalidOperationException("Bid submission rules require a BidSubmission context.");
     static string? Value(string token, RuleEvaluationContext c)
     {
         token = token.Trim(); var s = Supplier(c);
@@ -865,6 +872,71 @@ public sealed class RequisitionApplicationService(EProcurementDbContext db, IWor
     }
     public async Task<Requisition?> RejectAsync(Guid id, string actor, string reason, CancellationToken ct = default) { var req = await db.Requisitions.SingleOrDefaultAsync(x => x.Id == id, ct); if (req is null) return null; Change(req, RequisitionStatus.Rejected, actor, reason); db.Entry(req).CurrentValues[nameof(Requisition.RejectedAt)] = DateTimeOffset.UtcNow; await db.SaveChangesAsync(ct); return req with { Status = RequisitionStatus.Rejected, RejectedAt = DateTimeOffset.UtcNow }; }
     void Change(Requisition req, RequisitionStatus status, string actor, string notes) { var from = req.Status; db.Entry(req).CurrentValues[nameof(Requisition.Status)] = status; db.RequisitionStatusHistories.Add(new RequisitionStatusHistory(req.Id, from, status, actor, notes, DateTimeOffset.UtcNow)); db.AuditEvents.Add(new AuditEvent($"Requisition {status}", nameof(Requisition), req.Id, req.RequisitionNumber, actor, notes, DateTimeOffset.UtcNow)); }
+}
+
+public interface IBidSubmissionApplicationService
+{
+    Task<List<BidSubmission>> GetAsync(CancellationToken ct = default);
+    Task<BidSubmission?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<BidSubmission> CreateAsync(CreateBidSubmissionDto dto, CancellationToken ct = default);
+    Task<BidSubmission?> UpdateAsync(Guid id, UpdateBidSubmissionDto dto, CancellationToken ct = default);
+    Task<BidSubmission?> SubmitAsync(Guid id, string actor, CancellationToken ct = default);
+    Task<BidSubmission?> WithdrawAsync(Guid id, string actor, CancellationToken ct = default);
+    Task<List<BidSubmissionDocument>> GetDocumentsAsync(Guid id, CancellationToken ct = default);
+    Task<BidSubmissionDocument?> AddDocumentAsync(Guid id, UploadBidDocumentDto dto, CancellationToken ct = default);
+    Task<List<BidSubmissionHistory>> GetHistoryAsync(Guid id, CancellationToken ct = default);
+}
+public sealed record CreateBidSubmissionDto(string SubmissionNumber, Guid TenderId, Guid SupplierId, string SubmittedBy, List<CreateBidSubmissionItemDto>? Items = null, List<CreateBidSubmissionDeclarationDto>? Declarations = null);
+public sealed record UpdateBidSubmissionDto(List<CreateBidSubmissionItemDto> Items, List<CreateBidSubmissionDeclarationDto> Declarations);
+public sealed record CreateBidSubmissionItemDto(Guid? TenderLotId, string Description, decimal Quantity, decimal UnitPrice, string? Notes = null);
+public sealed record CreateBidSubmissionDeclarationDto(string DeclarationType, bool Accepted, string AcceptedBy);
+public sealed record UploadBidDocumentDto(string DocumentType, string Filename, string StorageReference, string UploadedBy);
+
+public sealed class BidSubmissionApplicationService(EProcurementDbContext db, IWorkflowApplicationService workflows, IBusinessRuleApplicationService rules) : IBidSubmissionApplicationService
+{
+    const string WorkflowCode = "BID-SUBMISSION-WORKFLOW";
+    public Task<List<BidSubmission>> GetAsync(CancellationToken ct = default) => Include(db.BidSubmissions.AsNoTracking()).OrderByDescending(x => x.SubmissionDate ?? DateTimeOffset.MinValue).ToListAsync(ct);
+    public Task<BidSubmission?> GetAsync(Guid id, CancellationToken ct = default) => Include(db.BidSubmissions.AsNoTracking()).SingleOrDefaultAsync(x => x.Id == id, ct);
+    public async Task<BidSubmission> CreateAsync(CreateBidSubmissionDto dto, CancellationToken ct = default)
+    {
+        var bid = new BidSubmission(dto.SubmissionNumber, dto.TenderId, dto.SupplierId, BidSubmissionStatus.Draft, DateTimeOffset.UtcNow, dto.SubmittedBy);
+        ApplyItems(bid, dto.Items ?? []);
+        foreach (var d in dto.Declarations ?? []) bid.Declarations.Add(new BidSubmissionDeclaration(bid.Id, d.DeclarationType, d.Accepted, d.AcceptedBy, DateTimeOffset.UtcNow));
+        bid.Versions.Add(new BidSubmissionVersion(bid.Id, 1, DateTimeOffset.UtcNow, dto.SubmittedBy));
+        AddHistory(bid, "Submission created", dto.SubmittedBy, "Draft bid submission created.");
+        db.BidSubmissions.Add(bid); db.AuditEvents.Add(new AuditEvent("Submission created", nameof(BidSubmission), bid.Id, bid.SubmissionNumber, dto.SubmittedBy, "Draft bid submission created", DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync(ct); return bid;
+    }
+    public async Task<BidSubmission?> UpdateAsync(Guid id, UpdateBidSubmissionDto dto, CancellationToken ct = default)
+    {
+        var bid = await Include(db.BidSubmissions).SingleOrDefaultAsync(x => x.Id == id, ct); if (bid is null) return null;
+        EnsureEditable(bid);
+        db.BidSubmissionItems.RemoveRange(bid.Items); db.BidSubmissionDeclarations.RemoveRange(bid.Declarations); await db.SaveChangesAsync(ct);
+        ApplyItems(bid, dto.Items); foreach (var d in dto.Declarations) bid.Declarations.Add(new BidSubmissionDeclaration(bid.Id, d.DeclarationType, d.Accepted, d.AcceptedBy, DateTimeOffset.UtcNow));
+        AddHistory(bid, "Submission updated", bid.SubmittedBy, "Draft bid submission updated."); db.AuditEvents.Add(new AuditEvent("Submission updated", nameof(BidSubmission), bid.Id, bid.SubmissionNumber, bid.SubmittedBy, "Bid submission updated", DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync(ct); return bid;
+    }
+    public async Task<BidSubmission?> SubmitAsync(Guid id, string actor, CancellationToken ct = default)
+    {
+        var bid = await Include(db.BidSubmissions).SingleOrDefaultAsync(x => x.Id == id, ct); if (bid is null) return null; EnsureEditable(bid);
+        await ValidateRequiredDocuments(bid, ct);
+        foreach (var result in await rules.EvaluatePublishedAsync(nameof(BidSubmission), nameof(BidSubmission), id, actor, await RuleValues(bid, ct), ct)) if (!result.Passed) throw new InvalidOperationException(result.Message);
+        var instance = await db.WorkflowInstances.Where(x => x.EntityType == nameof(BidSubmission) && x.EntityId == id && x.Status == WorkflowInstanceStatus.Running).OrderByDescending(x => x.StartedAt).FirstOrDefaultAsync(ct) ?? await workflows.StartAsync(WorkflowCode, nameof(BidSubmission), id, actor, ct);
+        foreach (var action in new[] { "MarkReady", "Submit", "Lock" }) { instance = await db.WorkflowInstances.SingleAsync(x => x.Id == instance.Id, ct); if (await db.WorkflowTransitions.AnyAsync(t => t.WorkflowVersionId == instance.WorkflowVersionId && t.FromNodeCode == instance.CurrentNodeCode && t.ActionCode == action, ct)) await workflows.ExecuteActionAsync(instance.Id, action, actor, ct); }
+        Change(bid, BidSubmissionStatus.Locked, actor, "Submission validated, submitted and locked."); db.Entry(bid).CurrentValues[nameof(BidSubmission.SubmittedAt)] = DateTimeOffset.UtcNow; db.Entry(bid).CurrentValues[nameof(BidSubmission.LockedAt)] = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct); return bid with { Status = BidSubmissionStatus.Locked, SubmittedAt = DateTimeOffset.UtcNow, LockedAt = DateTimeOffset.UtcNow };
+    }
+    public async Task<BidSubmission?> WithdrawAsync(Guid id, string actor, CancellationToken ct = default) { var bid = await db.BidSubmissions.SingleOrDefaultAsync(x => x.Id == id, ct); if (bid is null) return null; Change(bid, BidSubmissionStatus.Withdrawn, actor, "Submission withdrawn by supplier."); db.Entry(bid).CurrentValues[nameof(BidSubmission.WithdrawnAt)] = DateTimeOffset.UtcNow; await db.SaveChangesAsync(ct); return bid with { Status = BidSubmissionStatus.Withdrawn, WithdrawnAt = DateTimeOffset.UtcNow }; }
+    public Task<List<BidSubmissionDocument>> GetDocumentsAsync(Guid id, CancellationToken ct = default) => db.BidSubmissionDocuments.AsNoTracking().Where(x => x.BidSubmissionId == id).OrderBy(x => x.DocumentType).ToListAsync(ct);
+    public async Task<BidSubmissionDocument?> AddDocumentAsync(Guid id, UploadBidDocumentDto dto, CancellationToken ct = default) { var bid = await db.BidSubmissions.SingleOrDefaultAsync(x => x.Id == id, ct); if (bid is null) return null; EnsureEditable(bid); var version = await db.BidSubmissionDocuments.CountAsync(x => x.BidSubmissionId == id && x.DocumentType == dto.DocumentType, ct) + 1; var doc = new BidSubmissionDocument(id, dto.DocumentType, dto.Filename, dto.StorageReference, dto.UploadedBy, DateTimeOffset.UtcNow, version); db.BidSubmissionDocuments.Add(doc); AddHistory(bid, "Document uploaded", dto.UploadedBy, dto.DocumentType); db.AuditEvents.Add(new AuditEvent("Document uploaded", nameof(BidSubmission), id, bid.SubmissionNumber, dto.UploadedBy, dto.DocumentType, DateTimeOffset.UtcNow)); await db.SaveChangesAsync(ct); return doc; }
+    public Task<List<BidSubmissionHistory>> GetHistoryAsync(Guid id, CancellationToken ct = default) => db.BidSubmissionHistories.AsNoTracking().Where(x => x.BidSubmissionId == id).OrderByDescending(x => x.OccurredAt).ToListAsync(ct);
+    static IQueryable<BidSubmission> Include(IQueryable<BidSubmission> q) => q.Include(x => x.Items).Include(x => x.Documents).Include(x => x.History).Include(x => x.Declarations).Include(x => x.Versions).Include(x => x.StatusHistory);
+    static void EnsureEditable(BidSubmission bid) { if (bid.Status is BidSubmissionStatus.Locked or BidSubmissionStatus.Submitted or BidSubmissionStatus.Opened or BidSubmissionStatus.Evaluated or BidSubmissionStatus.Awarded or BidSubmissionStatus.Rejected) throw new InvalidOperationException("Locked bid submissions cannot be edited."); }
+    static void ApplyItems(BidSubmission bid, IEnumerable<CreateBidSubmissionItemDto> items) { foreach (var i in items) bid.Items.Add(new BidSubmissionItem(bid.Id, i.TenderLotId, i.Description, i.Quantity, i.UnitPrice, i.Quantity * i.UnitPrice, i.Notes)); }
+    void AddHistory(BidSubmission bid, string type, string actor, string details) => db.BidSubmissionHistories.Add(new BidSubmissionHistory(bid.Id, type, actor, details, DateTimeOffset.UtcNow));
+    void Change(BidSubmission bid, BidSubmissionStatus status, string actor, string notes) { var from = bid.Status; db.Entry(bid).CurrentValues[nameof(BidSubmission.Status)] = status; db.BidSubmissionStatusHistories.Add(new BidSubmissionStatusHistory(bid.Id, from, status, actor, DateTimeOffset.UtcNow, notes)); AddHistory(bid, $"Submission {status}", actor, notes); db.AuditEvents.Add(new AuditEvent($"Submission {status}", nameof(BidSubmission), bid.Id, bid.SubmissionNumber, actor, notes, DateTimeOffset.UtcNow)); }
+    async Task ValidateRequiredDocuments(BidSubmission bid, CancellationToken ct) { var set = await db.BusinessProcessDefinitions.AsNoTracking().Where(p => p.Code == "BID-SUBMISSION").Join(db.DocumentRequirementSets.Include(x => x.Requirements), p => p.ActiveDocumentRequirementSetId, s => s.Id, (p, s) => s).SingleAsync(ct); var missing = set.Requirements.Where(r => r.Required && bid.Documents.Count(d => d.DocumentType == r.DocumentType) < r.MinimumFiles).Select(r => r.DocumentType).ToList(); if (missing.Any()) throw new InvalidOperationException("Missing required bid documents: " + string.Join(", ", missing)); }
+    async Task<Dictionary<string, string?>> RuleValues(BidSubmission bid, CancellationToken ct) { var tender = await db.Tenders.AsNoTracking().SingleAsync(x => x.Id == bid.TenderId, ct); var supplier = await db.Suppliers.AsNoTracking().SingleAsync(x => x.Id == bid.SupplierId, ct); var set = await db.BusinessProcessDefinitions.AsNoTracking().Where(p => p.Code == "BID-SUBMISSION").Join(db.DocumentRequirementSets.Include(x => x.Requirements), p => p.ActiveDocumentRequirementSetId, s => s.Id, (p, s) => s).SingleAsync(ct); return new() { ["TenderStatus"] = tender.Status.ToString(), ["TenderClosingDate"] = tender.ClosingDate.ToString("O"), ["SupplierStatus"] = supplier.Status.ToString(), ["RequiredDocumentsUploaded"] = set.Requirements.Where(r => r.Required).All(r => bid.Documents.Count(d => d.DocumentType == r.DocumentType) >= r.MinimumFiles).ToString().ToLowerInvariant() }; }
 }
 
 public interface ITenderApplicationService

@@ -456,5 +456,56 @@ public static class SeedData
             db.AuditEvents.Add(new AuditEvent("Seeded demo supplier", nameof(Supplier), supplier.Id, supplier.ReferenceNumber, "system", "Demo supplier inserted by idempotent seed", DateTimeOffset.UtcNow));
         }
         await db.SaveChangesAsync(cancellationToken);
+
+        foreach (var rule in new[] {
+            new BusinessRuleDefinition("BID-TENDER-PUBLISHED", "Tender is published", nameof(BidSubmission), "BidSubmission.TenderIsPublished()", true, "Bid Submission", BusinessRuleStatus.Published, "Tender must be published.", DateTimeOffset.UtcNow, "system"),
+            new BusinessRuleDefinition("BID-TENDER-NOT-CLOSED", "Tender has not closed", nameof(BidSubmission), "BidSubmission.TenderHasNotClosed()", true, "Bid Submission", BusinessRuleStatus.Published, "Tender must still be open.", DateTimeOffset.UtcNow, "system"),
+            new BusinessRuleDefinition("BID-SUPPLIER-APPROVED", "Supplier is approved", nameof(BidSubmission), "BidSubmission.SupplierIsApproved()", true, "Bid Submission", BusinessRuleStatus.Published, "Supplier must be approved.", DateTimeOffset.UtcNow, "system"),
+            new BusinessRuleDefinition("BID-DOCUMENTS-UPLOADED", "All required documents uploaded", nameof(BidSubmission), "BidSubmission.RequiredDocumentsUploaded()", true, "Bid Submission", BusinessRuleStatus.Published, "All required documents must be uploaded.", DateTimeOffset.UtcNow, "system"),
+            new BusinessRuleDefinition("BID-DECLARATION-ACCEPTED", "Mandatory declaration accepted", nameof(BidSubmission), "BidSubmission.MandatoryDeclarationAccepted()", true, "Bid Submission", BusinessRuleStatus.Published, "Mandatory declaration must be accepted.", DateTimeOffset.UtcNow, "system"),
+            new BusinessRuleDefinition("BID-BEFORE-CLOSING", "Submission before closing date", nameof(BidSubmission), "BidSubmission.SubmissionBeforeClosingDate()", true, "Bid Submission", BusinessRuleStatus.Published, "Submission must be before closing date.", DateTimeOffset.UtcNow, "system")
+        }) if (!await db.BusinessRuleDefinitions.AnyAsync(x => x.Code == rule.Code, cancellationToken)) db.BusinessRuleDefinitions.Add(rule);
+        if (!await db.WorkflowDefinitions.AnyAsync(x => x.Code == "BID-SUBMISSION-WORKFLOW", cancellationToken))
+        {
+            var wf = new WorkflowDefinition("BID-SUBMISSION-WORKFLOW", "Bid Submission Workflow", nameof(BidSubmission));
+            var v = new WorkflowVersion(wf.Id, 1, WorkflowVersionStatus.Published, DateTimeOffset.UtcNow, "system");
+            v.Nodes.AddRange([new(v.Id,"Draft","Draft",WorkflowNodeKind.Start,IsStart:true), new(v.Id,"ReadyForSubmission","Ready for Submission",WorkflowNodeKind.Task,CreatesTask:true,DefaultAssignedRole:"Supplier"), new(v.Id,"Submitted","Submitted",WorkflowNodeKind.Automatic), new(v.Id,"Locked","Locked",WorkflowNodeKind.Task,CreatesTask:true,DefaultAssignedRole:"ProcurementOfficer"), new(v.Id,"Opened","Opened",WorkflowNodeKind.Task,CreatesTask:true,DefaultAssignedRole:"EvaluationCommittee"), new(v.Id,"Evaluated","Evaluated",WorkflowNodeKind.Task,CreatesTask:true,DefaultAssignedRole:"EvaluationCommittee"), new(v.Id,"Awarded","Awarded",WorkflowNodeKind.End,IsTerminal:true)]);
+            v.Transitions.AddRange([new(v.Id,"Draft","MarkReady","Mark ready","ReadyForSubmission"), new(v.Id,"ReadyForSubmission","Submit","Submit bid","Submitted","BID-BEFORE-CLOSING"), new(v.Id,"Submitted","Lock","Lock submission","Locked"), new(v.Id,"Locked","Open","Open bid","Opened"), new(v.Id,"Opened","Evaluate","Evaluate bid","Evaluated"), new(v.Id,"Evaluated","Award","Award bid","Awarded")]);
+            wf = wf with { PublishedVersionId = v.Id }; wf.Versions.Add(v); db.WorkflowDefinitions.Add(wf); await db.SaveChangesAsync(cancellationToken);
+        }
+        if (!await db.FormDefinitions.AnyAsync(x => x.Code == "BID-SUBMISSION-FORM", cancellationToken))
+        {
+            var form = new FormDefinition("BID-SUBMISSION-FORM", "Bid Submission Form", nameof(BidSubmission)); var v = new FormVersion(form.Id, 1, WorkflowVersionStatus.Published, DateTimeOffset.UtcNow, "system");
+            var sections = new[] { "Supplier Information", "Pricing", "Technical Proposal", "Commercial Proposal", "Declarations", "Attachments" };
+            for (var i = 0; i < sections.Length; i++) v.Sections.Add(new FormSection(v.Id, sections[i].Replace(" ", ""), sections[i], i + 1));
+            form = form with { ActiveVersionId = v.Id }; form.Versions.Add(v); db.FormDefinitions.Add(form); await db.SaveChangesAsync(cancellationToken);
+        }
+        if (!await db.DocumentRequirementSets.AnyAsync(x => x.Name == "Bid Submission Documents", cancellationToken)) { var set = new DocumentRequirementSet("Bid Submission Documents", "Required bid package documents with future vault, encryption and digital-signature metadata.", nameof(BidSubmission)); foreach (var d in new[] { "Technical Proposal", "Financial Proposal", "Company Registration", "Tax Clearance", "Bid Security", "Confidentiality Declaration" }) set.Requirements.Add(new DocumentRequirement(set.Id,d,true,1,5,".pdf,.doc,.docx,.xlsx",25_000_000)); db.DocumentRequirementSets.Add(set); await db.SaveChangesAsync(cancellationToken); }
+        if (!await db.ApprovalMatrices.AnyAsync(x => x.Name == "Bid Submission Approval", cancellationToken)) { var m = new ApprovalMatrix("Bid Submission Approval", "Configurable bid submission review roles.", nameof(BidSubmission)); m.Steps.AddRange([new ApprovalStep(m.Id,"Supplier",1), new ApprovalStep(m.Id,"ProcurementOfficer",2), new ApprovalStep(m.Id,"EvaluationCommittee",3)]); db.ApprovalMatrices.Add(m); await db.SaveChangesAsync(cancellationToken); }
+        var bidWorkflowId = await db.WorkflowDefinitions.Where(x => x.Code == "BID-SUBMISSION-WORKFLOW").Select(x => x.Id).SingleAsync(cancellationToken); var bidFormId = await db.FormDefinitions.Where(x => x.Code == "BID-SUBMISSION-FORM").Select(x => x.Id).SingleAsync(cancellationToken); var bidDocId = await db.DocumentRequirementSets.Where(x => x.Name == "Bid Submission Documents").Select(x => x.Id).SingleAsync(cancellationToken); var bidMatrixId = await db.ApprovalMatrices.Where(x => x.Name == "Bid Submission Approval").Select(x => x.Id).SingleAsync(cancellationToken);
+        if (!await db.BusinessProcessDefinitions.AnyAsync(x => x.Code == "BID-SUBMISSION", cancellationToken)) db.BusinessProcessDefinitions.Add(new BusinessProcessDefinition("BID-SUBMISSION", "Bid Submission", "Configurable supplier bid submission process.", nameof(BidSubmission), bidWorkflowId, bidFormId, bidDocId, bidMatrixId, BusinessProcessStatus.Published));
+        foreach (var page in new[] { ("BID-SUBMISSION-LIST","Bid Submission List","/app/bids",PageType.DataGrid), ("BID-SUBMISSION-NEW","New Bid Submission","/app/bids/new",PageType.Form), ("BID-SUBMISSION-DETAIL","Bid Submission Detail","/app/bids/{id}",PageType.DetailPage), ("BID-DOCUMENTS","Bid Documents","/app/bids/{id}/documents",PageType.DetailPage), ("BID-TIMELINE","Bid Timeline","/app/bids/{id}/timeline",PageType.Timeline), ("BID-HISTORY","Bid History","/app/bids/{id}/history",PageType.Timeline) }) if (!await db.PageDefinitions.AnyAsync(x => x.Code == page.Item1, cancellationToken)) db.PageDefinitions.Add(new PageDefinition(page.Item1, page.Item2, "Bid submission page rendered by the UI Composition Engine.", null, page.Item4, page.Item3, "FileText", @"{""mode"":""Api"",""endpoint"":""/api/bids""}", Status: MetadataStatus.Active, CreatedBy: "system"));
+        if (!await db.NavigationItems.AnyAsync(x => x.Code == "bids", cancellationToken)) { var main = await db.NavigationDefinitions.FirstAsync(cancellationToken); db.NavigationItems.Add(new NavigationItem(main.Id, "bids", "Bid Submissions", "Link", "/app/bids", "FileText", 95)); }
+        await db.SaveChangesAsync(cancellationToken);
+        if (!await db.Suppliers.AnyAsync(x => x.ReferenceNumber == "SUP-BID-2026-0001", cancellationToken)) db.Suppliers.Add(new Supplier("SUP-BID-2026-0001", "Maseru Digital Bidders", SupplierStatus.Approved));
+        if (!await db.Tenders.AnyAsync(x => x.TenderNumber == "RFP-LCA-2026-BID-001", cancellationToken))
+        {
+            var tender = new Tender("RFP-LCA-2026-BID-001", "Electronic bid submission pilot", "Published tender for bid submission demo.", TenderType.RFP, "Open Tender", TenderStatus.Published, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30), "procurement@lca.org.ls", DateTimeOffset.UtcNow.AddDays(-2), DateTimeOffset.UtcNow.AddDays(-1), "procurement@lca.org.ls");
+            tender.Lots.Add(new TenderLot(tender.Id, "LOT-1", "Bid platform configuration", "Configure bid submission capability."));
+            db.Tenders.Add(tender);
+        }
+        await db.SaveChangesAsync(cancellationToken);
+        if (!await db.BidSubmissions.AnyAsync(x => x.SubmissionNumber == "BID-SUB-2026-0001", cancellationToken))
+        {
+            var supplier = await db.Suppliers.SingleAsync(x => x.ReferenceNumber == "SUP-BID-2026-0001", cancellationToken);
+            var tender = await db.Tenders.Include(x => x.Lots).SingleAsync(x => x.TenderNumber == "RFP-LCA-2026-BID-001", cancellationToken);
+            var bid = new BidSubmission("BID-SUB-2026-0001", tender.Id, supplier.Id, BidSubmissionStatus.Draft, DateTimeOffset.UtcNow, "supplier@demo.ls");
+            bid.Items.Add(new BidSubmissionItem(bid.Id, tender.Lots.FirstOrDefault()?.Id, "Configuration and support", 1, 250000, 250000, "Demo draft bid"));
+            bid.Declarations.Add(new BidSubmissionDeclaration(bid.Id, "Confidentiality Declaration", true, "supplier@demo.ls", DateTimeOffset.UtcNow));
+            bid.Versions.Add(new BidSubmissionVersion(bid.Id, 1, DateTimeOffset.UtcNow, "supplier@demo.ls"));
+            bid.History.Add(new BidSubmissionHistory(bid.Id, "Submission created", "system", "Seed draft bid submission.", DateTimeOffset.UtcNow));
+            db.BidSubmissions.Add(bid);
+        }
+        await db.SaveChangesAsync(cancellationToken);
     }
 }
