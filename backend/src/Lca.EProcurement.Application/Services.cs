@@ -1107,7 +1107,9 @@ public sealed record PublicTenderSummaryDto(string Reference, string Title, stri
     public string TenderNumber => Reference;
     public string PublicUrl => $"/opportunities/{Uri.EscapeDataString(Slug)}";
 }
-public sealed record PublicTenderDetailDto(PublicTenderPublication Tender, List<PublicTenderDocument> Documents, List<PublicTenderClarification> Clarifications);
+public sealed record PublicTenderDetailDto(string Reference, string Title, string Description, string TenderType, string ProcurementMethod, string Category, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, string Status, string Slug, string PublicUrl, string BidSubmissionUrl, List<PublicTenderDocumentDto> Documents, List<PublicTenderClarificationDto> Clarifications);
+public sealed record PublicTenderDocumentDto(string DocumentType, string FileName, string PublicUrl, bool IsDownloadable, DateTimeOffset PublishedAt);
+public sealed record PublicTenderClarificationDto(string Question, string Response, DateTimeOffset PublishedAt);
 public sealed record PublicTenderCategoryDto(string Category, int Count);
 public sealed record PublicTenderCalendarItemDto(string Reference, string Title, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, string Category, string Status);
 public sealed record TenderDetailDto(Tender Tender, List<TenderLot> Lots, List<TenderDocument> Documents, List<TenderSupplierInvitation> SupplierInvitations, List<TenderClarification> Clarifications, List<TenderStatusHistory> StatusHistory, List<AuditEvent> AuditTimeline);
@@ -1128,7 +1130,7 @@ public interface IPublicTenderApplicationService
     Task<List<PublicTenderSummaryDto>> GetLatestAsync(int count = 5, CancellationToken ct = default);
 }
 
-public sealed class TenderApplicationService(EProcurementDbContext db, INotificationSender notifications) : ITenderApplicationService
+public sealed class TenderApplicationService(EProcurementDbContext db, INotificationSender notifications, IWorkflowApplicationService workflows) : ITenderApplicationService
 {
     public Task<List<TenderSummaryDto>> GetTendersAsync(CancellationToken ct = default) => db.Tenders.AsNoTracking().OrderByDescending(x => x.CreatedAt).Select(x => new TenderSummaryDto(x.Id, x.TenderNumber, x.Title, x.TenderType.ToString(), x.ProcurementMethod, x.Status.ToString(), x.PublicationDate, x.ClosingDate)).ToListAsync(ct);
 
@@ -1156,7 +1158,7 @@ public sealed class TenderApplicationService(EProcurementDbContext db, INotifica
     public async Task<TenderDetailDto?> PublishTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default)
     {
         var detail = await ChangeStatus(id, TenderStatus.Published, dto.Actor, "Tender published", publish: true, ct);
-        if (detail is not null) await notifications.SendAsync("TenderPublished", nameof(Tender), id, new { EntityReference = detail.Tender.TenderNumber, TenderNumber = detail.Tender.TenderNumber, TenderTitle = detail.Tender.Title, Status = detail.Tender.Status.ToString(), ClosingDate = detail.Tender.ClosingDate, RelatedUrl = $"/public/tenders/{detail.Tender.TenderNumber}" }, [new NotificationRecipientDto(dto.Actor, dto.Actor)], ct);
+        if (detail is not null) await NotifyTenderPublishedAsync(detail.Tender, dto.Actor, ct);
         return detail;
     }
     public Task<TenderDetailDto?> CancelTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default) => ChangeStatus(id, TenderStatus.Cancelled, dto.Actor, "Tender cancelled", publish: false, ct);
@@ -1206,11 +1208,62 @@ public sealed class TenderApplicationService(EProcurementDbContext db, INotifica
             db.Entry(tender).CurrentValues[nameof(Tender.PublishedAt)] = now;
             db.Entry(tender).CurrentValues[nameof(Tender.PublishedBy)] = actor;
             foreach (var invitation in tender.SupplierInvitations) db.Entry(invitation).CurrentValues[nameof(TenderSupplierInvitation.NotifiedAt)] = now;
+            await ExecuteTenderPublishWorkflowAsync(tender.Id, actor, ct);
             await UpsertPublicPublication(tender, now, ct);
         }
         db.AuditEvents.Add(new AuditEvent(note, nameof(Tender), tender.Id, tender.TenderNumber, actor, note, now));
         await db.SaveChangesAsync(ct);
         return await GetTenderAsync(id, ct);
+    }
+
+    async Task ExecuteTenderPublishWorkflowAsync(Guid tenderId, string actor, CancellationToken ct)
+    {
+        var instance = await db.WorkflowInstances.AsNoTracking()
+            .Where(x => x.EntityType == nameof(Tender) && x.EntityId == tenderId && x.Status == WorkflowInstanceStatus.Running)
+            .OrderByDescending(x => x.StartedAt)
+            .FirstOrDefaultAsync(ct);
+        if (instance is null) return;
+        var hasPublishTransition = await db.WorkflowVersions.AsNoTracking()
+            .Include(x => x.Transitions)
+            .AnyAsync(x => x.Id == instance.WorkflowVersionId && x.Transitions.Any(t => t.FromNodeCode == instance.CurrentNodeCode && (t.ActionCode == "Publish" || t.ActionCode == "PublishTender" || t.ActionCode == "Tender.Publish")), ct);
+        if (!hasPublishTransition) return;
+        var action = await db.WorkflowVersions.AsNoTracking()
+            .Where(x => x.Id == instance.WorkflowVersionId)
+            .SelectMany(x => x.Transitions)
+            .Where(t => t.FromNodeCode == instance.CurrentNodeCode && (t.ActionCode == "Publish" || t.ActionCode == "PublishTender" || t.ActionCode == "Tender.Publish"))
+            .Select(t => t.ActionCode)
+            .FirstAsync(ct);
+        await workflows.ExecuteActionAsync(instance.Id, action, actor, ct);
+    }
+
+    async Task NotifyTenderPublishedAsync(Tender tender, string actor, CancellationToken ct)
+    {
+        var recipients = new Dictionary<string, NotificationRecipientDto>(StringComparer.OrdinalIgnoreCase);
+        void Add(NotificationRecipientDto r) { if (!string.IsNullOrWhiteSpace(r.UserId)) recipients.TryAdd(r.UserId, r); }
+        foreach (var invitation in tender.SupplierInvitations)
+            Add(new NotificationRecipientDto(invitation.SupplierEmail, invitation.SupplierName, invitation.SupplierEmail, RecipientType: "Supplier"));
+
+        var supplierUsers = await db.ApplicationUsers.AsNoTracking()
+            .Include(x => x.SupplierLink)
+            .Where(x => x.IsActive && x.UserType == UserType.Supplier && x.SupplierId != null)
+            .ToListAsync(ct);
+        foreach (var user in supplierUsers)
+            Add(new NotificationRecipientDto(user.Email, user.FullName, user.Email, user.PhoneNumber, "Supplier"));
+
+        var supplierIds = supplierUsers.Select(x => x.SupplierId!.Value).Distinct().ToList();
+        var categorySupplierIds = await db.Suppliers.AsNoTracking()
+            .Include(x => x.Categories)
+            .Where(x => supplierIds.Contains(x.Id) && x.Categories.Any(c => c.Name == tender.Category))
+            .Select(x => x.Id)
+            .ToListAsync(ct);
+        foreach (var user in supplierUsers.Where(x => categorySupplierIds.Contains(x.SupplierId!.Value)))
+            Add(new NotificationRecipientDto(user.Email, user.FullName, user.Email, user.PhoneNumber, "Supplier", tender.Category));
+
+        Add(new NotificationRecipientDto(actor, actor));
+        var model = new { EntityReference = tender.TenderNumber, TenderNumber = tender.TenderNumber, TenderTitle = tender.Title, Status = tender.Status.ToString(), ClosingDate = tender.ClosingDate, RelatedUrl = $"/opportunities/{Slug(tender.TenderNumber + " " + tender.Title)}", BidSubmissionUrl = $"/app/bids/new?tender={tender.Id}" };
+        await notifications.SendAsync("TenderPublished", nameof(Tender), tender.Id, model, recipients.Values.ToList(), ct);
+        db.AuditEvents.Add(new AuditEvent("Tender publication notifications queued", nameof(Tender), tender.Id, tender.TenderNumber, actor, $"Queued {recipients.Count} tender publication recipients.", DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync(ct);
     }
 
     static void ValidatePublish(Tender tender, DateTimeOffset now)
@@ -1427,7 +1480,7 @@ public sealed class PublicTenderApplicationService(EProcurementDbContext db) : I
     public async Task<PublicTenderDetailDto?> GetTenderAsync(string reference, CancellationToken ct = default)
     {
         var tender = await Visible().Include(x => x.Documents).Include(x => x.Clarifications).SingleOrDefaultAsync(x => x.Reference == reference || x.Slug == reference, ct);
-        return tender is null ? null : new PublicTenderDetailDto(tender, tender.Documents.OrderBy(x => x.DocumentType).ToList(), tender.Clarifications.OrderByDescending(x => x.PublishedAt).ToList());
+        return tender is null ? null : new PublicTenderDetailDto(tender.Reference, tender.Title, tender.Description, tender.TenderType.ToString(), tender.ProcurementMethod, tender.Category, tender.PublishedAt, tender.ClosingDate, tender.Status.ToString(), tender.Slug, $"/opportunities/{Uri.EscapeDataString(tender.Slug)}", $"/app/bids/new?tender={Uri.EscapeDataString(tender.Reference)}", tender.Documents.OrderBy(x => x.DocumentType).Select(x => new PublicTenderDocumentDto(x.DocumentType, x.FileName, x.PublicUrl, x.IsDownloadable, x.PublishedAt)).ToList(), tender.Clarifications.OrderByDescending(x => x.PublishedAt).Select(x => new PublicTenderClarificationDto(x.Question, x.Response, x.PublishedAt)).ToList());
     }
     public Task<List<PublicTenderCategoryDto>> GetCategoriesAsync(CancellationToken ct = default) => Visible().GroupBy(x => x.Category).OrderBy(x => x.Key).Select(x => new PublicTenderCategoryDto(x.Key, x.Count())).ToListAsync(ct);
     public Task<List<PublicTenderCalendarItemDto>> GetCalendarAsync(CancellationToken ct = default) => Visible().OrderBy(x => x.ClosingDate).Select(x => new PublicTenderCalendarItemDto(x.Reference, x.Title, x.PublishedAt, x.ClosingDate, x.Category, x.Status.ToString())).ToListAsync(ct);

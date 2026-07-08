@@ -45,7 +45,7 @@ function isClosingSoon(value?: string | null) {
   return closing >= now && closing <= now + sevenDays;
 }
 function publicDocumentUrl(document: PublicTenderDocument) {
-  return document.downloadUrl || document.url;
+  return document.downloadUrl || document.publicUrl || document.url;
 }
 
 function PublicHeader() {
@@ -240,7 +240,9 @@ export function OpportunityDetailPage({ reference }: { reference: string }) {
   const clarifications =
     tender?.publicClarifications || tender?.clarifications || [];
   const submitBid = () => {
-    const target = `/app/bids/new?tenderReference=${encodeURIComponent(reference)}`;
+    const target =
+      tender?.bidSubmissionUrl ||
+      `/app/bids/new?tenderReference=${encodeURIComponent(reference)}`;
     const isSupplier =
       auth.currentUser &&
       (auth.currentUser.userType?.toLowerCase().includes("supplier") ||
@@ -331,7 +333,11 @@ export function OpportunityDetailPage({ reference }: { reference: string }) {
                 <dd>{categoryOf(tender)}</dd>
                 <dt>Published date</dt>
                 <dd>
-                  {formatDate(tender.publishedDate || tender.publicationDate)}
+                  {formatDate(
+                    tender.publishedAt ||
+                      tender.publishedDate ||
+                      tender.publicationDate,
+                  )}
                 </dd>
                 <dt>Closing date</dt>
                 <dd>{formatDate(tender.closingDate)}</dd>
