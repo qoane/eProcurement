@@ -1161,13 +1161,14 @@ public sealed class TenderApplicationService(EProcurementDbContext db, INotifica
 
     public async Task<TenderClarification?> CreateClarificationAsync(Guid tenderId, CreateTenderClarificationDto dto, CancellationToken ct = default)
     {
-        var tender = await db.Tenders.SingleOrDefaultAsync(x => x.Id == tenderId, ct); if (tender is null) return null;
+        var tender = await db.Tenders.AsNoTracking().SingleOrDefaultAsync(x => x.Id == tenderId, ct); if (tender is null) return null;
         var now = DateTimeOffset.UtcNow;
         var clarification = new TenderClarification(tenderId, dto.Question, dto.AskedBy, now, dto.IsPublic);
         db.TenderClarifications.Add(clarification);
-        if (tender.Status == TenderStatus.Published) AddStatus(tender, TenderStatus.Clarification, dto.AskedBy, now, "Clarification opened");
+        if (tender.Status == TenderStatus.Published) db.TenderStatusHistories.Add(new TenderStatusHistory(tender.Id, TenderStatus.Published, TenderStatus.Clarification, dto.AskedBy, now, "Clarification opened"));
         db.AuditEvents.Add(new AuditEvent("Tender clarification created", nameof(Tender), tender.Id, tender.TenderNumber, dto.AskedBy, dto.Question, now));
         await db.SaveChangesAsync(ct);
+        if (tender.Status == TenderStatus.Published) await db.Tenders.Where(x => x.Id == tender.Id && x.Status == TenderStatus.Published).ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, TenderStatus.Clarification), ct);
         return await db.TenderClarifications.AsNoTracking().Include(x => x.Responses).SingleAsync(x => x.Id == clarification.Id, ct);
     }
 
