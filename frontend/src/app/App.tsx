@@ -10,6 +10,10 @@ import { AuthLayout } from "../layout/AuthLayout";
 import { AppShell } from "../layout/AppShell";
 import { LandingPage } from "../modules/public/LandingPage";
 import { LoginPage } from "../modules/public/LoginPage";
+import {
+  OpportunitiesPage,
+  OpportunityDetailPage,
+} from "../modules/public/PublicOpportunitiesPage";
 import { DashboardPage } from "../modules/dashboard/DashboardPage";
 import { SupplierListPage } from "../modules/suppliers/SupplierListPage";
 import { SupplierDetailPage } from "../modules/suppliers/SupplierDetailPage";
@@ -47,16 +51,56 @@ import {
 } from "../modules/requisitions/RequisitionPages";
 import { StudioModulePage, StudioPage } from "../modules/studio/StudioPage";
 import { EmptyState } from "../components/ui/EmptyState";
-import { BidSubmissionDetailPage, BidSubmissionListPage, NewBidSubmissionPage } from "../modules/bids/BidSubmissionPages";
-import { BidOpeningDetailPage, BidOpeningListPage, NewBidOpeningPage } from "../modules/bid-opening/BidOpeningPages";
-import { EvaluationDetailPage, EvaluationListPage, EvaluationTemplateDetailPage, EvaluationTemplateListPage, NewEvaluationPage, NewEvaluationTemplatePage } from "../modules/evaluation/EvaluationPages";
-import { AwardDetailPage, AwardListPage, NewAwardPage } from "../modules/awards/AwardPages";
-import { NewPurchaseOrderPage, PurchaseOrderDetailPage, PurchaseOrderListPage } from "../modules/purchase-orders/PurchaseOrderPages";
-import { ContractDetailPage, ContractListPage, ContractMilestonesPage, ContractPerformancePage, NewContractPage } from "../modules/contracts/ContractPages";
+import {
+  BidSubmissionDetailPage,
+  BidSubmissionListPage,
+  NewBidSubmissionPage,
+} from "../modules/bids/BidSubmissionPages";
+import {
+  BidOpeningDetailPage,
+  BidOpeningListPage,
+  NewBidOpeningPage,
+} from "../modules/bid-opening/BidOpeningPages";
+import {
+  EvaluationDetailPage,
+  EvaluationListPage,
+  EvaluationTemplateDetailPage,
+  EvaluationTemplateListPage,
+  NewEvaluationPage,
+  NewEvaluationTemplatePage,
+} from "../modules/evaluation/EvaluationPages";
+import {
+  AwardDetailPage,
+  AwardListPage,
+  NewAwardPage,
+} from "../modules/awards/AwardPages";
+import {
+  NewPurchaseOrderPage,
+  PurchaseOrderDetailPage,
+  PurchaseOrderListPage,
+} from "../modules/purchase-orders/PurchaseOrderPages";
+import {
+  ContractDetailPage,
+  ContractListPage,
+  ContractMilestonesPage,
+  ContractPerformancePage,
+  NewContractPage,
+} from "../modules/contracts/ContractPages";
 import { PageHeader } from "../components/ui/PageHeader";
 import { AuthProvider } from "../auth/AuthContext";
-import { SecurityPage, RolesPage, UsersPage } from "../modules/security/SecurityPages";
-import { NotificationsPage, NotificationTemplatesPage, NotificationLogsPage, NotificationPreferencesPage, ProfilePage, SettingsPage } from "../modules/notifications/NotificationPages";
+import {
+  SecurityPage,
+  RolesPage,
+  UsersPage,
+} from "../modules/security/SecurityPages";
+import {
+  NotificationsPage,
+  NotificationTemplatesPage,
+  NotificationLogsPage,
+  NotificationPreferencesPage,
+  ProfilePage,
+  SettingsPage,
+} from "../modules/notifications/NotificationPages";
 function NotConfiguredPage({ title }: { title: string }) {
   return (
     <>
@@ -84,6 +128,26 @@ function route(p: string) {
       <AuthLayout>
         <LoginPage />
       </AuthLayout>
+    );
+  if (p === "/opportunities")
+    return (
+      <PublicLayout>
+        <OpportunitiesPage />
+      </PublicLayout>
+    );
+  if (p.startsWith("/opportunities/"))
+    return (
+      <PublicLayout>
+        <OpportunityDetailPage
+          reference={decodeURIComponent(p.split("/").pop() || "")}
+        />
+      </PublicLayout>
+    );
+  if (p === "/supplier/register")
+    return (
+      <PublicLayout>
+        <SupplierRegistrationPage />
+      </PublicLayout>
     );
   let page: React.ReactNode = <DashboardPage />;
   if (p === "/app" || p === "/app/dashboard") page = <DashboardPage />;
@@ -126,9 +190,11 @@ function route(p: string) {
     page = <NotConfiguredPage title="Dashboards" />;
   else if (p === "/app/settings") page = <SettingsPage />;
   else if (p === "/app/notifications") page = <NotificationsPage />;
-  else if (p === "/app/notification-templates") page = <NotificationTemplatesPage />;
+  else if (p === "/app/notification-templates")
+    page = <NotificationTemplatesPage />;
   else if (p === "/app/notification-logs") page = <NotificationLogsPage />;
-  else if (p === "/app/notification-preferences") page = <NotificationPreferencesPage />;
+  else if (p === "/app/notification-preferences")
+    page = <NotificationPreferencesPage />;
   else if (p === "/app/profile") page = <ProfilePage />;
   else if (p === "/app/planning") page = <PlanningPage />;
   else if (p === "/app/planning/new") page = <NewPlanningPage />;
@@ -159,28 +225,65 @@ function route(p: string) {
   else if (p === "/app/bids") page = <BidSubmissionListPage />;
   else if (p === "/app/bids/new") page = <NewBidSubmissionPage />;
   else if (p.startsWith("/app/bids/"))
-    page = <BidSubmissionDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+    page = (
+      <BidSubmissionDetailPage
+        id={decodeURIComponent(p.split("/").pop() || "")}
+      />
+    );
   else if (p === "/app/bid-opening") page = <BidOpeningListPage />;
   else if (p === "/app/bid-opening/new") page = <NewBidOpeningPage />;
   else if (p.startsWith("/app/bid-opening/"))
-    page = <BidOpeningDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+    page = (
+      <BidOpeningDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />
+    );
   else if (p === "/app/evaluation") page = <EvaluationListPage />;
   else if (p === "/app/evaluation/new") page = <NewEvaluationPage />;
-  else if (p === "/app/evaluation/templates") page = <EvaluationTemplateListPage />;
-  else if (p === "/app/evaluation/templates/new") page = <NewEvaluationTemplatePage />;
-  else if (p.startsWith("/app/evaluation/templates/")) page = <EvaluationTemplateDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
-  else if (p.startsWith("/app/evaluation/")) page = <EvaluationDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p === "/app/evaluation/templates")
+    page = <EvaluationTemplateListPage />;
+  else if (p === "/app/evaluation/templates/new")
+    page = <NewEvaluationTemplatePage />;
+  else if (p.startsWith("/app/evaluation/templates/"))
+    page = (
+      <EvaluationTemplateDetailPage
+        id={decodeURIComponent(p.split("/").pop() || "")}
+      />
+    );
+  else if (p.startsWith("/app/evaluation/"))
+    page = (
+      <EvaluationDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />
+    );
   else if (p === "/app/awards") page = <AwardListPage />;
   else if (p === "/app/awards/new") page = <NewAwardPage />;
-  else if (p.startsWith("/app/awards/")) page = <AwardDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p.startsWith("/app/awards/"))
+    page = (
+      <AwardDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />
+    );
   else if (p === "/app/purchase-orders") page = <PurchaseOrderListPage />;
   else if (p === "/app/purchase-orders/new") page = <NewPurchaseOrderPage />;
-  else if (p.startsWith("/app/purchase-orders/")) page = <PurchaseOrderDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p.startsWith("/app/purchase-orders/"))
+    page = (
+      <PurchaseOrderDetailPage
+        id={decodeURIComponent(p.split("/").pop() || "")}
+      />
+    );
   else if (p === "/app/contracts") page = <ContractListPage />;
   else if (p === "/app/contracts/new") page = <NewContractPage />;
-  else if (p.endsWith("/milestones") && p.startsWith("/app/contracts/")) page = <ContractMilestonesPage id={decodeURIComponent(p.split("/")[p.split("/").length - 2] || "")} />;
-  else if (p.endsWith("/performance") && p.startsWith("/app/contracts/")) page = <ContractPerformancePage id={decodeURIComponent(p.split("/")[p.split("/").length - 2] || "")} />;
-  else if (p.startsWith("/app/contracts/")) page = <ContractDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p.endsWith("/milestones") && p.startsWith("/app/contracts/"))
+    page = (
+      <ContractMilestonesPage
+        id={decodeURIComponent(p.split("/")[p.split("/").length - 2] || "")}
+      />
+    );
+  else if (p.endsWith("/performance") && p.startsWith("/app/contracts/"))
+    page = (
+      <ContractPerformancePage
+        id={decodeURIComponent(p.split("/")[p.split("/").length - 2] || "")}
+      />
+    );
+  else if (p.startsWith("/app/contracts/"))
+    page = (
+      <ContractDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />
+    );
   else if (p === "/app/security") page = <SecurityPage />;
   else if (p === "/app/users") page = <UsersPage />;
   else if (p === "/app/roles") page = <RolesPage />;
