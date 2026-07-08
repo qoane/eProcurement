@@ -1102,7 +1102,11 @@ public interface ITenderApplicationService
 }
 
 public sealed record TenderSummaryDto(Guid Id, string TenderNumber, string Title, string TenderType, string ProcurementMethod, string Status, DateTimeOffset? PublicationDate, DateTimeOffset ClosingDate);
-public sealed record PublicTenderSummaryDto(string Reference, string Title, string TenderType, string ProcurementMethod, string Category, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, string Status, string Slug);
+public sealed record PublicTenderSummaryDto(string Reference, string Title, string TenderType, string ProcurementMethod, string Category, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, string Status, string Slug)
+{
+    public string TenderNumber => Reference;
+    public string PublicUrl => $"/opportunities/{Uri.EscapeDataString(Slug)}";
+}
 public sealed record PublicTenderDetailDto(PublicTenderPublication Tender, List<PublicTenderDocument> Documents, List<PublicTenderClarification> Clarifications);
 public sealed record PublicTenderCategoryDto(string Category, int Count);
 public sealed record PublicTenderCalendarItemDto(string Reference, string Title, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, string Category, string Status);
@@ -1427,6 +1431,6 @@ public sealed class PublicTenderApplicationService(EProcurementDbContext db) : I
     }
     public Task<List<PublicTenderCategoryDto>> GetCategoriesAsync(CancellationToken ct = default) => Visible().GroupBy(x => x.Category).OrderBy(x => x.Key).Select(x => new PublicTenderCategoryDto(x.Key, x.Count())).ToListAsync(ct);
     public Task<List<PublicTenderCalendarItemDto>> GetCalendarAsync(CancellationToken ct = default) => Visible().OrderBy(x => x.ClosingDate).Select(x => new PublicTenderCalendarItemDto(x.Reference, x.Title, x.PublishedAt, x.ClosingDate, x.Category, x.Status.ToString())).ToListAsync(ct);
-    public Task<List<PublicTenderSummaryDto>> GetLatestAsync(int count = 5, CancellationToken ct = default) => Visible().OrderByDescending(x => x.PublishedAt).Take(count).Select(x => new PublicTenderSummaryDto(x.Reference, x.Title, x.TenderType.ToString(), x.ProcurementMethod, x.Category, x.PublishedAt, x.ClosingDate, x.Status.ToString(), x.Slug)).ToListAsync(ct);
+    public Task<List<PublicTenderSummaryDto>> GetLatestAsync(int count = 5, CancellationToken ct = default) => Visible().OrderByDescending(x => x.PublishedAt).Take(Math.Clamp(count, 1, 20)).Select(x => new PublicTenderSummaryDto(x.Reference, x.Title, x.TenderType.ToString(), x.ProcurementMethod, x.Category, x.PublishedAt, x.ClosingDate, x.Status.ToString(), x.Slug)).ToListAsync(ct);
     IQueryable<PublicTenderPublication> Visible() => db.PublicTenderPublications.AsNoTracking().Where(x => x.IsVisible && x.Status == TenderStatus.Published);
 }

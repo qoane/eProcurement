@@ -22,5 +22,5 @@ public sealed class PublicTendersController(IPublicTenderApplicationService publ
     public async Task<IActionResult> GetCalendar(CancellationToken ct) => Ok(await publicTenders.GetCalendarAsync(ct));
 
     [HttpGet("widgets/latest-tenders")]
-    public async Task<IActionResult> GetLatest(CancellationToken ct, [FromQuery] int count = 5) => Ok(await publicTenders.GetLatestAsync(count, ct));
+    public async Task<IActionResult> GetLatest(CancellationToken ct, [FromQuery] int take = 5) => Ok(await publicTenders.GetLatestAsync(take, ct));
 }
