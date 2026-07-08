@@ -25,8 +25,12 @@ export function LoginPage() {
         onSubmit={async (e) => {
           e.preventDefault();
           setError("");
-          if (await auth.login(email, password)) navigate("/app/dashboard");
-          else setError("Invalid email or password.");
+          if (await auth.login(email, password)) {
+            const returnUrl = new URLSearchParams(location.search).get(
+              "returnUrl",
+            );
+            navigate(returnUrl || "/app/dashboard");
+          } else setError("Invalid email or password.");
         }}
       >
         <div>
@@ -35,11 +39,21 @@ export function LoginPage() {
         </div>
         <label>
           Email
-          <Input type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} required />
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.currentTarget.value)}
+            required
+          />
         </label>
         <label>
           Password
-          <Input type="password" value={password} onChange={(e) => setPassword(e.currentTarget.value)} required />
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.currentTarget.value)}
+            required
+          />
         </label>
         <div className="login-options">
           <label className="check-row">
