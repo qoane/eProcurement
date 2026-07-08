@@ -10,6 +10,7 @@ import { AuthLayout } from "../layout/AuthLayout";
 import { AppShell } from "../layout/AppShell";
 import { LandingPage } from "../modules/public/LandingPage";
 import { LoginPage } from "../modules/public/LoginPage";
+import { LatestOpportunitiesWidgetPage } from "../modules/public/LatestOpportunitiesWidgetPage";
 import {
   OpportunitiesPage,
   OpportunityDetailPage,
@@ -129,6 +130,8 @@ function route(p: string) {
         <LoginPage />
       </AuthLayout>
     );
+  if (p === "/widgets/latest-opportunities")
+    return <LatestOpportunitiesWidgetPage />;
   if (p === "/opportunities")
     return (
       <PublicLayout>

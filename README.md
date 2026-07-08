@@ -54,3 +54,30 @@ pwsh scripts/task.ps1 ci
 
 Available tasks are `health`, `setup`, `ci`, `test`, `migrate`, `seed`, `reset-db`, `format`, `clean`, `dev-api`, and `dev-web`.
 No repository script uses Docker.
+
+## Embedding Latest Opportunities
+
+The public Latest Opportunities widget is available without authentication and is designed for embedding on the LCA website.
+
+### JavaScript placeholder snippet
+
+Use this markup on the host page when the production JavaScript loader is published:
+
+```html
+<div id="lca-opportunities-widget"></div>
+<script src="https://procurement.lca.org.ls/widgets/latest-opportunities.js"></script>
+```
+
+### Iframe-ready widget
+
+Until the JavaScript loader is published, embed the compact widget route directly with an iframe:
+
+```html
+<iframe
+  src="https://procurement.lca.org.ls/widgets/latest-opportunities"
+  title="Latest LCA procurement opportunities"
+  style="width: 100%; max-width: 540px; min-height: 420px; border: 0;"
+></iframe>
+```
+
+The widget reads from `GET /api/public/widgets/latest-tenders?take=5`, which returns the tender number, title, closing date, category, status, and public opportunity URL for the latest visible public tenders.
