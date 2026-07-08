@@ -16,6 +16,7 @@ export type PublicTenderDocument = {
   description?: string;
   documentType?: string;
   url?: string;
+  publicUrl?: string;
   downloadUrl?: string;
 };
 
@@ -42,6 +43,8 @@ export type PublicTenderSummary = {
   categoryName?: string;
   status?: string;
   publicUrl?: string;
+  bidSubmissionUrl?: string;
+  publishedAt?: string | null;
   publishedDate?: string | null;
   publicationDate?: string | null;
   closingDate?: string | null;
@@ -68,4 +71,7 @@ export const getPublicTenderCalendar = () =>
   apiGet<unknown[]>("/api/public/tender-calendar", []);
 
 export const getLatestPublicTenders = (take = 5) =>
-  apiGet<PublicTenderSummary[]>(`/api/public/widgets/latest-tenders?take=${encodeURIComponent(String(take))}`, []);
+  apiGet<PublicTenderSummary[]>(
+    `/api/public/widgets/latest-tenders?take=${encodeURIComponent(String(take))}`,
+    [],
+  );
