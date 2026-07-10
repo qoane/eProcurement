@@ -27,6 +27,7 @@ export type PublicTenderClarification = {
   response?: string;
   askedAt?: string;
   respondedAt?: string;
+  publishedAt?: string;
   isPublic?: boolean;
   responses?: { id?: string; response?: string; respondedAt?: string }[];
 };

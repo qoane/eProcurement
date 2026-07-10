@@ -8,6 +8,7 @@ public sealed class TendersController(ITenderApplicationService tenders) : Contr
 {
     [HttpGet] public async Task<IActionResult> Get(CancellationToken ct) => Ok(await tenders.GetTendersAsync(ct));
     [HttpGet("{id:guid}")] public async Task<IActionResult> Get(Guid id, CancellationToken ct) => (await tenders.GetTenderAsync(id, ct)) is { } t ? Ok(t) : NotFound();
+    [HttpGet("clarifications")] public async Task<IActionResult> ClarificationWorkspace(CancellationToken ct) => Ok(await tenders.GetClarificationWorkspaceAsync(ct));
     [RequirePermission("Tender.Create")]
     [HttpPost] public async Task<IActionResult> Create(CreateTenderDto dto, CancellationToken ct) => Ok(await tenders.CreateTenderAsync(dto, ct));
     [RequirePermission("Tender.Publish")]
