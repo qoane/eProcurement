@@ -120,10 +120,11 @@ public sealed class IdentityService(EProcurementDbContext db, IPasswordService p
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
 public sealed class RequirePermissionAttribute(string permission) : Attribute, IAsyncAuthorizationFilter
 {
+    public string Permission { get; } = permission;
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
         if (context.HttpContext.User.Identity?.IsAuthenticated != true) { context.Result = new UnauthorizedResult(); return; }
         var svc = context.HttpContext.RequestServices.GetRequiredService<IIdentityService>();
-        if (!await svc.HasPermissionAsync(context.HttpContext.User, permission, context.HttpContext.RequestAborted)) context.Result = new ForbidResult();
+        if (!await svc.HasPermissionAsync(context.HttpContext.User, Permission, context.HttpContext.RequestAborted)) context.Result = new ForbidResult();
     }
 }

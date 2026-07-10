@@ -22,6 +22,7 @@ builder.Services.AddDbContext<EProcurementDbContext>(options => options.UseConfi
 builder.Services.AddScoped<IWorkflowApplicationService, WorkflowApplicationService>();
 builder.Services.AddScoped<IBusinessRuleApplicationService, BusinessRuleApplicationService>();
 builder.Services.AddScoped<ISupplierApplicationService, SupplierApplicationService>();
+builder.Services.AddScoped<ISupplierPortalApplicationService, SupplierPortalApplicationService>();
 builder.Services.AddScoped<IDynamicFormApplicationService, DynamicFormApplicationService>();
 builder.Services.AddScoped<IAuditApplicationService, AuditApplicationService>();
 builder.Services.AddScoped<IPlatformConfigurationApplicationService, PlatformConfigurationApplicationService>();
@@ -83,6 +84,12 @@ app.UseExceptionHandler(errorApp =>
     errorApp.Run(async context =>
     {
         var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        if (exception is UnauthorizedAccessException unauthorizedAccess)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await Results.Problem(title: "Forbidden", detail: unauthorizedAccess.Message, statusCode: StatusCodes.Status403Forbidden).ExecuteAsync(context);
+            return;
+        }
         if (exception is InvalidOperationException invalidOperation)
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
