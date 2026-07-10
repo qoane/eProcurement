@@ -118,7 +118,20 @@ function NotConfiguredPage({ title }: { title: string }) {
   );
 }
 
+function legacyPublicRedirect(path: string) {
+  if (path === "/opportunities") return "/public/opportunities";
+  if (path.startsWith("/opportunities/")) return `/public${path}`;
+  if (path === "/supplier/register") return "/public/register";
+  return null;
+}
+
 function route(p: string) {
+  const redirectTo = legacyPublicRedirect(p);
+  if (redirectTo) {
+    history.replaceState(null, "", redirectTo);
+    queueMicrotask(() => dispatchEvent(new PopStateEvent("popstate")));
+    return null;
+  }
   if (p === "/")
     return (
       <PublicLayout>

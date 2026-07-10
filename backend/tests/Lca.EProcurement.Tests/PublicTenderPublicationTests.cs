@@ -39,7 +39,7 @@ public class PublicTenderPublicationTests
     {
         var tender = Tender(TenderStatus.Published);
         tender.Documents.Add(new TenderDocument(tender.Id, "TOR", "tor.pdf", "Terms of reference", true, DateTimeOffset.UtcNow, tender.CreatedBy, IsPublic: true, PublicUrl: "/public/docs/tor.pdf"));
-        var publicDocs = tender.Documents.Where(x => x.IsPublic && !string.IsNullOrWhiteSpace(x.PublicUrl)).Select(x => new PublicTenderDocumentDto(x.DocumentType, x.FileName, x.PublicUrl!, x.IsDownloadable, DateTimeOffset.UtcNow)).ToList();
+        var publicDocs = tender.Documents.Where(x => x.IsPublic && x.IsDownloadable && !string.IsNullOrWhiteSpace(x.PublicUrl)).Select(x => new PublicTenderDocumentDto(x.DocumentType, x.FileName, x.PublicUrl!, x.IsDownloadable, DateTimeOffset.UtcNow)).ToList();
         Assert.Single(publicDocs);
         Assert.Equal("/public/docs/tor.pdf", publicDocs[0].PublicUrl);
     }
@@ -49,7 +49,7 @@ public class PublicTenderPublicationTests
     {
         var tender = Tender(TenderStatus.Published);
         tender.Documents.Add(new TenderDocument(tender.Id, "EvaluationPlan", "internal.pdf", "Internal evaluation plan", true, DateTimeOffset.UtcNow, tender.CreatedBy, IsPublic: false, PublicUrl: "/private/internal.pdf"));
-        var publicDocs = tender.Documents.Where(x => x.IsPublic && !string.IsNullOrWhiteSpace(x.PublicUrl)).ToList();
+        var publicDocs = tender.Documents.Where(x => x.IsPublic && x.IsDownloadable && !string.IsNullOrWhiteSpace(x.PublicUrl)).ToList();
         Assert.Empty(publicDocs);
     }
 
@@ -62,6 +62,54 @@ public class PublicTenderPublicationTests
         var latest = new[] { hidden, published }.Where(x => x.IsVisible && x.Status == TenderStatus.Published).OrderByDescending(x => x.PublishedAt).ToList();
         Assert.Single(latest);
         Assert.Equal(published.Reference, latest[0].Reference);
+    }
+
+    [Fact]
+    public void Publishing_creates_or_updates_public_tender_publication()
+    {
+        var tender = Tender(TenderStatus.Published);
+        var publication = Publication(tender);
+        Assert.Equal(tender.Id, publication.TenderId);
+        Assert.Equal(tender.TenderNumber, publication.Reference);
+        Assert.Equal(tender.Title, publication.Title);
+        Assert.True(publication.IsVisible);
+    }
+
+    [Fact]
+    public void Non_downloadable_public_documents_are_not_visible()
+    {
+        var tender = Tender(TenderStatus.Published);
+        tender.Documents.Add(new TenderDocument(tender.Id, "TOR", "view-only.pdf", "View only", true, DateTimeOffset.UtcNow, tender.CreatedBy, IsPublic: true, PublicUrl: "/public/docs/view-only.pdf", IsDownloadable: false));
+        var publicDocs = tender.Documents.Where(x => x.IsPublic && x.IsDownloadable && !string.IsNullOrWhiteSpace(x.PublicUrl)).ToList();
+        Assert.Empty(publicDocs);
+    }
+
+    [Fact]
+    public void Public_clarifications_are_visible_only_after_response_is_published()
+    {
+        var tender = Tender(TenderStatus.Published);
+        var unanswered = new TenderClarification(tender.Id, "Unanswered public question?", "supplier@demo.ls", DateTimeOffset.UtcNow, IsPublic: true);
+        var privateAnswered = new TenderClarification(tender.Id, "Private answered question?", "supplier@demo.ls", DateTimeOffset.UtcNow, IsPublic: false);
+        privateAnswered.Responses.Add(new TenderClarificationResponse(privateAnswered.Id, "Private response", "procurement@lca.org.ls", DateTimeOffset.UtcNow));
+        var publicAnswered = new TenderClarification(tender.Id, "Public answered question?", "supplier@demo.ls", DateTimeOffset.UtcNow, IsPublic: true);
+        publicAnswered.Responses.Add(new TenderClarificationResponse(publicAnswered.Id, "Public response", "procurement@lca.org.ls", DateTimeOffset.UtcNow));
+        tender.Clarifications.AddRange([unanswered, privateAnswered, publicAnswered]);
+
+        var publicClarifications = tender.Clarifications
+            .Where(x => x.IsPublic)
+            .SelectMany(x => x.Responses.Select(r => new PublicTenderClarificationDto(x.Question, r.Response, DateTimeOffset.UtcNow)))
+            .ToList();
+
+        Assert.Single(publicClarifications);
+        Assert.Equal("Public answered question?", publicClarifications[0].Question);
+    }
+
+    [Fact]
+    public void Internal_tender_detail_publication_panel_uses_public_notice_url()
+    {
+        var tender = Tender(TenderStatus.Published);
+        var publicUrl = $"/public/opportunities/{tender.TenderNumber}";
+        Assert.Equal("/public/opportunities/RFP-LCA-2026-PUB", publicUrl);
     }
 
     [Fact]
@@ -103,5 +151,5 @@ public class PublicTenderPublicationTests
 
     static Tender Tender(TenderStatus status) => new("RFP-LCA-2026-PUB", "Public spectrum tender", "Public tender description", TenderType.RFP, "Open Tender", status, status == TenderStatus.Published ? DateTimeOffset.UtcNow : null, DateTimeOffset.UtcNow.AddDays(14), "procurement@lca.org.ls", DateTimeOffset.UtcNow.AddDays(-1), status == TenderStatus.Published ? DateTimeOffset.UtcNow : null, status == TenderStatus.Published ? "approver@lca.org.ls" : null, "ICT");
     static PublicTenderPublication Publication(Tender tender) => new(tender.Id, tender.TenderNumber, tender.TenderNumber, tender.Title, tender.Description, tender.TenderType, tender.ProcurementMethod, tender.Category, DateTimeOffset.UtcNow, tender.ClosingDate, tender.Status, tender.Status == TenderStatus.Published, "rfp-lca-2026-pub-public-spectrum-tender", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
-    static PublicTenderDetailDto Detail(PublicTenderPublication publication, List<PublicTenderDocumentDto> documents, List<PublicTenderClarificationDto> clarifications) => new(publication.Reference, publication.Title, publication.Description, publication.TenderType.ToString(), publication.ProcurementMethod, publication.Category, publication.PublishedAt, publication.ClosingDate, publication.Status.ToString(), publication.Slug, $"/opportunities/{publication.Slug}", $"/app/bids/new?tender={publication.Reference}", documents, clarifications);
+    static PublicTenderDetailDto Detail(PublicTenderPublication publication, List<PublicTenderDocumentDto> documents, List<PublicTenderClarificationDto> clarifications) => new(publication.Reference, publication.Title, publication.Description, publication.TenderType.ToString(), publication.ProcurementMethod, publication.Category, publication.PublishedAt, publication.ClosingDate, publication.Status.ToString(), publication.Slug, $"/public/opportunities/{publication.Reference}", $"/app/bids/new?tender={publication.Reference}", documents, clarifications);
 }

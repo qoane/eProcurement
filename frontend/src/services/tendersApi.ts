@@ -2,7 +2,7 @@ import { apiGet, apiPost } from "./apiClient";
 
 export type TenderSummary = { id: string; tenderNumber: string; title: string; tenderType: string; procurementMethod: string; status: string; publicationDate?: string | null; closingDate: string };
 export type TenderLot = { id: string; lotNumber: string; title: string; description: string };
-export type TenderDocument = { id: string; documentType: string; fileName: string; description: string; isRequired: boolean };
+export type TenderDocument = { id: string; documentType: string; fileName: string; description: string; isRequired: boolean; isPublic?: boolean; isDownloadable?: boolean; publicUrl?: string | null };
 export type TenderClarificationResponse = { id: string; response: string; respondedBy: string; respondedAt: string };
 export type TenderClarification = { id: string; question: string; askedBy: string; askedAt: string; isPublic: boolean; responses: TenderClarificationResponse[] };
 export type TenderDetail = { tender: TenderSummary & { description: string; createdBy: string; createdAt: string; publishedBy?: string | null; publishedAt?: string | null }; lots: TenderLot[]; documents: TenderDocument[]; supplierInvitations: { id: string; supplierName: string; supplierEmail: string; notifiedAt?: string | null }[]; clarifications: TenderClarification[]; statusHistory: { id: string; fromStatus: string; toStatus: string; actor: string; changedAt: string; notes: string }[]; auditTimeline: { id: string; eventType: string; actor: string; details: string; occurredAt: string }[] };
