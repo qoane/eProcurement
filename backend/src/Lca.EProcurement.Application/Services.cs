@@ -1105,13 +1105,14 @@ public sealed record TenderSummaryDto(Guid Id, string TenderNumber, string Title
 public sealed record PublicTenderSummaryDto(string Reference, string Title, string TenderType, string ProcurementMethod, string Category, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, string Status, string Slug)
 {
     public string TenderNumber => Reference;
-    public string PublicUrl => $"/opportunities/{Uri.EscapeDataString(Slug)}";
+    public string PublicUrl => $"/public/opportunities/{Uri.EscapeDataString(Slug)}";
 }
 public sealed record PublicTenderDetailDto(string Reference, string Title, string Description, string TenderType, string ProcurementMethod, string Category, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, string Status, string Slug, string PublicUrl, string BidSubmissionUrl, List<PublicTenderDocumentDto> Documents, List<PublicTenderClarificationDto> Clarifications);
 public sealed record PublicTenderDocumentDto(string DocumentType, string FileName, string PublicUrl, bool IsDownloadable, DateTimeOffset PublishedAt);
 public sealed record PublicTenderClarificationDto(string Question, string Response, DateTimeOffset PublishedAt);
 public sealed record PublicTenderCategoryDto(string Category, int Count);
 public sealed record PublicTenderCalendarItemDto(string Reference, string Title, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, string Category, string Status);
+public sealed record PublicAwardNoticeDto(string AwardNumber, string TenderNumber, string TenderTitle, string SupplierName, decimal AwardAmount, string Currency, string Status, DateTimeOffset? PublishedAt, DateTimeOffset CreatedAt);
 public sealed record TenderDetailDto(Tender Tender, List<TenderLot> Lots, List<TenderDocument> Documents, List<TenderSupplierInvitation> SupplierInvitations, List<TenderClarification> Clarifications, List<TenderStatusHistory> StatusHistory, List<AuditEvent> AuditTimeline);
 public sealed record TenderActorDto(string Actor);
 public sealed record CreateTenderLotDto(string LotNumber, string Title, string Description);
@@ -1128,6 +1129,7 @@ public interface IPublicTenderApplicationService
     Task<List<PublicTenderCategoryDto>> GetCategoriesAsync(CancellationToken ct = default);
     Task<List<PublicTenderCalendarItemDto>> GetCalendarAsync(CancellationToken ct = default);
     Task<List<PublicTenderSummaryDto>> GetLatestAsync(int count = 5, CancellationToken ct = default);
+    Task<List<PublicAwardNoticeDto>> GetAwardNoticesAsync(CancellationToken ct = default);
 }
 
 public sealed class TenderApplicationService(EProcurementDbContext db, INotificationSender notifications, IWorkflowApplicationService workflows) : ITenderApplicationService
@@ -1480,10 +1482,11 @@ public sealed class PublicTenderApplicationService(EProcurementDbContext db) : I
     public async Task<PublicTenderDetailDto?> GetTenderAsync(string reference, CancellationToken ct = default)
     {
         var tender = await Visible().Include(x => x.Documents).Include(x => x.Clarifications).SingleOrDefaultAsync(x => x.Reference == reference || x.Slug == reference, ct);
-        return tender is null ? null : new PublicTenderDetailDto(tender.Reference, tender.Title, tender.Description, tender.TenderType.ToString(), tender.ProcurementMethod, tender.Category, tender.PublishedAt, tender.ClosingDate, tender.Status.ToString(), tender.Slug, $"/opportunities/{Uri.EscapeDataString(tender.Slug)}", $"/app/bids/new?tender={Uri.EscapeDataString(tender.Reference)}", tender.Documents.OrderBy(x => x.DocumentType).Select(x => new PublicTenderDocumentDto(x.DocumentType, x.FileName, x.PublicUrl, x.IsDownloadable, x.PublishedAt)).ToList(), tender.Clarifications.OrderByDescending(x => x.PublishedAt).Select(x => new PublicTenderClarificationDto(x.Question, x.Response, x.PublishedAt)).ToList());
+        return tender is null ? null : new PublicTenderDetailDto(tender.Reference, tender.Title, tender.Description, tender.TenderType.ToString(), tender.ProcurementMethod, tender.Category, tender.PublishedAt, tender.ClosingDate, tender.Status.ToString(), tender.Slug, $"/public/opportunities/{Uri.EscapeDataString(tender.Slug)}", $"/app/bids/new?tenderReference={Uri.EscapeDataString(tender.Reference)}", tender.Documents.OrderBy(x => x.DocumentType).Select(x => new PublicTenderDocumentDto(x.DocumentType, x.FileName, x.PublicUrl, x.IsDownloadable, x.PublishedAt)).ToList(), tender.Clarifications.OrderByDescending(x => x.PublishedAt).Select(x => new PublicTenderClarificationDto(x.Question, x.Response, x.PublishedAt)).ToList());
     }
     public Task<List<PublicTenderCategoryDto>> GetCategoriesAsync(CancellationToken ct = default) => Visible().GroupBy(x => x.Category).OrderBy(x => x.Key).Select(x => new PublicTenderCategoryDto(x.Key, x.Count())).ToListAsync(ct);
     public Task<List<PublicTenderCalendarItemDto>> GetCalendarAsync(CancellationToken ct = default) => Visible().OrderBy(x => x.ClosingDate).Select(x => new PublicTenderCalendarItemDto(x.Reference, x.Title, x.PublishedAt, x.ClosingDate, x.Category, x.Status.ToString())).ToListAsync(ct);
     public Task<List<PublicTenderSummaryDto>> GetLatestAsync(int count = 5, CancellationToken ct = default) => Visible().OrderByDescending(x => x.PublishedAt).Take(Math.Clamp(count, 1, 20)).Select(x => new PublicTenderSummaryDto(x.Reference, x.Title, x.TenderType.ToString(), x.ProcurementMethod, x.Category, x.PublishedAt, x.ClosingDate, x.Status.ToString(), x.Slug)).ToListAsync(ct);
+    public Task<List<PublicAwardNoticeDto>> GetAwardNoticesAsync(CancellationToken ct = default) => db.Awards.AsNoTracking().Where(x => x.Status == AwardStatus.Published && x.PublishedAt != null).Join(db.Tenders.AsNoTracking(), a => a.TenderId, t => t.Id, (a, t) => new PublicAwardNoticeDto(a.AwardNumber, t.TenderNumber, t.Title, a.SupplierName, a.AwardAmount, "LSL", a.Status.ToString(), a.PublishedAt, a.CreatedAt)).OrderByDescending(x => x.PublishedAt).ToListAsync(ct);
     IQueryable<PublicTenderPublication> Visible() => db.PublicTenderPublications.AsNoTracking().Where(x => x.IsVisible && x.Status == TenderStatus.Published);
 }
