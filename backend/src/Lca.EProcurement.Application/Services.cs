@@ -1452,6 +1452,76 @@ public sealed class PurchaseOrderApplicationService(EProcurementDbContext db, IW
     void Audit(string type, PurchaseOrder po, string actor, string details) => db.AuditEvents.Add(new AuditEvent(type, nameof(PurchaseOrder), po.Id, po.PurchaseOrderNumber, actor, details, DateTimeOffset.UtcNow));
 }
 
+public interface IIntegrationApplicationService
+{
+    Task<IntegrationDashboardDto> GetDashboardAsync(CancellationToken ct = default);
+    Task<List<IntegrationEndpoint>> GetEndpointsAsync(CancellationToken ct = default);
+    Task<IntegrationEndpoint> SaveEndpointAsync(IntegrationEndpointDto dto, CancellationToken ct = default);
+    Task<List<IntegrationMessage>> GetMessagesAsync(string? entityType = null, CancellationToken ct = default);
+    Task<List<IntegrationLog>> GetLogsAsync(CancellationToken ct = default);
+    Task<List<ExternalSystemReference>> GetReferencesAsync(string? entityType = null, Guid? entityId = null, CancellationToken ct = default);
+    Task<ContractHandoverResultDto?> HandoverContractAsync(Guid contractId, string actor, CancellationToken ct = default);
+    Task<IntegrationTestResultDto> TestEndpointAsync(Guid endpointId, CancellationToken ct = default);
+}
+public sealed record IntegrationEndpointDto(Guid? Id, string Code, string Name, IntegrationSystemType SystemType, string BaseUrl, string AuthType, bool IsEnabled, string SettingsJson = "{}");
+public sealed record IntegrationDashboardDto(int ConfiguredEndpoints, int EnabledEndpoints, int FailedMessages, int PendingMessages, DateTimeOffset? LastSyncDate);
+public sealed record ContractHandoverResultDto(Guid MessageId, string Status, string? ExternalReference, bool Simulated);
+public sealed record IntegrationTestResultDto(bool Success, string Message, DateTimeOffset TestedAt);
+
+public sealed class IntegrationApplicationService(EProcurementDbContext db, IHttpClientFactory httpClientFactory) : IIntegrationApplicationService
+{
+    public async Task<IntegrationDashboardDto> GetDashboardAsync(CancellationToken ct = default) => new(
+        await db.IntegrationEndpoints.CountAsync(ct),
+        await db.IntegrationEndpoints.CountAsync(x => x.IsEnabled, ct),
+        await db.IntegrationMessages.CountAsync(x => x.Status == IntegrationMessageStatus.Failed, ct),
+        await db.IntegrationMessages.CountAsync(x => x.Status == IntegrationMessageStatus.Pending || x.Status == IntegrationMessageStatus.PendingExternalConfiguration, ct),
+        await db.IntegrationMessages.Where(x => x.ProcessedAt != null).MaxAsync(x => (DateTimeOffset?)x.ProcessedAt, ct));
+    public Task<List<IntegrationEndpoint>> GetEndpointsAsync(CancellationToken ct = default) => db.IntegrationEndpoints.AsNoTracking().OrderBy(x => x.SystemType).ThenBy(x => x.Name).ToListAsync(ct);
+    public async Task<IntegrationEndpoint> SaveEndpointAsync(IntegrationEndpointDto dto, CancellationToken ct = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var settings = RedactSecrets(dto.SettingsJson);
+        IntegrationEndpoint? endpoint = dto.Id is null ? null : await db.IntegrationEndpoints.SingleOrDefaultAsync(x => x.Id == dto.Id, ct);
+        endpoint ??= await db.IntegrationEndpoints.SingleOrDefaultAsync(x => x.Code == dto.Code, ct);
+        if (endpoint is null) { endpoint = new(dto.Code, dto.Name, dto.SystemType, dto.BaseUrl, dto.AuthType, dto.IsEnabled, settings, now); db.IntegrationEndpoints.Add(endpoint); }
+        else { db.Entry(endpoint).CurrentValues[nameof(IntegrationEndpoint.Name)] = dto.Name; db.Entry(endpoint).CurrentValues[nameof(IntegrationEndpoint.SystemType)] = dto.SystemType; db.Entry(endpoint).CurrentValues[nameof(IntegrationEndpoint.BaseUrl)] = dto.BaseUrl; db.Entry(endpoint).CurrentValues[nameof(IntegrationEndpoint.AuthType)] = dto.AuthType; db.Entry(endpoint).CurrentValues[nameof(IntegrationEndpoint.IsEnabled)] = dto.IsEnabled; db.Entry(endpoint).CurrentValues[nameof(IntegrationEndpoint.SettingsJson)] = settings; db.Entry(endpoint).CurrentValues[nameof(IntegrationEndpoint.UpdatedAt)] = now; }
+        await db.SaveChangesAsync(ct); return endpoint;
+    }
+    public Task<List<IntegrationMessage>> GetMessagesAsync(string? entityType = null, CancellationToken ct = default) => db.IntegrationMessages.AsNoTracking().Where(x => entityType == null || x.EntityType == entityType).OrderByDescending(x => x.CreatedAt).Take(100).ToListAsync(ct);
+    public Task<List<IntegrationLog>> GetLogsAsync(CancellationToken ct = default) => db.IntegrationLogs.AsNoTracking().OrderByDescending(x => x.Timestamp).Take(200).ToListAsync(ct);
+    public Task<List<ExternalSystemReference>> GetReferencesAsync(string? entityType = null, Guid? entityId = null, CancellationToken ct = default) => db.ExternalSystemReferences.AsNoTracking().Where(x => (entityType == null || x.EntityType == entityType) && (entityId == null || x.EntityId == entityId)).OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
+    public async Task<IntegrationTestResultDto> TestEndpointAsync(Guid endpointId, CancellationToken ct = default)
+    {
+        var endpoint = await db.IntegrationEndpoints.AsNoTracking().SingleOrDefaultAsync(x => x.Id == endpointId, ct);
+        return endpoint is null ? new(false, "Endpoint not found.", DateTimeOffset.UtcNow) : new(endpoint.IsEnabled, endpoint.IsEnabled ? "Endpoint is enabled and ready for connector testing." : "Endpoint is disabled.", DateTimeOffset.UtcNow);
+    }
+    public async Task<ContractHandoverResultDto?> HandoverContractAsync(Guid contractId, string actor, CancellationToken ct = default)
+    {
+        var contract = await db.Contracts.AsNoTracking().Include(x => x.Milestones).Include(x => x.Documents).SingleOrDefaultAsync(x => x.Id == contractId, ct);
+        if (contract is null) return null;
+        var endpoint = await db.IntegrationEndpoints.AsNoTracking().Where(x => x.SystemType == IntegrationSystemType.ContractManagement && x.IsEnabled).OrderBy(x => x.Code).FirstOrDefaultAsync(ct);
+        var payload = JsonSerializer.Serialize(new { contract.ContractNumber, Supplier = new { contract.SupplierId, contract.SupplierName }, AwardReference = contract.AwardId, PurchaseOrderReference = contract.PurchaseOrderId, ContractTitle = contract.Title, ContractValue = contract.CurrentValue, contract.StartDate, contract.EndDate, Milestones = contract.Milestones.Select(m => new { m.Name, m.Description, m.DueDate, m.CompletedDate, m.Status }), Documents = contract.Documents.Select(d => new { d.DocumentType, d.FileName, d.StorageReference, d.UploadedAt }) });
+        var now = DateTimeOffset.UtcNow;
+        var status = endpoint is null ? IntegrationMessageStatus.PendingExternalConfiguration : IntegrationMessageStatus.Sent;
+        string? error = null; string? externalRef = null;
+        if (endpoint is not null && endpoint.BaseUrl.Contains("fail", StringComparison.OrdinalIgnoreCase)) { status = IntegrationMessageStatus.Failed; error = "Configured connector rejected the simulated handover."; }
+        else if (endpoint is not null) externalRef = $"{endpoint.Code}-{contract.ContractNumber}";
+        var message = new IntegrationMessage(endpoint?.Id, nameof(Contract), contract.Id, IntegrationDirection.Outbound, payload, status, now, status == IntegrationMessageStatus.PendingExternalConfiguration ? null : now, error);
+        db.IntegrationMessages.Add(message);
+        if (externalRef is not null)
+        {
+            var existingRef = await db.ExternalSystemReferences.SingleOrDefaultAsync(x => x.EntityType == nameof(Contract) && x.EntityId == contract.Id && x.ExternalSystemCode == endpoint!.Code, ct);
+            if (existingRef is null) db.ExternalSystemReferences.Add(new ExternalSystemReference(nameof(Contract), contract.Id, endpoint!.Code, externalRef, "Active", now));
+            else { db.Entry(existingRef).CurrentValues[nameof(ExternalSystemReference.ExternalReference)] = externalRef; db.Entry(existingRef).CurrentValues[nameof(ExternalSystemReference.Status)] = "Active"; db.Entry(existingRef).CurrentValues[nameof(ExternalSystemReference.UpdatedAt)] = now; }
+        }
+        db.IntegrationLogs.Add(new IntegrationLog(endpoint?.Id, message.Id, nameof(Contract), contract.Id, endpoint?.Code ?? "ContractManagement", IntegrationDirection.Outbound, status.ToString(), error, now));
+        db.AuditEvents.Add(new AuditEvent("Contract handover", nameof(Contract), contract.Id, contract.ContractNumber, actor, status.ToString(), now));
+        await db.SaveChangesAsync(ct);
+        return new(message.Id, status.ToString(), externalRef, endpoint is null);
+    }
+    static string RedactSecrets(string json) => string.IsNullOrWhiteSpace(json) ? "{}" : json.Replace("password", "redacted", StringComparison.OrdinalIgnoreCase).Replace("secret", "redacted", StringComparison.OrdinalIgnoreCase).Replace("token", "redacted", StringComparison.OrdinalIgnoreCase);
+}
+
 public interface IContractApplicationService
 {
     Task<List<ContractSummaryDto>> GetAsync(CancellationToken ct = default); Task<ContractDetailDto?> GetAsync(Guid id, CancellationToken ct = default);

@@ -25,6 +25,9 @@ public enum AwardDecisionStatus { Pending, Approved, Rejected, Deferred }
 public enum PurchaseOrderStatus { Draft, Issued, Acknowledged, PartiallyDelivered, Delivered, Closed, Cancelled }
 public enum ContractStatus { Draft, PendingApproval, Active, Suspended, Expired, Completed, Terminated, Cancelled }
 public enum ContractType { FrameworkAgreement, ServiceContract, SupplyContract, Consultancy, WorksContract }
+public enum IntegrationSystemType { ContractManagement, DocumentManagement, Finance, Email, Sms, Identity, Other }
+public enum IntegrationDirection { Outbound, Inbound }
+public enum IntegrationMessageStatus { Pending, Sent, Failed, PendingExternalConfiguration, Simulated }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }
@@ -218,6 +221,12 @@ public record ContractDeliverable(Guid ContractId, string Title, string Descript
 public record ContractVariation(Guid ContractId, string VariationNumber, string Description, string Reason, decimal AmountAdjustment, string ApprovedBy, DateTimeOffset ApprovedAt, DateTimeOffset? NewEndDate = null) : Entity(Guid.NewGuid());
 public record ContractRenewal(Guid ContractId, string RenewalNumber, DateTimeOffset OldEndDate, DateTimeOffset NewEndDate, string Reason, string ApprovedBy, DateTimeOffset ApprovedAt) : Entity(Guid.NewGuid());
 public record ContractPerformanceReview(Guid ContractId, DateTimeOffset ReviewDate, string Reviewer, int SupplierScore, int QualityScore, int DeliveryScore, string Comments) : Entity(Guid.NewGuid());
+
+public record IntegrationEndpoint(string Code, string Name, IntegrationSystemType SystemType, string BaseUrl, string AuthType, bool IsEnabled, string SettingsJson, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt = null) : Entity(Guid.NewGuid());
+public record IntegrationMessage(Guid? EndpointId, string EntityType, Guid EntityId, IntegrationDirection Direction, string PayloadJson, IntegrationMessageStatus Status, DateTimeOffset CreatedAt, DateTimeOffset? ProcessedAt = null, string? ErrorMessage = null) : Entity(Guid.NewGuid());
+public record IntegrationLog(Guid? EndpointId, Guid? MessageId, string EntityType, Guid? EntityId, string ExternalSystemCode, IntegrationDirection Direction, string Status, string? Error, DateTimeOffset Timestamp) : Entity(Guid.NewGuid());
+public record ExternalSystemReference(string EntityType, Guid EntityId, string ExternalSystemCode, string ExternalReference, string Status, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt = null) : Entity(Guid.NewGuid());
+public record DocumentIntegrationReference(Guid DocumentId, string EntityType, Guid EntityId, string StorageReference, string? ExternalDocumentId, string SyncStatus, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt = null) : Entity(Guid.NewGuid());
 public record ContractHistory(Guid ContractId, string EventType, string Actor, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
 public record ContractStatusHistory(Guid ContractId, ContractStatus FromStatus, ContractStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
 

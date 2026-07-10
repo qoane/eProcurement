@@ -13,3 +13,4 @@ export const renewContract=(id:string,endDate:string)=>apiPost<ContractDetail>(`
 export const addVariation=(id:string)=>apiPost<ContractDetail>(`/api/contracts/${id}/variation`,{actor:actor.actor,description:"Approved variation",reason:"Scope adjustment",amountAdjustment:1000});
 export const addMilestone=(id:string)=>apiPost<any>(`/api/contracts/${id}/milestones`,{actor:actor.actor,name:"Governance review",description:"Contract governance review",dueDate:new Date(Date.now()+14*86400000).toISOString()});
 export const addPerformance=(id:string)=>apiPost<any>(`/api/contracts/${id}/performance`,{reviewer:actor.actor,supplierScore:85,qualityScore:88,deliveryScore:82,comments:"Supplier performance review recorded."});
+export const handoverContract=(id:string)=>apiPost<any>(`/api/contracts/${id}/handover-to-external-system`,actor);
