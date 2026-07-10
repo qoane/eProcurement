@@ -82,6 +82,7 @@ import {
   PurchaseOrderDetailPage,
   PurchaseOrderListPage,
 } from "../modules/purchase-orders/PurchaseOrderPages";
+import { ProcurementCaseDetailPage, ProcurementCaseListPage } from "../modules/procurement-cases/ProcurementCasePages";
 import {
   ContractDetailPage,
   ContractListPage,
@@ -245,6 +246,8 @@ function route(p: string) {
         id={decodeURIComponent(p.split("/").pop() || "")}
       />
     );
+  else if (p === "/app/procurement-cases") page = <ProcurementCaseListPage />;
+  else if (p.startsWith("/app/procurement-cases/")) page = <ProcurementCaseDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/tenders") page = <TendersPage />;
   else if (p === "/app/tenders/new") page = <NewTenderPage />;
   else if (p === "/app/tenders/clarifications")

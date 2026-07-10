@@ -1605,3 +1605,72 @@ public sealed class SupplierPortalApplicationService(EProcurementDbContext db, I
     }
     static SupplierPortalProfileDto ToProfile(Supplier s, Dictionary<string,string?> v) => new(s.Id, s.ReferenceNumber, s.LegalName, v.GetValueOrDefault("tradingName"), v.GetValueOrDefault("registrationNumber"), v.GetValueOrDefault("taxNumber"), v.GetValueOrDefault("contactPerson"), v.GetValueOrDefault("email"), v.GetValueOrDefault("phone"), v.GetValueOrDefault("address"), s.Status.ToString(), s.Categories.Select(x=>x.Name).ToList(), s.Documents);
 }
+
+public interface IProcurementCaseApplicationService
+{
+    Task<List<ProcurementCaseListDto>> GetCasesAsync(CancellationToken ct = default);
+    Task<ProcurementCaseDetailDto?> GetCaseAsync(Guid id, CancellationToken ct = default);
+    Task<List<ProcurementCaseStageDto>> GetTimelineAsync(Guid id, CancellationToken ct = default);
+    Task<List<AuditEvent>> GetAuditAsync(Guid id, CancellationToken ct = default);
+    Task<List<ProcurementCaseDocumentDto>> GetDocumentsAsync(Guid id, CancellationToken ct = default);
+}
+public sealed record ProcurementCaseListDto(Guid Id, string CaseNumber, string Title, string CurrentLifecycleStage, string? Tender, string? SupplierIfAwarded, decimal TotalValue, string Status);
+public sealed record ProcurementCaseDetailDto(ProcurementCase Case, List<ProcurementCaseLink> Links, List<ProcurementCaseStageDto> Timeline, List<AuditEvent> AuditTimeline, List<ProcurementCaseDocumentDto> Documents, List<NotificationMessage> Notifications, object Summary);
+public sealed record ProcurementCaseStageDto(string Stage, string? RecordNumber, string Status, string ResponsibleRole, DateTimeOffset? Date, string? Url);
+public sealed record ProcurementCaseDocumentDto(string DocumentType, string FileName, string Source, string? Url, DateTimeOffset Date);
+
+public sealed class ProcurementCaseApplicationService(EProcurementDbContext db) : IProcurementCaseApplicationService
+{
+    static readonly (string Stage, ProcurementCaseRelationshipType Type, string Role, string Url)[] Stages = [
+        ("Plan", ProcurementCaseRelationshipType.AnnualPlan, "Procurement Officer", "/app/planning/"),
+        ("Requisition", ProcurementCaseRelationshipType.Requisition, "Requester", "/app/requisitions/"),
+        ("Source", ProcurementCaseRelationshipType.Tender, "Procurement Officer", "/app/tenders/"),
+        ("Submit", ProcurementCaseRelationshipType.BidSubmission, "Supplier", "/app/bids/"),
+        ("Open", ProcurementCaseRelationshipType.BidOpening, "Opening Committee", "/app/bid-opening/"),
+        ("Evaluate", ProcurementCaseRelationshipType.Evaluation, "Evaluation Committee", "/app/evaluation/"),
+        ("Award", ProcurementCaseRelationshipType.Award, "Approver", "/app/awards/"),
+        ("Manage", ProcurementCaseRelationshipType.Contract, "Contract Manager", "/app/contracts/"),
+        ("Report", ProcurementCaseRelationshipType.AuditEvent, "Auditor", "/app/audit")];
+    public async Task<List<ProcurementCaseListDto>> GetCasesAsync(CancellationToken ct = default)
+    {
+        var cases = await db.ProcurementCases.AsNoTracking().Include(x => x.Links).OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
+        var awardIds = cases.SelectMany(c => c.Links.Where(l => l.RelationshipType == ProcurementCaseRelationshipType.Award).Select(l => l.EntityId)).ToList();
+        var awards = await db.Awards.AsNoTracking().Where(a => awardIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, ct);
+        return cases.Select(c => {
+            var last = Stages.LastOrDefault(s => c.Links.Any(l => l.RelationshipType == s.Type)).Stage ?? "Plan";
+            var tender = c.Links.FirstOrDefault(l => l.RelationshipType == ProcurementCaseRelationshipType.Tender)?.EntityReference;
+            var award = c.Links.Select(l => awards.GetValueOrDefault(l.EntityId)).FirstOrDefault(a => a is not null);
+            return new ProcurementCaseListDto(c.Id, c.CaseNumber, c.Title, last, tender, award?.SupplierName, award?.AwardAmount ?? 0, c.Status.ToString());
+        }).ToList();
+    }
+    public async Task<ProcurementCaseDetailDto?> GetCaseAsync(Guid id, CancellationToken ct = default)
+    {
+        var c = await db.ProcurementCases.AsNoTracking().Include(x => x.Links).SingleOrDefaultAsync(x => x.Id == id, ct); if (c is null) return null;
+        var audit = await GetAuditAsync(id, ct); var docs = await GetDocumentsAsync(id, ct); var notes = await GetNotifications(c, ct);
+        var tenderRef = c.Links.FirstOrDefault(l => l.RelationshipType == ProcurementCaseRelationshipType.Tender)?.EntityReference;
+        var pub = c.Links.FirstOrDefault(l => l.RelationshipType == ProcurementCaseRelationshipType.PublicPublication);
+        return new(c, c.Links.OrderBy(l => l.CreatedAt).ToList(), await GetTimelineAsync(id, ct), audit, docs, notes, new { PublicNoticeLink = pub is null ? null : $"/public/opportunities/{pub.EntityReference}", Tender = tenderRef });
+    }
+    public async Task<List<ProcurementCaseStageDto>> GetTimelineAsync(Guid id, CancellationToken ct = default)
+    {
+        var links = await db.ProcurementCaseLinks.AsNoTracking().Where(l => l.ProcurementCaseId == id).ToListAsync(ct);
+        return Stages.Select(s => { var l = links.Where(x => x.RelationshipType == s.Type).OrderBy(x => x.CreatedAt).LastOrDefault(); return new ProcurementCaseStageDto(s.Stage, l?.EntityReference, l is null ? "Pending" : "Completed", s.Role, l?.CreatedAt, l is null ? null : s.Url == "/app/audit" ? s.Url : s.Url + l.EntityId); }).ToList();
+    }
+    public async Task<List<AuditEvent>> GetAuditAsync(Guid id, CancellationToken ct = default)
+    {
+        var ids = await db.ProcurementCaseLinks.AsNoTracking().Where(l => l.ProcurementCaseId == id).Select(l => l.EntityId).ToListAsync(ct); ids.Add(id);
+        return await db.AuditEvents.AsNoTracking().Where(a => ids.Contains(a.EntityId)).OrderBy(a => a.OccurredAt).ToListAsync(ct);
+    }
+    public async Task<List<ProcurementCaseDocumentDto>> GetDocumentsAsync(Guid id, CancellationToken ct = default)
+    {
+        var links = await db.ProcurementCaseLinks.AsNoTracking().Where(l => l.ProcurementCaseId == id).ToListAsync(ct); var docs = new List<ProcurementCaseDocumentDto>();
+        var tenderIds = links.Where(l => l.RelationshipType == ProcurementCaseRelationshipType.Tender).Select(l => l.EntityId).ToList();
+        docs.AddRange(await db.TenderDocuments.AsNoTracking().Where(d => tenderIds.Contains(d.TenderId)).Select(d => new ProcurementCaseDocumentDto(d.DocumentType, d.FileName, "Tender", d.PublicUrl, d.CreatedAt)).ToListAsync(ct));
+        var bidIds = links.Where(l => l.RelationshipType == ProcurementCaseRelationshipType.BidSubmission).Select(l => l.EntityId).ToList();
+        docs.AddRange(await db.BidSubmissionDocuments.AsNoTracking().Where(d => bidIds.Contains(d.BidSubmissionId)).Select(d => new ProcurementCaseDocumentDto(d.DocumentType, d.Filename, "Bid", d.StorageReference, d.UploadedAt)).ToListAsync(ct));
+        var contractIds = links.Where(l => l.RelationshipType == ProcurementCaseRelationshipType.Contract).Select(l => l.EntityId).ToList();
+        docs.AddRange(await db.ContractDocuments.AsNoTracking().Where(d => contractIds.Contains(d.ContractId)).Select(d => new ProcurementCaseDocumentDto(d.DocumentType, d.FileName, "Contract", d.StorageReference, d.UploadedAt)).ToListAsync(ct));
+        return docs.OrderBy(d => d.Date).ToList();
+    }
+    async Task<List<NotificationMessage>> GetNotifications(ProcurementCase c, CancellationToken ct) { var ids = c.Links.Select(l => (Guid?)l.EntityId).Append(c.Id).ToList(); return await db.NotificationMessages.AsNoTracking().Where(n => n.EntityId != null && ids.Contains(n.EntityId)).OrderBy(n => n.CreatedAt).ToListAsync(ct); }
+}
