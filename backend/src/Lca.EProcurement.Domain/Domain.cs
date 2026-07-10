@@ -12,6 +12,8 @@ public enum BusinessRuleStatus { Draft, Published, Archived }
 public enum RequisitionStatus { Draft, Submitted, BudgetValidation, ManagerApproval, ProcurementReview, Approved, Rejected }
 public enum TenderType { RFP, RFQ, RFI }
 public enum TenderStatus { Draft, Published, Clarification, Cancelled, Closed }
+public enum TenderClarificationStatus { Submitted, UnderReview, Answered, Published, Closed }
+public enum TenderClarificationVisibility { Private, Public }
 public enum BidSubmissionStatus { Draft, Submitted, Locked, Withdrawn, Opened, Evaluated, Awarded, Rejected }
 public enum BidOpeningSessionStatus { Draft, Scheduled, InProgress, Completed, ReferredToEvaluation, Cancelled }
 public enum BidOpeningSubmissionStatus { Pending, Opened, Late, Disqualified, ReferredToEvaluation }
@@ -90,9 +92,21 @@ public record PublicTenderClarification(Guid PublicTenderPublicationId, Guid Ten
 public record TenderSupplierInvitation(Guid TenderId, Guid? SupplierId, string SupplierName, string SupplierEmail, DateTimeOffset InvitedAt, string InvitedBy, DateTimeOffset? NotifiedAt = null) : Entity(Guid.NewGuid());
 public record TenderClarification(Guid TenderId, string Question, string AskedBy, DateTimeOffset AskedAt, bool IsPublic = true) : Entity(Guid.NewGuid())
 {
+    public TenderClarificationStatus Status { get; init; } = TenderClarificationStatus.Submitted;
+    public TenderClarificationVisibility Visibility { get; init; } = IsPublic ? TenderClarificationVisibility.Public : TenderClarificationVisibility.Private;
+    public Guid? SupplierId { get; init; }
+    public string SupplierName { get; init; } = AskedBy;
+    public string QuestionReference { get; init; } = $"CLR-{AskedAt:yyyyMMddHHmmss}";
+    public string? AssignedOfficer { get; init; }
     public List<TenderClarificationResponse> Responses { get; init; } = [];
 }
-public record TenderClarificationResponse(Guid TenderClarificationId, string Response, string RespondedBy, DateTimeOffset RespondedAt) : Entity(Guid.NewGuid());
+public record TenderClarificationResponse(Guid TenderClarificationId, string Response, string RespondedBy, DateTimeOffset RespondedAt) : Entity(Guid.NewGuid())
+{
+    public bool IsPublished { get; init; }
+    public DateTimeOffset? PublishedAt { get; init; }
+    public string? PublishedBy { get; init; }
+}
+
 public record TenderStatusHistory(Guid TenderId, TenderStatus FromStatus, TenderStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
 
 public record BidSubmission(string SubmissionNumber, Guid TenderId, Guid SupplierId, BidSubmissionStatus Status, DateTimeOffset? SubmissionDate, string SubmittedBy, DateTimeOffset? SubmittedAt = null, DateTimeOffset? WithdrawnAt = null, DateTimeOffset? LockedAt = null, DateTimeOffset? OpenedAt = null, int CurrentVersion = 1) : Entity(Guid.NewGuid())

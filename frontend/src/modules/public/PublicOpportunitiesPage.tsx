@@ -291,6 +291,7 @@ export function OpportunityDetailPage({ reference }: { reference: string }) {
                         c.responses?.[0]?.response ||
                         "Awaiting public response."}
                     </p>
+                    {(c.publishedAt || c.respondedAt) && <small>Published {formatDate(c.publishedAt || c.respondedAt)}</small>}
                   </div>
                 ))
               ) : (

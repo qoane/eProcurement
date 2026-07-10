@@ -35,6 +35,7 @@ import { ConfigurationPage } from "../modules/configuration/ConfigurationPage";
 import { ReportingPage } from "../modules/reporting/ReportingPage";
 import {
   NewTenderPage,
+  TenderClarificationsWorkspacePage,
   TenderDetailPage,
   TendersPage,
 } from "../modules/tenders/TendersPage";
@@ -247,7 +248,9 @@ function route(p: string) {
   else if (p === "/app/tenders") page = <TendersPage />;
   else if (p === "/app/tenders/new") page = <NewTenderPage />;
   else if (p === "/app/tenders/clarifications")
-    page = <NotConfiguredPage title="Clarifications" />;
+    page = <TenderClarificationsWorkspacePage />;
+  else if (p.match(/^\/app\/tenders\/[^/]+\/clarifications$/))
+    page = <TenderDetailPage id={decodeURIComponent(p.split("/")[3] || "")} />;
   else if (p.startsWith("/app/tenders/"))
     page = (
       <TenderDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />

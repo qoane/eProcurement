@@ -1097,6 +1097,7 @@ public interface ITenderApplicationService
     Task<TenderDetailDto?> PublishTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default);
     Task<TenderDetailDto?> CancelTenderAsync(Guid id, TenderActorDto dto, CancellationToken ct = default);
     Task<List<TenderClarification>> GetClarificationsAsync(Guid tenderId, CancellationToken ct = default);
+    Task<List<TenderClarificationWorkspaceDto>> GetClarificationWorkspaceAsync(CancellationToken ct = default);
     Task<TenderClarification?> CreateClarificationAsync(Guid tenderId, CreateTenderClarificationDto dto, CancellationToken ct = default);
     Task<TenderClarificationResponse?> RespondToClarificationAsync(Guid tenderId, Guid clarificationId, RespondToTenderClarificationDto dto, CancellationToken ct = default);
 }
@@ -1114,13 +1115,14 @@ public sealed record PublicTenderCategoryDto(string Category, int Count);
 public sealed record PublicTenderCalendarItemDto(string Reference, string Title, DateTimeOffset PublishedAt, DateTimeOffset ClosingDate, string Category, string Status);
 public sealed record PublicAwardNoticeDto(string AwardNumber, string TenderNumber, string TenderTitle, string SupplierName, decimal AwardAmount, string Currency, string Status, DateTimeOffset? PublishedAt, DateTimeOffset CreatedAt);
 public sealed record TenderDetailDto(Tender Tender, List<TenderLot> Lots, List<TenderDocument> Documents, List<TenderSupplierInvitation> SupplierInvitations, List<TenderClarification> Clarifications, List<TenderStatusHistory> StatusHistory, List<AuditEvent> AuditTimeline);
+public sealed record TenderClarificationWorkspaceDto(Guid Id, Guid TenderId, string TenderNumber, string TenderTitle, string QuestionReference, string SupplierName, DateTimeOffset AskedAt, string Status, string Visibility, string ResponseStatus, string? AssignedOfficer);
 public sealed record TenderActorDto(string Actor);
 public sealed record CreateTenderLotDto(string LotNumber, string Title, string Description);
 public sealed record CreateTenderDocumentDto(string DocumentType, string FileName, string Description, bool IsRequired = true, bool IsPublic = false, string? PublicUrl = null, bool IsDownloadable = true);
 public sealed record CreateTenderSupplierInvitationDto(Guid? SupplierId, string SupplierName, string SupplierEmail);
 public sealed record CreateTenderDto(string TenderNumber, string Title, string Description, TenderType TenderType, string ProcurementMethod, DateTimeOffset ClosingDate, string CreatedBy, List<CreateTenderLotDto>? Lots = null, List<CreateTenderDocumentDto>? Documents = null, List<CreateTenderSupplierInvitationDto>? SupplierInvitations = null, string Category = "General");
-public sealed record CreateTenderClarificationDto(string Question, string AskedBy, bool IsPublic = true);
-public sealed record RespondToTenderClarificationDto(string Response, string RespondedBy);
+public sealed record CreateTenderClarificationDto(string Question, string AskedBy, bool IsPublic = true, Guid? SupplierId = null, string? SupplierName = null);
+public sealed record RespondToTenderClarificationDto(string Response, string RespondedBy, bool IsPublic = false, bool Publish = false);
 
 public interface IPublicTenderApplicationService
 {
@@ -1167,12 +1169,17 @@ public sealed class TenderApplicationService(EProcurementDbContext db, INotifica
 
     public Task<List<TenderClarification>> GetClarificationsAsync(Guid tenderId, CancellationToken ct = default) => db.TenderClarifications.AsNoTracking().Include(x => x.Responses).Where(x => x.TenderId == tenderId).OrderByDescending(x => x.AskedAt).ToListAsync(ct);
 
+    public Task<List<TenderClarificationWorkspaceDto>> GetClarificationWorkspaceAsync(CancellationToken ct = default) => db.TenderClarifications.AsNoTracking().Include(x => x.Responses).Join(db.Tenders.AsNoTracking(), c => c.TenderId, t => t.Id, (c, t) => new TenderClarificationWorkspaceDto(c.Id, t.Id, t.TenderNumber, t.Title, c.QuestionReference, c.SupplierName, c.AskedAt, c.Status.ToString(), c.Visibility.ToString(), c.Responses.Any(r => r.IsPublished) ? "Published" : c.Responses.Any() ? "Answered" : "Awaiting response", c.AssignedOfficer)).OrderByDescending(x => x.AskedAt).ToListAsync(ct);
+
     public async Task<TenderClarification?> CreateClarificationAsync(Guid tenderId, CreateTenderClarificationDto dto, CancellationToken ct = default)
     {
         var tender = await db.Tenders.AsNoTracking().SingleOrDefaultAsync(x => x.Id == tenderId, ct); if (tender is null) return null;
         var now = DateTimeOffset.UtcNow;
-        var clarification = new TenderClarification(tenderId, dto.Question, dto.AskedBy, now, dto.IsPublic);
+        if (tender.Status != TenderStatus.Published && tender.Status != TenderStatus.Clarification) throw new InvalidOperationException("Clarifications can only be asked for published tenders.");
+        if (tender.ClosingDate <= now) throw new InvalidOperationException("Clarifications cannot be asked after the tender closing date.");
+        var clarification = new TenderClarification(tenderId, dto.Question, dto.AskedBy, now, dto.IsPublic) with { SupplierId = dto.SupplierId, SupplierName = string.IsNullOrWhiteSpace(dto.SupplierName) ? dto.AskedBy : dto.SupplierName!, QuestionReference = $"CLR-{now:yyyyMMddHHmmss}-{Random.Shared.Next(100,999)}" };
         db.TenderClarifications.Add(clarification);
+        QueueClarificationNotification("TenderClarificationSubmitted", tender, clarification, "Procurement clarification required", $"A supplier clarification question has been submitted for {tender.TenderNumber}.", "procurement@lca.org.ls", "Procurement Officer", now, $"/app/tenders/{tender.Id}/clarifications");
         if (tender.Status == TenderStatus.Published) db.TenderStatusHistories.Add(new TenderStatusHistory(tender.Id, TenderStatus.Published, TenderStatus.Clarification, dto.AskedBy, now, "Clarification opened"));
         db.AuditEvents.Add(new AuditEvent("Tender clarification created", nameof(Tender), tender.Id, tender.TenderNumber, dto.AskedBy, dto.Question, now));
         await db.SaveChangesAsync(ct);
@@ -1183,10 +1190,16 @@ public sealed class TenderApplicationService(EProcurementDbContext db, INotifica
     public async Task<TenderClarificationResponse?> RespondToClarificationAsync(Guid tenderId, Guid clarificationId, RespondToTenderClarificationDto dto, CancellationToken ct = default)
     {
         var tender = await db.Tenders.SingleOrDefaultAsync(x => x.Id == tenderId, ct); if (tender is null) return null;
-        if (!await db.TenderClarifications.AnyAsync(x => x.Id == clarificationId && x.TenderId == tenderId, ct)) return null;
+        var clarification = await db.TenderClarifications.Include(x => x.Responses).SingleOrDefaultAsync(x => x.Id == clarificationId && x.TenderId == tenderId, ct);
+        if (clarification is null) return null;
         var now = DateTimeOffset.UtcNow;
-        var response = new TenderClarificationResponse(clarificationId, dto.Response, dto.RespondedBy, now);
+        var makePublic = dto.IsPublic || dto.Publish;
+        var response = new TenderClarificationResponse(clarificationId, dto.Response, dto.RespondedBy, now) with { IsPublished = dto.Publish && makePublic, PublishedAt = dto.Publish && makePublic ? now : null, PublishedBy = dto.Publish && makePublic ? dto.RespondedBy : null };
         db.TenderClarificationResponses.Add(response);
+        db.Entry(clarification).CurrentValues[nameof(TenderClarification.Status)] = dto.Publish && makePublic ? TenderClarificationStatus.Published : TenderClarificationStatus.Answered;
+        db.Entry(clarification).CurrentValues[nameof(TenderClarification.Visibility)] = makePublic ? TenderClarificationVisibility.Public : TenderClarificationVisibility.Private;
+        db.Entry(clarification).CurrentValues[nameof(TenderClarification.IsPublic)] = makePublic;
+        QueueClarificationNotification("TenderClarificationResponded", tender, clarification, "Tender clarification response", $"Your clarification for {tender.TenderNumber} has been answered.", clarification.AskedBy, clarification.SupplierName, now, $"/app/supplier/clarifications");
         db.AuditEvents.Add(new AuditEvent("Tender clarification responded", nameof(Tender), tender.Id, tender.TenderNumber, dto.RespondedBy, dto.Response, now));
         await db.SaveChangesAsync(ct);
         if (tender.Status is TenderStatus.Published or TenderStatus.Clarification)
@@ -1283,7 +1296,14 @@ public sealed class TenderApplicationService(EProcurementDbContext db, INotifica
         if (publication is null) { publication = new PublicTenderPublication(tender.Id, tender.TenderNumber, reference, tender.Title, tender.Description, tender.TenderType, tender.ProcurementMethod, tender.Category, now, tender.ClosingDate, TenderStatus.Published, true, slug, now, now); db.PublicTenderPublications.Add(publication); await db.SaveChangesAsync(ct); }
         else { db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.TenderNumber)] = tender.TenderNumber; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Reference)] = reference; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Title)] = tender.Title; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Description)] = tender.Description; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.TenderType)] = tender.TenderType; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.ProcurementMethod)] = tender.ProcurementMethod; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Category)] = tender.Category; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.PublishedAt)] = now; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.ClosingDate)] = tender.ClosingDate; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Status)] = TenderStatus.Published; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.IsVisible)] = true; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.Slug)] = slug; db.Entry(publication).CurrentValues[nameof(PublicTenderPublication.UpdatedAt)] = now; db.PublicTenderDocuments.RemoveRange(publication.Documents); db.PublicTenderClarifications.RemoveRange(publication.Clarifications); }
         foreach (var doc in tender.Documents.Where(d => d.IsPublic && d.IsDownloadable && !string.IsNullOrWhiteSpace(d.PublicUrl))) db.PublicTenderDocuments.Add(new PublicTenderDocument(publication.Id, doc.DocumentType, doc.FileName, doc.PublicUrl!, doc.IsDownloadable, now));
-        foreach (var c in tender.Clarifications.Where(c => c.IsPublic)) foreach (var r in c.Responses) db.PublicTenderClarifications.Add(new PublicTenderClarification(publication.Id, c.Id, c.Question, r.Response, now));
+        foreach (var c in tender.Clarifications.Where(c => c.IsPublic && c.Visibility == TenderClarificationVisibility.Public)) foreach (var r in c.Responses.Where(r => r.IsPublished)) db.PublicTenderClarifications.Add(new PublicTenderClarification(publication.Id, c.Id, c.Question, r.Response, r.PublishedAt ?? now));
+    }
+
+    void QueueClarificationNotification(string eventCode, Tender tender, TenderClarification clarification, string subject, string body, string recipientEmail, string recipientName, DateTimeOffset now, string relatedUrl)
+    {
+        var message = new NotificationMessage(eventCode, nameof(Tender), tender.Id, NotificationChannel.InApp, subject, body, NotificationPriority.Normal, NotificationStatus.Unread, now, RelatedUrl: relatedUrl);
+        message.Recipients.Add(new NotificationRecipient(message.Id, recipientEmail, eventCode == "TenderClarificationSubmitted" ? "ProcurementOfficer" : "Supplier", recipientName, recipientEmail, null, null, NotificationStatus.Unread));
+        db.NotificationMessages.Add(message);
     }
 
     static string Slug(string value) => string.Join("-", new string(value.ToLowerInvariant().Select(ch => char.IsLetterOrDigit(ch) ? ch : ' ').ToArray()).Split(' ', StringSplitOptions.RemoveEmptyEntries));
@@ -1496,7 +1516,7 @@ public sealed record SupplierPortalDashboardDto(string ProfileStatus, List<strin
 public sealed record SupplierPortalProfileDto(Guid Id, string ReferenceNumber, string LegalName, string? TradingName, string? RegistrationNumber, string? TaxNumber, string? ContactPerson, string? Email, string? Phone, string? Address, string Status, List<string> Categories, List<SupplierDocument> Documents);
 public sealed record UpdateSupplierPortalProfileDto(string LegalName, string? TradingName, string? RegistrationNumber, string? TaxNumber, string? ContactPerson, string? Email, string? Phone, string? Address, List<string>? Categories);
 public sealed record CreateSupplierClarificationDto(string Question);
-public sealed record SupplierClarificationDto(Guid Id, Guid TenderId, string TenderNumber, string TenderTitle, string Question, DateTimeOffset AskedAt, bool IsPublic, List<TenderClarificationResponse> Responses);
+public sealed record SupplierClarificationDto(Guid Id, Guid TenderId, string TenderNumber, string TenderTitle, string Question, DateTimeOffset AskedAt, bool IsPublic, string Status, DateTimeOffset? RespondedAt, List<TenderClarificationResponse> Responses);
 public sealed record CreateSupplierBidDto(Guid TenderId, List<CreateBidSubmissionItemDto>? Items = null, List<CreateBidSubmissionDeclarationDto>? Declarations = null);
 
 public interface ISupplierPortalApplicationService
@@ -1552,11 +1572,21 @@ public sealed class SupplierPortalApplicationService(EProcurementDbContext db, I
     public Task<PublicTenderDetailDto?> GetOpportunityAsync(SupplierPortalUserContext user, string reference, CancellationToken ct = default) => publicTenders.GetTenderAsync(reference, ct);
     public async Task<TenderClarification> AskClarificationAsync(SupplierPortalUserContext user, string reference, CreateSupplierClarificationDto dto, CancellationToken ct = default)
     {
-        var tenderId = await db.PublicTenderPublications.AsNoTracking().Where(x => x.Reference == reference || x.Slug == reference || x.TenderNumber == reference).Select(x => x.TenderId).SingleAsync(ct);
-        var clarification = new TenderClarification(tenderId, dto.Question, user.Email, DateTimeOffset.UtcNow, true);
-        db.TenderClarifications.Add(clarification); await db.SaveChangesAsync(ct); return clarification;
+        var now = DateTimeOffset.UtcNow;
+        var publication = await db.PublicTenderPublications.AsNoTracking().SingleAsync(x => x.Reference == reference || x.Slug == reference || x.TenderNumber == reference, ct);
+        var tender = await db.Tenders.AsNoTracking().SingleAsync(x => x.Id == publication.TenderId, ct);
+        if (publication.Status != TenderStatus.Published || !publication.IsVisible || tender.Status is not (TenderStatus.Published or TenderStatus.Clarification)) throw new InvalidOperationException("Suppliers can only ask clarifications for published tenders.");
+        if (publication.ClosingDate <= now) throw new InvalidOperationException("Suppliers can only ask clarifications before the tender closing date.");
+        var supplier = await db.Suppliers.AsNoTracking().SingleAsync(x => x.Id == user.SupplierId, ct);
+        var clarification = new TenderClarification(publication.TenderId, dto.Question, user.Email, now, false) with { SupplierId = user.SupplierId, SupplierName = supplier.LegalName, Visibility = TenderClarificationVisibility.Private, QuestionReference = $"CLR-{now:yyyyMMddHHmmss}-{Random.Shared.Next(100,999)}" };
+        db.TenderClarifications.Add(clarification);
+        db.AuditEvents.Add(new AuditEvent("Tender clarification created", nameof(Tender), publication.TenderId, publication.Reference, user.Email, dto.Question, now));
+        var message = new NotificationMessage("TenderClarificationSubmitted", nameof(Tender), publication.TenderId, NotificationChannel.InApp, "Procurement clarification required", $"A supplier clarification question has been submitted for {publication.Reference}.", NotificationPriority.Normal, NotificationStatus.Unread, now, RelatedUrl: $"/app/tenders/{publication.TenderId}/clarifications");
+        message.Recipients.Add(new NotificationRecipient(message.Id, "procurement@lca.org.ls", "ProcurementOfficer", "Procurement Officer", "procurement@lca.org.ls", null, null, NotificationStatus.Unread));
+        db.NotificationMessages.Add(message);
+        await db.SaveChangesAsync(ct); return clarification;
     }
-    public Task<List<SupplierClarificationDto>> GetClarificationsAsync(SupplierPortalUserContext user, CancellationToken ct = default) => db.TenderClarifications.AsNoTracking().Include(x=>x.Responses).Where(x => x.AskedBy == user.Email).Join(db.Tenders.AsNoTracking(), c => c.TenderId, t => t.Id, (c,t) => new SupplierClarificationDto(c.Id, t.Id, t.TenderNumber, t.Title, c.Question, c.AskedAt, c.IsPublic, c.Responses)).OrderByDescending(x => x.AskedAt).ToListAsync(ct);
+    public Task<List<SupplierClarificationDto>> GetClarificationsAsync(SupplierPortalUserContext user, CancellationToken ct = default) => db.TenderClarifications.AsNoTracking().Include(x=>x.Responses).Where(x => x.AskedBy == user.Email).Join(db.Tenders.AsNoTracking(), c => c.TenderId, t => t.Id, (c,t) => new SupplierClarificationDto(c.Id, t.Id, t.TenderNumber, t.Title, c.Question, c.AskedAt, c.IsPublic, c.Status.ToString(), c.Responses.OrderByDescending(r => r.RespondedAt).Select(r => (DateTimeOffset?)r.RespondedAt).FirstOrDefault(), c.Responses)).OrderByDescending(x => x.AskedAt).ToListAsync(ct);
     public Task<List<BidSubmission>> GetBidsAsync(SupplierPortalUserContext user, CancellationToken ct = default) => db.BidSubmissions.AsNoTracking().Include(x=>x.Items).Include(x=>x.Documents).Include(x=>x.Declarations).Where(x => x.SupplierId == user.SupplierId).OrderByDescending(x => x.SubmissionDate).ToListAsync(ct);
     public Task<BidSubmission?> GetBidAsync(SupplierPortalUserContext user, Guid id, CancellationToken ct = default) => db.BidSubmissions.AsNoTracking().Include(x=>x.Items).Include(x=>x.Documents).Include(x=>x.History).Include(x=>x.Declarations).SingleOrDefaultAsync(x => x.Id == id && x.SupplierId == user.SupplierId, ct);
     public async Task<BidSubmission> CreateBidAsync(SupplierPortalUserContext user, CreateSupplierBidDto dto, CancellationToken ct = default)
