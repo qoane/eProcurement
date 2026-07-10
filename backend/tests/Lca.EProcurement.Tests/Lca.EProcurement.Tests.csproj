@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Lca.EProcurement.Api\Lca.EProcurement.Api.csproj" />
     <ProjectReference Include="..\..\src\Lca.EProcurement.Application\Lca.EProcurement.Application.csproj" />
     <ProjectReference Include="..\..\src\Lca.EProcurement.EntityFrameworkCore\Lca.EProcurement.EntityFrameworkCore.csproj" />
   </ItemGroup>

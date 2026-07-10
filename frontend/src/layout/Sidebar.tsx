@@ -178,13 +178,24 @@ function NavGroup({
   );
 }
 
+const supplierNavigation: NavigationItem[] = [{ code: "supplier-workspace", label: "Supplier Portal", itemType: "Group", icon: "BriefcaseBusiness", displayOrder: 1, isCollapsible: true, isExpandedByDefault: true, permissionsJson: "[]", visibilityRule: "SupplierOnly", isVisible: true, children: [
+  { code: "supplier-dashboard", label: "Dashboard", itemType: "Link", url: "/app/supplier/dashboard", icon: "LayoutDashboard", displayOrder: 1, isCollapsible: false, isExpandedByDefault: true, permissionsJson: "[]", visibilityRule: "", isVisible: true, children: [] },
+  { code: "supplier-profile", label: "My Profile", itemType: "Link", url: "/app/supplier/profile", icon: "Building2", displayOrder: 2, isCollapsible: false, isExpandedByDefault: true, permissionsJson: "[]", visibilityRule: "", isVisible: true, children: [] },
+  { code: "supplier-documents", label: "My Documents", itemType: "Link", url: "/app/supplier/documents", icon: "Files", displayOrder: 3, isCollapsible: false, isExpandedByDefault: true, permissionsJson: "[]", visibilityRule: "", isVisible: true, children: [] },
+  { code: "supplier-opportunities", label: "Opportunities", itemType: "Link", url: "/app/supplier/opportunities", icon: "Search", displayOrder: 4, isCollapsible: false, isExpandedByDefault: true, permissionsJson: "[]", visibilityRule: "", isVisible: true, children: [] },
+  { code: "supplier-bids", label: "My Bids", itemType: "Link", url: "/app/supplier/bids", icon: "FileCheck2", displayOrder: 5, isCollapsible: false, isExpandedByDefault: true, permissionsJson: "[]", visibilityRule: "", isVisible: true, children: [] },
+  { code: "supplier-clarifications", label: "Clarifications", itemType: "Link", url: "/app/supplier/clarifications", icon: "MessagesSquare", displayOrder: 6, isCollapsible: false, isExpandedByDefault: true, permissionsJson: "[]", visibilityRule: "", isVisible: true, children: [] },
+  { code: "supplier-notifications", label: "Notifications", itemType: "Link", url: "/app/supplier/notifications", icon: "Bell", displayOrder: 7, isCollapsible: false, isExpandedByDefault: true, permissionsJson: "[]", visibilityRule: "", isVisible: true, children: [] },
+  { code: "supplier-settings", label: "Settings", itemType: "Link", url: "/app/settings", icon: "Settings", displayOrder: 8, isCollapsible: false, isExpandedByDefault: true, permissionsJson: "[]", visibilityRule: "", isVisible: true, children: [] }
+] }];
+
 export function Sidebar() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, currentUser } = useAuth();
   const [navigation, setNavigation] = useState(defaultNavigation);
   const [compact, setCompact] = useState(
     () => localStorage.getItem(compactKey) === "true",
   );
-  const items = useMemo(() => visible(navigation.items, hasPermission), [navigation, hasPermission]);
+  const items = useMemo(() => currentUser?.userType === "Supplier" ? supplierNavigation : visible(navigation.items, hasPermission), [navigation, hasPermission, currentUser?.userType]);
   useEffect(() => {
     getNavigation().then((r) => setNavigation(r.data));
   }, []);

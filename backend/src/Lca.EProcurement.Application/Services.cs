@@ -1490,3 +1490,88 @@ public sealed class PublicTenderApplicationService(EProcurementDbContext db) : I
     public Task<List<PublicAwardNoticeDto>> GetAwardNoticesAsync(CancellationToken ct = default) => db.Awards.AsNoTracking().Where(x => x.Status == AwardStatus.Published && x.PublishedAt != null).Join(db.Tenders.AsNoTracking(), a => a.TenderId, t => t.Id, (a, t) => new PublicAwardNoticeDto(a.AwardNumber, t.TenderNumber, t.Title, a.SupplierName, a.AwardAmount, "LSL", a.Status.ToString(), a.PublishedAt, a.CreatedAt)).OrderByDescending(x => x.PublishedAt).ToListAsync(ct);
     IQueryable<PublicTenderPublication> Visible() => db.PublicTenderPublications.AsNoTracking().Where(x => x.IsVisible && x.Status == TenderStatus.Published);
 }
+
+public sealed record SupplierPortalUserContext(Guid SupplierId, string Email, string? UserId);
+public sealed record SupplierPortalDashboardDto(string ProfileStatus, List<string> MissingDocuments, int OpenOpportunities, int DraftBids, int SubmittedBids, int ClarificationsAwaitingResponse, int UnreadNotifications);
+public sealed record SupplierPortalProfileDto(Guid Id, string ReferenceNumber, string LegalName, string? TradingName, string? RegistrationNumber, string? TaxNumber, string? ContactPerson, string? Email, string? Phone, string? Address, string Status, List<string> Categories, List<SupplierDocument> Documents);
+public sealed record UpdateSupplierPortalProfileDto(string LegalName, string? TradingName, string? RegistrationNumber, string? TaxNumber, string? ContactPerson, string? Email, string? Phone, string? Address, List<string>? Categories);
+public sealed record CreateSupplierClarificationDto(string Question);
+public sealed record SupplierClarificationDto(Guid Id, Guid TenderId, string TenderNumber, string TenderTitle, string Question, DateTimeOffset AskedAt, bool IsPublic, List<TenderClarificationResponse> Responses);
+public sealed record CreateSupplierBidDto(Guid TenderId, List<CreateBidSubmissionItemDto>? Items = null, List<CreateBidSubmissionDeclarationDto>? Declarations = null);
+
+public interface ISupplierPortalApplicationService
+{
+    Task<SupplierPortalDashboardDto> GetDashboardAsync(SupplierPortalUserContext user, CancellationToken ct = default);
+    Task<SupplierPortalProfileDto> GetProfileAsync(SupplierPortalUserContext user, CancellationToken ct = default);
+    Task<SupplierPortalProfileDto> UpdateProfileAsync(SupplierPortalUserContext user, UpdateSupplierPortalProfileDto dto, CancellationToken ct = default);
+    Task<List<SupplierDocument>> GetDocumentsAsync(SupplierPortalUserContext user, CancellationToken ct = default);
+    Task<List<PublicTenderSummaryDto>> GetOpportunitiesAsync(SupplierPortalUserContext user, CancellationToken ct = default);
+    Task<PublicTenderDetailDto?> GetOpportunityAsync(SupplierPortalUserContext user, string reference, CancellationToken ct = default);
+    Task<TenderClarification> AskClarificationAsync(SupplierPortalUserContext user, string reference, CreateSupplierClarificationDto dto, CancellationToken ct = default);
+    Task<List<SupplierClarificationDto>> GetClarificationsAsync(SupplierPortalUserContext user, CancellationToken ct = default);
+    Task<List<BidSubmission>> GetBidsAsync(SupplierPortalUserContext user, CancellationToken ct = default);
+    Task<BidSubmission?> GetBidAsync(SupplierPortalUserContext user, Guid id, CancellationToken ct = default);
+    Task<BidSubmission> CreateBidAsync(SupplierPortalUserContext user, CreateSupplierBidDto dto, CancellationToken ct = default);
+    Task<List<NotificationMessage>> GetNotificationsAsync(SupplierPortalUserContext user, CancellationToken ct = default);
+}
+
+public sealed class SupplierPortalApplicationService(EProcurementDbContext db, IPublicTenderApplicationService publicTenders, IBidSubmissionApplicationService bids) : ISupplierPortalApplicationService
+{
+    public async Task<SupplierPortalDashboardDto> GetDashboardAsync(SupplierPortalUserContext user, CancellationToken ct = default)
+    {
+        var profile = await Supplier(user, ct);
+        var required = await db.DocumentRequirements.AsNoTracking().Where(x => x.Required && db.DocumentRequirementSets.Any(s => s.Id == x.DocumentRequirementSetId && s.EntityType == nameof(Supplier))).Select(x => x.DocumentType).Distinct().ToListAsync(ct);
+        var missing = required.Where(r => profile.Documents.All(d => d.DocumentType != r)).ToList();
+        var open = await db.PublicTenderPublications.AsNoTracking().CountAsync(x => x.IsVisible && x.Status == TenderStatus.Published && x.ClosingDate > DateTimeOffset.UtcNow, ct);
+        var ownBids = db.BidSubmissions.AsNoTracking().Where(x => x.SupplierId == user.SupplierId);
+        var draft = await ownBids.CountAsync(x => x.Status == BidSubmissionStatus.Draft, ct);
+        var submitted = await ownBids.CountAsync(x => x.Status != BidSubmissionStatus.Draft && x.Status != BidSubmissionStatus.Withdrawn, ct);
+        var awaiting = await db.TenderClarifications.AsNoTracking().CountAsync(x => x.AskedBy == user.Email && !x.Responses.Any(), ct);
+        var unread = await db.NotificationMessages.AsNoTracking().CountAsync(x => x.Recipients.Any(r => r.Email == user.Email) && x.Status != NotificationStatus.Sent, ct);
+        return new(profile.Status.ToString(), missing, open, draft, submitted, awaiting, unread);
+    }
+    public async Task<SupplierPortalProfileDto> GetProfileAsync(SupplierPortalUserContext user, CancellationToken ct = default) => ToProfile(await Supplier(user, ct), await LatestValues(user.SupplierId, ct));
+    public async Task<SupplierPortalProfileDto> UpdateProfileAsync(SupplierPortalUserContext user, UpdateSupplierPortalProfileDto dto, CancellationToken ct = default)
+    {
+        var supplier = await db.Suppliers.Include(x=>x.Categories).Include(x=>x.Documents).SingleAsync(x => x.Id == user.SupplierId, ct);
+        db.Entry(supplier).CurrentValues[nameof(Supplier.LegalName)] = dto.LegalName;
+        supplier.Categories.Clear();
+        foreach (var c in dto.Categories ?? [])
+        {
+            var name = c.Trim();
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            var category = await db.SupplierCategories.SingleOrDefaultAsync(x => x.Name == name, ct) ?? new SupplierCategory(name);
+            supplier.Categories.Add(category);
+        }
+        await SaveProfileValues(user, dto, ct);
+        await db.SaveChangesAsync(ct);
+        return await GetProfileAsync(user, ct);
+    }
+    public Task<List<SupplierDocument>> GetDocumentsAsync(SupplierPortalUserContext user, CancellationToken ct = default) => db.SupplierDocuments.AsNoTracking().Where(x => x.SupplierId == user.SupplierId).OrderBy(x => x.DocumentType).ToListAsync(ct);
+    public Task<List<PublicTenderSummaryDto>> GetOpportunitiesAsync(SupplierPortalUserContext user, CancellationToken ct = default) => publicTenders.GetTendersAsync(ct);
+    public Task<PublicTenderDetailDto?> GetOpportunityAsync(SupplierPortalUserContext user, string reference, CancellationToken ct = default) => publicTenders.GetTenderAsync(reference, ct);
+    public async Task<TenderClarification> AskClarificationAsync(SupplierPortalUserContext user, string reference, CreateSupplierClarificationDto dto, CancellationToken ct = default)
+    {
+        var tenderId = await db.PublicTenderPublications.AsNoTracking().Where(x => x.Reference == reference || x.Slug == reference || x.TenderNumber == reference).Select(x => x.TenderId).SingleAsync(ct);
+        var clarification = new TenderClarification(tenderId, dto.Question, user.Email, DateTimeOffset.UtcNow, true);
+        db.TenderClarifications.Add(clarification); await db.SaveChangesAsync(ct); return clarification;
+    }
+    public Task<List<SupplierClarificationDto>> GetClarificationsAsync(SupplierPortalUserContext user, CancellationToken ct = default) => db.TenderClarifications.AsNoTracking().Include(x=>x.Responses).Where(x => x.AskedBy == user.Email).Join(db.Tenders.AsNoTracking(), c => c.TenderId, t => t.Id, (c,t) => new SupplierClarificationDto(c.Id, t.Id, t.TenderNumber, t.Title, c.Question, c.AskedAt, c.IsPublic, c.Responses)).OrderByDescending(x => x.AskedAt).ToListAsync(ct);
+    public Task<List<BidSubmission>> GetBidsAsync(SupplierPortalUserContext user, CancellationToken ct = default) => db.BidSubmissions.AsNoTracking().Include(x=>x.Items).Include(x=>x.Documents).Include(x=>x.Declarations).Where(x => x.SupplierId == user.SupplierId).OrderByDescending(x => x.SubmissionDate).ToListAsync(ct);
+    public Task<BidSubmission?> GetBidAsync(SupplierPortalUserContext user, Guid id, CancellationToken ct = default) => db.BidSubmissions.AsNoTracking().Include(x=>x.Items).Include(x=>x.Documents).Include(x=>x.History).Include(x=>x.Declarations).SingleOrDefaultAsync(x => x.Id == id && x.SupplierId == user.SupplierId, ct);
+    public async Task<BidSubmission> CreateBidAsync(SupplierPortalUserContext user, CreateSupplierBidDto dto, CancellationToken ct = default)
+    {
+        if (!await db.Tenders.AnyAsync(x => x.Id == dto.TenderId && x.Status == TenderStatus.Published && x.ClosingDate > DateTimeOffset.UtcNow, ct)) throw new InvalidOperationException("Bids can only be created for published open tenders.");
+        return await bids.CreateAsync(new CreateBidSubmissionDto($"BID-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}", dto.TenderId, user.SupplierId, user.Email, dto.Items, dto.Declarations), ct);
+    }
+    public Task<List<NotificationMessage>> GetNotificationsAsync(SupplierPortalUserContext user, CancellationToken ct = default) => db.NotificationMessages.AsNoTracking().Include(x => x.Recipients).Where(x => x.Recipients.Any(r => r.Email == user.Email)).OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
+    async Task<Supplier> Supplier(SupplierPortalUserContext user, CancellationToken ct) => await db.Suppliers.AsNoTracking().Include(x=>x.Documents).Include(x=>x.Categories).SingleAsync(x => x.Id == user.SupplierId, ct);
+    async Task<Dictionary<string,string?>> LatestValues(Guid supplierId, CancellationToken ct) => await db.FormSubmissions.AsNoTracking().Include(x=>x.Values).Where(x => x.EntityType == nameof(Supplier) && x.EntityId == supplierId).OrderByDescending(x => x.SubmittedAt).Select(x => x.Values.ToDictionary(v => v.FieldCode, v => v.Value)).FirstOrDefaultAsync(ct) ?? [];
+    async Task SaveProfileValues(SupplierPortalUserContext user, UpdateSupplierPortalProfileDto dto, CancellationToken ct)
+    {
+        var submission = new FormSubmission(Guid.Empty, Guid.Empty, nameof(Supplier), user.SupplierId, user.Email, DateTimeOffset.UtcNow);
+        foreach (var (k,v) in new Dictionary<string,string?>{{"tradingName",dto.TradingName},{"registrationNumber",dto.RegistrationNumber},{"taxNumber",dto.TaxNumber},{"contactPerson",dto.ContactPerson},{"email",dto.Email},{"phone",dto.Phone},{"address",dto.Address}}) submission.Values.Add(new FormSubmissionValue(submission.Id, k, v));
+        db.FormSubmissions.Add(submission); await Task.CompletedTask;
+    }
+    static SupplierPortalProfileDto ToProfile(Supplier s, Dictionary<string,string?> v) => new(s.Id, s.ReferenceNumber, s.LegalName, v.GetValueOrDefault("tradingName"), v.GetValueOrDefault("registrationNumber"), v.GetValueOrDefault("taxNumber"), v.GetValueOrDefault("contactPerson"), v.GetValueOrDefault("email"), v.GetValueOrDefault("phone"), v.GetValueOrDefault("address"), s.Status.ToString(), s.Categories.Select(x=>x.Name).ToList(), s.Documents);
+}

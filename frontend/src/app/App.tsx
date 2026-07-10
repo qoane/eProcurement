@@ -95,6 +95,7 @@ import {
   RolesPage,
   UsersPage,
 } from "../modules/security/SecurityPages";
+import { SupplierBidDetailPage, SupplierBidsPage, SupplierClarificationsPage, SupplierDashboardPage, SupplierDocumentsPage, SupplierNotificationsPage, SupplierOpportunitiesPage, SupplierProfilePage } from "../modules/supplier-portal/SupplierPortalPages";
 import {
   NotificationsPage,
   NotificationTemplatesPage,
@@ -171,7 +172,15 @@ function route(p: string) {
   if (p === "/public/register") return <PublicLayout><PublicRegisterPage /></PublicLayout>;
   if (p === "/public/help") return <PublicLayout><PublicHelpPage /></PublicLayout>;
   let page: React.ReactNode = <DashboardPage />;
-  if (p === "/app" || p === "/app/dashboard") page = <DashboardPage />;
+  if (p === "/app/supplier/dashboard") page = <SupplierDashboardPage />;
+  else if (p === "/app/supplier/profile") page = <SupplierProfilePage />;
+  else if (p === "/app/supplier/documents") page = <SupplierDocumentsPage />;
+  else if (p === "/app/supplier/opportunities") page = <SupplierOpportunitiesPage />;
+  else if (p === "/app/supplier/bids") page = <SupplierBidsPage />;
+  else if (p.startsWith("/app/supplier/bids/")) page = <SupplierBidDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p === "/app/supplier/clarifications") page = <SupplierClarificationsPage />;
+  else if (p === "/app/supplier/notifications") page = <SupplierNotificationsPage />;
+  else if (p === "/app" || p === "/app/dashboard") page = <DashboardPage />;
   else if (p === "/app/suppliers") page = <SupplierListPage />;
   else if (p === "/app/suppliers/register") page = <SupplierRegistrationPage />;
   else if (p === "/app/suppliers/verification")
