@@ -312,6 +312,15 @@ public record RequisitionAttachment(Guid RequisitionId, string FileName, string 
 public record RequisitionStatusHistory(Guid RequisitionId, RequisitionStatus FromStatus, RequisitionStatus ToStatus, string Actor, string Notes, DateTimeOffset ChangedAt) : Entity(Guid.NewGuid());
 public record BudgetCommitment(Guid RequisitionId, Guid BudgetId, Guid BudgetLineId, Guid FinancialYearId, Guid CostCentreId, Guid ProcurementCategoryId, decimal Amount, string CommittedBy, DateTimeOffset CommittedAt, string Reference) : Entity(Guid.NewGuid());
 
+
+public enum ProcurementCaseStatus { Active, Completed, Cancelled }
+public enum ProcurementCaseRelationshipType { AnnualPlan, Budget, Requisition, Tender, PublicPublication, BidSubmission, BidOpening, Evaluation, Award, PurchaseOrder, Contract, Document, Notification, AuditEvent }
+public record ProcurementCase(string CaseNumber, string Title, string Description, Guid FinancialYearId, string Department, ProcurementCaseStatus Status, DateTimeOffset CreatedAt, string CreatedBy) : Entity(Guid.NewGuid())
+{
+    public List<ProcurementCaseLink> Links { get; init; } = [];
+}
+public record ProcurementCaseLink(Guid ProcurementCaseId, string EntityType, Guid EntityId, string EntityReference, ProcurementCaseRelationshipType RelationshipType, DateTimeOffset CreatedAt) : Entity(Guid.NewGuid());
+
 public enum UserType { SystemAdministrator, ProcurementOfficer, FinanceUser, Approver, Evaluator, Auditor, Supplier }
 
 public record ApplicationUser(string Email, string FullName, string? PhoneNumber, UserType UserType, bool IsActive, bool IsExternalUser, Guid? SupplierId, DateTimeOffset CreatedAt, DateTimeOffset? LastLoginAt, string PasswordHash) : Entity(Guid.NewGuid())
