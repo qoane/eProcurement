@@ -32,7 +32,7 @@ import { RuleDesignerPage } from "../modules/rules/RuleDesignerPage";
 import { DynamicFormsPage } from "../modules/forms/DynamicFormsPage";
 import { FormDesignerPage } from "../modules/forms/FormDesignerPage";
 import { ConfigurationPage } from "../modules/configuration/ConfigurationPage";
-import { ReportingPage } from "../modules/reporting/ReportingPage";
+import { DashboardsPage, ReportingPage } from "../modules/reporting/ReportingPage";
 import {
   NewTenderPage,
   TenderClarificationsWorkspacePage,
@@ -218,8 +218,8 @@ function route(p: string) {
     );
   else if (p === "/app/configuration") page = <ConfigurationPage />;
   else if (p === "/app/reporting") page = <ReportingPage />;
-  else if (p === "/app/dashboards")
-    page = <NotConfiguredPage title="Dashboards" />;
+  else if (p === "/app/dashboards") page = <DashboardsPage />;
+  else if (p.startsWith("/app/reporting/")) page = <ReportingPage reportCode={decodeURIComponent(p.split("/").pop() || "executive-dashboard")} />;
   else if (p === "/app/settings") page = <SettingsPage />;
   else if (p === "/app/notifications") page = <NotificationsPage />;
   else if (p === "/app/notification-templates")
