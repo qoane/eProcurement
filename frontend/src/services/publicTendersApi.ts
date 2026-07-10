@@ -67,11 +67,17 @@ export const getPublicTender = (reference: string) =>
   );
 export const getPublicTenderCategories = () =>
   apiGet<PublicTenderCategory[]>("/api/public/tender-categories", []);
+export type PublicTenderCalendarItem = { reference: string; title: string; publishedAt?: string | null; closingDate?: string | null; category?: string; status?: string };
+export type PublicAwardNotice = { awardNumber: string; tenderNumber: string; tenderTitle: string; supplierName: string; awardAmount: number; currency?: string; status?: string; publishedAt?: string | null; createdAt?: string | null };
+
 export const getPublicTenderCalendar = () =>
-  apiGet<unknown[]>("/api/public/tender-calendar", []);
+  apiGet<PublicTenderCalendarItem[]>("/api/public/tender-calendar", []);
 
 export const getLatestPublicTenders = (take = 5) =>
   apiGet<PublicTenderSummary[]>(
     `/api/public/widgets/latest-tenders?take=${encodeURIComponent(String(take))}`,
     [],
   );
+
+export const getPublicAwardNotices = () =>
+  apiGet<PublicAwardNotice[]>("/api/public/awards", []);

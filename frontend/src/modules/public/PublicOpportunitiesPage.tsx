@@ -16,7 +16,7 @@ import {
   type PublicTenderSummary,
 } from "../../services/publicTendersApi";
 
-function referenceOf(tender: PublicTenderSummary) {
+export function referenceOf(tender: PublicTenderSummary) {
   return (
     tender.reference ||
     tender.referenceNumber ||
@@ -25,10 +25,10 @@ function referenceOf(tender: PublicTenderSummary) {
     ""
   );
 }
-function categoryOf(tender: PublicTenderSummary) {
+export function categoryOf(tender: PublicTenderSummary) {
   return tender.categoryName || tender.category || "Uncategorised";
 }
-function formatDate(value?: string | null) {
+export function formatDate(value?: string | null) {
   if (!value) return "Not specified";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -36,7 +36,7 @@ function formatDate(value?: string | null) {
     date,
   );
 }
-function isClosingSoon(value?: string | null) {
+export function isClosingSoon(value?: string | null) {
   if (!value) return false;
   const closing = new Date(value).getTime();
   if (Number.isNaN(closing)) return false;
@@ -48,35 +48,12 @@ function publicDocumentUrl(document: PublicTenderDocument) {
   return document.downloadUrl || document.publicUrl || document.url;
 }
 
-function PublicHeader() {
-  return (
-    <header className="public-header">
-      <button className="public-brand" onClick={() => navigate("/")}>
-        <span className="public-brand-mark">LCA</span>
-        <span>
-          <strong>Public Procurement</strong>
-          <small>Lesotho Communications Authority</small>
-        </span>
-      </button>
-      <nav>
-        <button onClick={() => navigate("/opportunities")}>
-          Opportunities
-        </button>
-        <button onClick={() => navigate("/supplier/register")}>
-          Supplier registration
-        </button>
-        <button onClick={() => navigate("/login")}>Sign in</button>
-      </nav>
-    </header>
-  );
-}
-
 export function OpportunitiesPage() {
   const [tenders, setTenders] = useState<PublicTenderSummary[]>([]);
   const [categories, setCategories] = useState<PublicTenderCategory[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => new URLSearchParams(location.search).get("search") || "");
   const [tenderType, setTenderType] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("");
@@ -124,8 +101,7 @@ export function OpportunitiesPage() {
   );
 
   return (
-    <main className="public-portal">
-      <PublicHeader />
+    <div className="public-portal">
       <section className="public-hero compact">
         <p className="landing-kicker">Open opportunities</p>
         <h1>Find public tenders from the Lesotho Communications Authority.</h1>
@@ -209,7 +185,7 @@ export function OpportunitiesPage() {
                   variant="secondary"
                   onClick={() =>
                     navigate(
-                      `/opportunities/${encodeURIComponent(referenceOf(tender))}`,
+                      `/public/opportunities/${encodeURIComponent(referenceOf(tender))}`,
                     )
                   }
                 >
@@ -220,7 +196,7 @@ export function OpportunitiesPage() {
           )}
         </section>
       )}
-    </main>
+    </div>
   );
 }
 
@@ -253,8 +229,7 @@ export function OpportunityDetailPage({ reference }: { reference: string }) {
     );
   };
   return (
-    <main className="public-portal">
-      <PublicHeader />
+    <div className="public-portal">
       {loading ? (
         <p className="public-empty">Loading opportunity…</p>
       ) : !tender ? (
@@ -269,7 +244,7 @@ export function OpportunityDetailPage({ reference }: { reference: string }) {
               <Button onClick={submitBid}>Submit bid</Button>
               <Button
                 variant="secondary"
-                onClick={() => navigate("/supplier/register")}
+                onClick={() => navigate("/public/register")}
               >
                 Register as supplier
               </Button>
@@ -283,6 +258,7 @@ export function OpportunityDetailPage({ reference }: { reference: string }) {
                   "No public description has been provided."}
               </p>
               <h2>Public documents</h2>
+              <div className="document-actions"><Button variant="secondary" onClick={() => { const first = documents.map(publicDocumentUrl).find(Boolean); if (first) location.href = first; }}>Download Documents</Button></div>
               {documents.length ? (
                 documents.map((d) => {
                   const url = publicDocumentUrl(d);
@@ -349,7 +325,7 @@ export function OpportunityDetailPage({ reference }: { reference: string }) {
                 </p>
                 <Button
                   variant="secondary"
-                  onClick={() => navigate("/supplier/register")}
+                  onClick={() => navigate("/public/register")}
                 >
                   Supplier registration
                 </Button>
@@ -358,6 +334,6 @@ export function OpportunityDetailPage({ reference }: { reference: string }) {
           </section>
         </>
       )}
-    </main>
+    </div>
   );
 }

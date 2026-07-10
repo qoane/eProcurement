@@ -9,6 +9,7 @@ import { PublicLayout } from "../layout/PublicLayout";
 import { AuthLayout } from "../layout/AuthLayout";
 import { AppShell } from "../layout/AppShell";
 import { LandingPage } from "../modules/public/LandingPage";
+import { PublicAwardsPage, PublicCalendarPage, PublicHelpPage, PublicPortalHomePage, PublicRegisterPage } from "../modules/public/PublicPortalPages";
 import { LoginPage } from "../modules/public/LoginPage";
 import { LatestOpportunitiesWidgetPage } from "../modules/public/LatestOpportunitiesWidgetPage";
 import {
@@ -132,13 +133,19 @@ function route(p: string) {
     );
   if (p === "/widgets/latest-opportunities")
     return <LatestOpportunitiesWidgetPage />;
-  if (p === "/opportunities")
+  if (p === "/public")
+    return (
+      <PublicLayout>
+        <PublicPortalHomePage />
+      </PublicLayout>
+    );
+  if (p === "/public/opportunities")
     return (
       <PublicLayout>
         <OpportunitiesPage />
       </PublicLayout>
     );
-  if (p.startsWith("/opportunities/"))
+  if (p.startsWith("/public/opportunities/"))
     return (
       <PublicLayout>
         <OpportunityDetailPage
@@ -146,12 +153,10 @@ function route(p: string) {
         />
       </PublicLayout>
     );
-  if (p === "/supplier/register")
-    return (
-      <PublicLayout>
-        <SupplierRegistrationPage />
-      </PublicLayout>
-    );
+  if (p === "/public/calendar") return <PublicLayout><PublicCalendarPage /></PublicLayout>;
+  if (p === "/public/awards") return <PublicLayout><PublicAwardsPage /></PublicLayout>;
+  if (p === "/public/register") return <PublicLayout><PublicRegisterPage /></PublicLayout>;
+  if (p === "/public/help") return <PublicLayout><PublicHelpPage /></PublicLayout>;
   let page: React.ReactNode = <DashboardPage />;
   if (p === "/app" || p === "/app/dashboard") page = <DashboardPage />;
   else if (p === "/app/suppliers") page = <SupplierListPage />;

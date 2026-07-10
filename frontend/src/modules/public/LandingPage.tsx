@@ -39,13 +39,14 @@ export function LandingPage() {
         <p className="landing-kicker">ProcuraFlow Command Center</p>
         <h1 id="landing-title">Procurement, configured with confidence.</h1>
         <p className="landing-statement">
-          Configure workflows, suppliers, approvals, forms, and audit trails in
-          one place. Built for transparent public procurement.
+          ProcuraFlow supports transparent procurement operations for the
+          Lesotho Communications Authority. Learn about the platform, LCA
+          procurement, or sign in to continue.
         </p>
         <div className="landing-actions">
           <Button onClick={() => navigate("/login")}>Sign in</Button>
-          <Button variant="secondary" onClick={() => navigate("/login")}>
-            Learn more
+          <Button variant="secondary" onClick={() => navigate("/public")}>
+            Public Procurement Portal
           </Button>
         </div>
       </section>
@@ -87,7 +88,7 @@ export function LandingPage() {
       </section>
 
       <footer className="landing-footer">
-        Configured for Lesotho Communications Authority
+        About ProcuraFlow · About LCA Procurement · Configured for Lesotho Communications Authority
       </footer>
     </main>
   );

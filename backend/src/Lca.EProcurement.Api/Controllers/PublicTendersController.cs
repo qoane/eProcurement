@@ -23,4 +23,7 @@ public sealed class PublicTendersController(IPublicTenderApplicationService publ
 
     [HttpGet("widgets/latest-tenders")]
     public async Task<IActionResult> GetLatest(CancellationToken ct, [FromQuery] int take = 5) => Ok(await publicTenders.GetLatestAsync(take, ct));
+
+    [HttpGet("awards")]
+    public async Task<IActionResult> GetAwardNotices(CancellationToken ct) => Ok(await publicTenders.GetAwardNoticesAsync(ct));
 }
