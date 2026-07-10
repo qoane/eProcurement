@@ -6,12 +6,13 @@ namespace Lca.EProcurement.Api.Controllers;
 
 [ApiController, Route("api/contracts")]
 [RequirePermission("Contract.View")]
-public sealed class ContractsController(IContractApplicationService contracts) : ControllerBase
+public sealed class ContractsController(IContractApplicationService contracts, IIntegrationApplicationService integrations) : ControllerBase
 {
     [HttpGet] public Task<List<ContractSummaryDto>> Get(CancellationToken ct) => contracts.GetAsync(ct);
     [HttpGet("{id:guid}")] public async Task<IActionResult> Get(Guid id, CancellationToken ct) => (await contracts.GetAsync(id, ct)) is { } c ? Ok(c) : NotFound();
     [HttpPost("from-award/{awardId:guid}")] public async Task<IActionResult> FromAward(Guid awardId, ContractCreateDto dto, CancellationToken ct) { var c = await contracts.CreateFromAwardAsync(awardId, dto, ct); return Created($"/api/contracts/{c.Contract.Id}", c); }
     [HttpPost("from-purchase-order/{purchaseOrderId:guid}")] public async Task<IActionResult> FromPurchaseOrder(Guid purchaseOrderId, ContractCreateDto dto, CancellationToken ct) { var c = await contracts.CreateFromPurchaseOrderAsync(purchaseOrderId, dto, ct); return Created($"/api/contracts/{c.Contract.Id}", c); }
+    [HttpPost("{id:guid}/handover-to-external-system")] public async Task<IActionResult> Handover(Guid id, ContractActorDto dto, CancellationToken ct) => (await integrations.HandoverContractAsync(id, dto.Actor, ct)) is { } r ? Ok(r) : NotFound();
     [HttpPost("{id:guid}/activate")] public async Task<IActionResult> Activate(Guid id, ContractActorDto dto, CancellationToken ct) => (await contracts.ActivateAsync(id, dto, ct)) is { } c ? Ok(c) : NotFound();
     [HttpPost("{id:guid}/complete")] public async Task<IActionResult> Complete(Guid id, ContractActorDto dto, CancellationToken ct) => (await contracts.CompleteAsync(id, dto, ct)) is { } c ? Ok(c) : NotFound();
     [HttpPost("{id:guid}/terminate")] public async Task<IActionResult> Terminate(Guid id, ContractActorDto dto, CancellationToken ct) => (await contracts.TerminateAsync(id, dto, ct)) is { } c ? Ok(c) : NotFound();

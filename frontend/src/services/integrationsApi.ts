@@ -1,0 +1,12 @@
+import { apiGet, apiPost } from "./apiClient";
+export type IntegrationEndpoint = { id:string; code:string; name:string; systemType:string; baseUrl:string; authType:string; isEnabled:boolean; settingsJson:string; createdAt:string; updatedAt?:string };
+export type IntegrationMessage = { id:string; endpointId?:string; entityType:string; entityId:string; direction:string; status:string; createdAt:string; processedAt?:string; errorMessage?:string };
+export type IntegrationLog = { id:string; entityType:string; entityId?:string; externalSystemCode:string; direction:string; status:string; error?:string; timestamp:string };
+export type ExternalSystemReference = { id:string; entityType:string; entityId:string; externalSystemCode:string; externalReference:string; status:string; createdAt:string };
+export const getIntegrationDashboard=()=>apiGet<any>("/api/integrations/dashboard",{});
+export const getIntegrationEndpoints=()=>apiGet<IntegrationEndpoint[]>("/api/integrations/endpoints",[]);
+export const saveIntegrationEndpoint=(body:Partial<IntegrationEndpoint>)=>apiPost<IntegrationEndpoint>("/api/integrations/endpoints",body);
+export const testIntegrationEndpoint=(id:string)=>apiPost<any>(`/api/integrations/endpoints/${id}/test`,{});
+export const getIntegrationMessages=()=>apiGet<IntegrationMessage[]>("/api/integrations/messages",[]);
+export const getIntegrationLogs=()=>apiGet<IntegrationLog[]>("/api/integrations/logs",[]);
+export const getExternalReferences=()=>apiGet<ExternalSystemReference[]>("/api/integrations/references",[]);

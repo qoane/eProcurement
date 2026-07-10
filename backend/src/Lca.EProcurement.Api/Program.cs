@@ -52,6 +52,7 @@ builder.Services.AddScoped<IEvaluationApplicationService, EvaluationApplicationS
 builder.Services.AddScoped<IAwardApplicationService, AwardApplicationService>();
 builder.Services.AddScoped<IPurchaseOrderApplicationService, PurchaseOrderApplicationService>();
 builder.Services.AddScoped<IContractApplicationService, ContractApplicationService>();
+builder.Services.AddScoped<IIntegrationApplicationService, IntegrationApplicationService>();
 builder.Services.AddScoped<IProcurementCaseApplicationService, ProcurementCaseApplicationService>();
 builder.Services.AddScoped<IReportingApplicationService, ReportingApplicationService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();

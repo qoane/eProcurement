@@ -91,6 +91,7 @@ import {
   NewContractPage,
 } from "../modules/contracts/ContractPages";
 import { PageHeader } from "../components/ui/PageHeader";
+import { ContractIntegrationPage, DocumentIntegrationPage, IntegrationDashboardPage, IntegrationLogsPage } from "../modules/integrations/IntegrationPages";
 import { AuthProvider } from "../auth/AuthContext";
 import {
   SecurityPage,
@@ -323,8 +324,10 @@ function route(p: string) {
   else if (p === "/app/security") page = <SecurityPage />;
   else if (p === "/app/users") page = <UsersPage />;
   else if (p === "/app/roles") page = <RolesPage />;
-  else if (p === "/app/integrations")
-    page = <NotConfiguredPage title="Integrations" />;
+  else if (p === "/app/integrations") page = <IntegrationDashboardPage />;
+  else if (p === "/app/integrations/contracts") page = <ContractIntegrationPage />;
+  else if (p === "/app/integrations/document-management") page = <DocumentIntegrationPage />;
+  else if (p === "/app/integrations/logs") page = <IntegrationLogsPage />;
   return <AppShell>{page}</AppShell>;
 }
 export function App() {
