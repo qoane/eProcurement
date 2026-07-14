@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Security.Cryptography;
 using Lca.EProcurement.Domain;
 using Lca.EProcurement.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
@@ -29,7 +30,8 @@ public sealed class PasswordService : IPasswordService
 
 public interface IIdentityService
 {
-    Task<AuthResponse?> LoginAsync(string email, string password, CancellationToken ct = default);
+    Task<object?> LoginAsync(string email, string password, CancellationToken ct = default);
+    Task<AuthResponse?> BuildTokenForUserAsync(Guid userId, CancellationToken ct = default);
     Task<AuthResponse?> CurrentAsync(ClaimsPrincipal principal, CancellationToken ct = default);
     Task<bool> HasPermissionAsync(ClaimsPrincipal principal, string permission, CancellationToken ct = default);
 }
@@ -41,11 +43,33 @@ public sealed class IdentityService(EProcurementDbContext db, IPasswordService p
     private const string SupplierIdClaim = "supplierId";
     private const string CreatedAtClaim = "createdAt";
     private const string LastLoginAtClaim = "lastLoginAt";
-    public async Task<AuthResponse?> LoginAsync(string email, string password, CancellationToken ct = default)
+    public async Task<object?> LoginAsync(string email, string password, CancellationToken ct = default)
     {
         var user = await db.ApplicationUsers.SingleOrDefaultAsync(x => x.Email == email, ct);
-        if (user is null || !user.IsActive || !passwords.Verify(user.PasswordHash, password)) return null;
-        await db.ApplicationUsers.Where(x => x.Id == user.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.LastLoginAt, DateTimeOffset.UtcNow), ct);
+        if (user is null) return null;
+        if (!user.IsActive || user.LockoutEnd > DateTimeOffset.UtcNow) return null;
+        if (!passwords.Verify(user.PasswordHash, password))
+        {
+            var failed = user.FailedLoginCount + 1;
+            var lockout = failed >= 5 ? DateTimeOffset.UtcNow.AddMinutes(15) : user.LockoutEnd;
+            await db.ApplicationUsers.Where(x => x.Id == user.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.FailedLoginCount, failed).SetProperty(x => x.LockoutEnd, lockout), ct);
+            db.AuditEvents.Add(new AuditEvent(failed >= 5 ? "Account locked" : "Login failure", nameof(ApplicationUser), user.Id, user.Email, user.Email, "Invalid credentials", DateTimeOffset.UtcNow));
+            await db.SaveChangesAsync(ct);
+            return null;
+        }
+        await db.ApplicationUsers.Where(x => x.Id == user.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.LastLoginAt, DateTimeOffset.UtcNow).SetProperty(x => x.FailedLoginCount, 0).SetProperty(x => x.LockoutEnd, (DateTimeOffset?)null), ct);
+        db.AuditEvents.Add(new AuditEvent("Login success", nameof(ApplicationUser), user.Id, user.Email, user.Email, "Local login succeeded", DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync(ct);
+        var mfa = await db.UserMfaSettings.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == user.Id && x.IsEnabled, ct);
+        if (mfa is not null)
+        {
+            var code = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
+            var challenge = new UserMfaChallenge(user.Id, mfa.PreferredMethod, SecurityHardeningService.HashCode(code), DateTimeOffset.UtcNow.AddMinutes(10), null, DateTimeOffset.UtcNow);
+            db.UserMfaChallenges.Add(challenge);
+            db.AuditEvents.Add(new AuditEvent("MFA challenge created", nameof(ApplicationUser), user.Id, user.Email, user.Email, "MFA required for login", DateTimeOffset.UtcNow));
+            await db.SaveChangesAsync(ct);
+            return new MfaLoginResponse(true, challenge.Id, [mfa.PreferredMethod.ToString()]);
+        }
         return await BuildResponseAsync(user.Id, ct);
     }
     public async Task<AuthResponse?> CurrentAsync(ClaimsPrincipal principal, CancellationToken ct = default)
@@ -68,6 +92,7 @@ public sealed class IdentityService(EProcurementDbContext db, IPasswordService p
         if (!Guid.TryParse(id, out var userId)) return false;
         return await db.UserRoles.Where(ur => ur.UserId == userId).Join(db.RolePermissions, ur => ur.RoleId, rp => rp.RoleId, (_, rp) => rp.PermissionId).Join(db.Permissions, pid => pid, p => p.Id, (_, p) => p).AnyAsync(p => p.Code == permission && p.IsActive, ct);
     }
+    public Task<AuthResponse?> BuildTokenForUserAsync(Guid userId, CancellationToken ct = default) => BuildResponseAsync(userId, ct);
     private async Task<AuthResponse?> BuildResponseAsync(Guid userId, CancellationToken ct)
     {
         var user = await db.ApplicationUsers.AsNoTracking().SingleOrDefaultAsync(x => x.Id == userId && x.IsActive, ct);

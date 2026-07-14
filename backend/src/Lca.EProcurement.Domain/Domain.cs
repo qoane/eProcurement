@@ -1,6 +1,9 @@
 namespace Lca.EProcurement.Domain;
 
 public enum SupplierStatus { Draft, Submitted, UnderVerification, Approved, Rejected, Suspended, Blacklisted }
+public enum SupplierAccountState { PendingVerification, EmailVerified, ProfileSubmitted, UnderReview, Approved, Rejected, Suspended }
+public enum MfaMethod { EmailOtp, SmsOtp, AuthenticatorApp }
+public enum IdentityProviderType { OpenIdConnect, Saml2, ActiveDirectory, Ldap }
 public enum WorkflowTaskStatus { Open, Assigned, Completed, Cancelled }
 public enum WorkflowInstanceStatus { Running, Completed, Cancelled }
 public enum WorkflowVersionStatus { Draft, Published, Archived }
@@ -67,6 +70,9 @@ public record SeedMetadata(string Kind, string Code, string Name) : Entity(Guid.
 
 public record Supplier(string ReferenceNumber, string LegalName, SupplierStatus Status) : Entity(Guid.NewGuid())
 {
+    public SupplierAccountState AccountState { get; init; } = Status == SupplierStatus.Approved ? SupplierAccountState.Approved : SupplierAccountState.PendingVerification;
+    public bool EmailVerified { get; init; } = Status == SupplierStatus.Approved;
+    public bool ProfileComplete { get; init; } = Status == SupplierStatus.Approved;
     public List<SupplierDocument> Documents { get; init; } = [];
     public List<SupplierCategory> Categories { get; init; } = [];
     public List<SupplierPerformanceRating> PerformanceRatings { get; init; } = [];
@@ -334,6 +340,12 @@ public enum UserType { SystemAdministrator, ProcurementOfficer, FinanceUser, App
 
 public record ApplicationUser(string Email, string FullName, string? PhoneNumber, UserType UserType, bool IsActive, bool IsExternalUser, Guid? SupplierId, DateTimeOffset CreatedAt, DateTimeOffset? LastLoginAt, string PasswordHash) : Entity(Guid.NewGuid())
 {
+    public int FailedLoginCount { get; init; }
+    public DateTimeOffset? LockoutEnd { get; init; }
+    public bool EmailConfirmed { get; init; }
+    public bool PhoneNumberConfirmed { get; init; }
+    public DateTimeOffset? LastPasswordChangedAt { get; init; }
+    public bool MustChangePassword { get; init; }
     public List<UserRole> UserRoles { get; init; } = [];
     public UserProfile? Profile { get; init; }
     public SupplierUserLink? SupplierLink { get; init; }
@@ -351,6 +363,15 @@ public record RolePermission(Guid RoleId, Guid PermissionId) : Entity(Guid.NewGu
 public record UserRole(Guid UserId, Guid RoleId) : Entity(Guid.NewGuid());
 public record UserProfile(Guid UserId, string Department, string JobTitle, string PreferencesJson = "{}") : Entity(Guid.NewGuid());
 public record SupplierUserLink(Guid UserId, Guid SupplierId, bool IsPrimaryContact = false, DateTimeOffset LinkedAt = default) : Entity(Guid.NewGuid());
+
+public record UserMfaSetting(Guid UserId, bool IsEnabled, MfaMethod PreferredMethod, string? AuthenticatorSecretEncrypted, string? PhoneNumber, string? Email, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt = null) : Entity(Guid.NewGuid());
+public record UserMfaChallenge(Guid UserId, MfaMethod Method, string CodeHash, DateTimeOffset ExpiresAt, DateTimeOffset? ConsumedAt, DateTimeOffset CreatedAt, int AttemptCount = 0) : Entity(Guid.NewGuid());
+public record TrustedDevice(Guid UserId, string DeviceHash, string Name, DateTimeOffset TrustedUntil, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt = null) : Entity(Guid.NewGuid());
+public record IdentityProviderConfiguration(string Code, string Name, IdentityProviderType ProviderType, string? Authority, string? ClientId, string? ClientSecretEncrypted, string? MetadataUrl, string CallbackPath, bool IsEnabled, string SettingsJson, DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt = null) : Entity(Guid.NewGuid());
+public record ExternalIdentityLink(Guid UserId, string ProviderCode, string ExternalSubjectId, string? ExternalEmail, DateTimeOffset LinkedAt, DateTimeOffset? LastLoginAt = null) : Entity(Guid.NewGuid());
+public record DelegationRule(Guid DelegatorUserId, Guid DelegateUserId, string? RoleCode, DateTimeOffset StartsAt, DateTimeOffset EndsAt, string Reason, bool IsActive, DateTimeOffset CreatedAt, string CreatedBy) : Entity(Guid.NewGuid());
+public record EscalationRule(string EntityType, string WorkflowCode, string NodeCode, string? AssignedRole, int EscalateAfterHours, string? EscalateToRole, Guid? EscalateToUserId, bool IsActive) : Entity(Guid.NewGuid());
+public record WorkflowTaskEscalation(Guid WorkflowTaskId, Guid? EscalatedFromUserId, Guid? EscalatedToUserId, string? EscalatedToRole, string Reason, DateTimeOffset EscalatedAt) : Entity(Guid.NewGuid());
 
 public enum NotificationChannel { InApp, Email, Sms }
 public enum NotificationStatus { Pending, Sent, Failed, Cancelled, Read, Unread }

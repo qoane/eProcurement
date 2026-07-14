@@ -92,7 +92,7 @@ import {
 } from "../modules/contracts/ContractPages";
 import { PageHeader } from "../components/ui/PageHeader";
 import { ContractIntegrationPage, DocumentIntegrationPage, IntegrationDashboardPage, IntegrationLogsPage } from "../modules/integrations/IntegrationPages";
-import { AuthProvider } from "../auth/AuthContext";
+import { AuthProvider, useAuth } from "../auth/AuthContext";
 import {
   SecurityPage,
   RolesPage,
@@ -127,6 +127,26 @@ function legacyPublicRedirect(path: string) {
   if (path.startsWith("/opportunities/")) return `/public${path}`;
   if (path === "/supplier/register") return "/public/register";
   return null;
+}
+
+function AccessDeniedPage() { return <EmptyState title="Access denied" message="You are signed in, but your account does not have permission to view this page." />; }
+function ProtectedShell({ path, children }: { path: string; children: React.ReactNode }) {
+  const { currentUser, hasPermission } = useAuth();
+  if (!currentUser) { history.replaceState(null, "", `/login`); queueMicrotask(() => dispatchEvent(new PopStateEvent("popstate"))); return null; }
+  const rules: [RegExp, string][] = [
+    [/^\/app\/security/, "Security.View"], [/^\/app\/users/, "Security.Users"], [/^\/app\/roles/, "Security.Roles"],
+    [/^\/app\/audit/, "Audit.View"], [/^\/app\/notifications/, "Notifications.View"], [/^\/app\/notification-logs/, "NotificationLogs.View"],
+    [/^\/app\/notification-templates/, "NotificationTemplates.Manage"], [/^\/app\/integrations/, "Integrations.View"],
+    [/^\/app\/suppliers/, "Supplier.View"], [/^\/app\/planning/, "Planning.View"], [/^\/app\/budgets/, "Budget.View"],
+    [/^\/app\/requisitions/, "Requisition.View"], [/^\/app\/tenders/, "Tender.View"], [/^\/app\/bids/, "Bid.View"],
+    [/^\/app\/bid-opening/, "BidOpening.View"], [/^\/app\/evaluation/, "Evaluation.View"], [/^\/app\/awards/, "Award.View"],
+    [/^\/app\/purchase-orders/, "PurchaseOrder.View"], [/^\/app\/contracts/, "Contract.View"], [/^\/app\/workflows|^\/app\/tasks/, "Workflow.View"],
+    [/^\/app\/rules/, "Studio.Rules"], [/^\/app\/forms/, "Studio.Forms"], [/^\/app\/studio/, "Studio.View"], [/^\/app\/configuration/, "Settings.View"],
+    [/^\/app\/reporting|^\/app\/dashboards/, "Reporting.View"]
+  ];
+  const required = rules.find(([regex]) => regex.test(path))?.[1];
+  if (required && !hasPermission(required)) return <AppShell><AccessDeniedPage /></AppShell>;
+  return <AppShell>{children}</AppShell>;
 }
 
 function route(p: string) {
@@ -328,7 +348,7 @@ function route(p: string) {
   else if (p === "/app/integrations/contracts") page = <ContractIntegrationPage />;
   else if (p === "/app/integrations/document-management") page = <DocumentIntegrationPage />;
   else if (p === "/app/integrations/logs") page = <IntegrationLogsPage />;
-  return <AppShell>{page}</AppShell>;
+  return <ProtectedShell path={p}>{page}</ProtectedShell>;
 }
 export function App() {
   const [p, setP] = useState(location.pathname);

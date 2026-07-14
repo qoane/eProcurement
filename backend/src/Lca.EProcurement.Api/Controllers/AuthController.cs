@@ -10,7 +10,7 @@ public sealed class AuthController(IIdentityService identity) : ControllerBase
 {
     [HttpPost("login")]
     [AllowAnonymous]
-    public async Task<ActionResult<AuthResponse>> Login(LoginRequest request, CancellationToken ct)
+    public async Task<ActionResult<object>> Login(LoginRequest request, CancellationToken ct)
     {
         var response = await identity.LoginAsync(request.Email, request.Password, ct);
         return response is null ? Unauthorized() : Ok(response);
