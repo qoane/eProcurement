@@ -7,7 +7,7 @@ public enum IdentityProviderType { OpenIdConnect, Saml2, ActiveDirectory, Ldap }
 public enum WorkflowTaskStatus { Open, Assigned, Completed, Cancelled }
 public enum WorkflowInstanceStatus { Running, Completed, Cancelled }
 public enum WorkflowVersionStatus { Draft, Published, Archived }
-public enum WorkflowNodeKind { Start, Task, Automatic, End }
+public enum WorkflowNodeKind { Start, Task, Automatic, Decision, End }
 public enum WorkflowActionKind { Transition, TaskAssignment, TaskCompletion, Cancellation }
 public enum RuleOutcome { Passed, Failed }
 public enum BusinessProcessStatus { Draft, Published, Archived }

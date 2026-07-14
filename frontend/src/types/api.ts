@@ -154,6 +154,9 @@ export type ApprovalMatrix = {
   entityType: string;
   steps?: ApprovalStep[];
 };
+export type StudioAreaSummary = { name: string; slug: string; description: string; itemCount: number; draftCount: number; publishedCount: number; lastUpdatedAt?: string };
+export type ConfigurationPackageManifest = { id?: string; name: string; createdAt?: string; createdBy?: string; itemCount?: number; status?: string };
+
 export type ConfigurationStudio = {
   businessProcesses: BusinessProcessDefinition[];
   documentRequirementSets: DocumentRequirementSet[];

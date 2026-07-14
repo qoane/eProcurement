@@ -1392,3 +1392,6 @@ textarea.input {
     grid-template-columns: 1fr;
   }
 }
+.studio-card-metrics { display: grid; gap: .2rem; color: var(--muted-text); font-size: .78rem; margin-top: .5rem; }
+.studio-card-metrics em { font-style: normal; color: var(--muted-text); }
+.btn-sm { padding: .25rem .55rem; font-size: .78rem; justify-self: start; margin-top: .45rem; }

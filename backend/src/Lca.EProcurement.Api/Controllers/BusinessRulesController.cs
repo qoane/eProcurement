@@ -13,6 +13,24 @@ public sealed class BusinessRulesController(IBusinessRuleApplicationService rule
     [HttpPost("validate")] public async Task<IActionResult> Validate(RuleExpressionDto dto, CancellationToken ct) => Ok(await rules.ValidateAsync(dto, ct));
     [HttpPost("simulate")] public async Task<IActionResult> Simulate(RuleSimulationDto dto, CancellationToken ct) => Ok(await rules.SimulateAsync(dto, ct));
     [HttpPost("{code}/publish")] public async Task<IActionResult> Publish(string code, ActorDto dto, CancellationToken ct) => (await rules.PublishAsync(code, dto.Actor, ct)) is { } r ? Ok(r) : NotFound();
+    [HttpPost("{code}/test")] public async Task<IActionResult> Test(string code, RuleTestDto dto, CancellationToken ct)
+    {
+        var all = await rules.GetRulesAsync(ct);
+        var rule = all.SingleOrDefault(x => x.Code == code);
+        if (rule is null) return NotFound();
+        var values = string.IsNullOrWhiteSpace(dto.SampleDataJson) ? [] : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string?>>(dto.SampleDataJson) ?? [];
+        try
+        {
+            var result = await rules.SimulateAsync(new RuleSimulationDto(rule.AppliesTo, rule.Expression, values), ct);
+            return Ok(new { passed = result.Passed, rule.FailureMessage, executionDetails = result.Trace, errors = result.Validation.Errors });
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { passed = false, rule.FailureMessage, executionDetails = new { rule.Expression }, errors = new[] { ex.Message } });
+        }
+    }
     [HttpPost("{code}/evaluate")] public async Task<IActionResult> Evaluate(string code, EvaluateRuleDto dto, CancellationToken ct) => Ok(await rules.EvaluateAsync(code, dto.EntityType, dto.EntityId, dto.Actor, ct));
 }
 public sealed record EvaluateRuleDto(string EntityType, Guid EntityId, string Actor);
+
+public sealed record RuleTestDto(string EntityType, Guid? EntityId, string SampleDataJson);
