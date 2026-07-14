@@ -1,0 +1,8 @@
+import { useEffect, useState } from "react";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { Card } from "../../components/ui/Card";
+function TitledCard({ title, children }: { title: string; children: React.ReactNode }) { return <Card><div className="card-header"><h3 className="card-title">{title}</h3></div><div className="card-body">{children}</div></Card>; }
+import { EmptyState } from "../../components/ui/EmptyState";
+import { getSupportCases, type SupportCase } from "../../services/operationsApi";
+export function SupportCaseListPage(){ const [cases,setCases]=useState<SupportCase[]>([]); const [error,setError]=useState(""); const load=()=>getSupportCases().then(r=>{setCases(r.data.items); setError(r.error||"")}); useEffect(()=>{load()},[]); return <><PageHeader title="Support cases" description="Internal operational support and maintenance tracking." actions={<button className="btn btn-outline-primary" onClick={load}>Retry</button>}/>{error&&<div className="alert alert-danger">Something went wrong. {error.includes("Reference")?error:<span />}</div>}<TitledCard title="Cases">{cases.length?cases.map(c=><a key={c.id} className="d-block py-2" href={`/app/support/${c.id}`}>{c.caseNumber} - {c.title} <span className="badge text-bg-secondary">{c.status}</span></a>):<EmptyState title="No support cases" message="Support cases logged by users and suppliers will appear here."/>}</TitledCard></> }
+export function SupportCaseDetailPage({ id }: { id: string }){ return <><PageHeader title="Support case" description={id}/><EmptyState title="Support case detail" message="Use the support API to assign, resolve or close this case."/></> }
