@@ -1,0 +1,23 @@
+namespace Lca.EProcurement.Domain;
+
+public enum DataGovernancePolicyType { Ownership, Retention, Archival, Privacy, Migration, Export, Deletion }
+public enum DataArchiveBatchStatus { Draft, Running, Completed, Failed, Cancelled }
+public enum DataPrivacyClassificationLevel { Public, Internal, Confidential, PersonalData, FinancialData, SealedBidData, AuditSensitive }
+public enum MigrationBatchStatus { Uploaded, Validating, ValidationFailed, ReadyToImport, Importing, Imported, PartiallyImported, Failed, Cancelled }
+public enum MigrationIssueSeverity { Info, Warning, Error }
+public enum DataExportStatus { Requested, Processing, Completed, Failed, Cancelled }
+public enum DataProcessingOperationType { Import, Export, Archive, PrivacyMasking, RetentionRuleApplied, DataQualityCheck, MigrationValidation, DeletionRequested, DeletionRejected }
+
+public record DataGovernancePolicy(string Code, string Name, string Description, DataGovernancePolicyType PolicyType, string EntityType, bool IsActive, DateTimeOffset EffectiveFrom, DateTimeOffset? EffectiveTo, string CreatedBy, DateTimeOffset CreatedAt, string? UpdatedBy = null, DateTimeOffset? UpdatedAt = null) : Entity(Guid.NewGuid());
+public record DataRetentionRule(string Code, string Name, string EntityType, int RetentionPeriodDays, int ArchiveAfterDays, int? DeleteAfterDays, bool LegalHoldSupported, bool RequiresApprovalForDeletion, bool IsActive, string CreatedBy, DateTimeOffset CreatedAt, string? UpdatedBy = null, DateTimeOffset? UpdatedAt = null) : Entity(Guid.NewGuid());
+public record DataArchiveBatch(string BatchNumber, string EntityType, string Reason, DataArchiveBatchStatus Status, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? StartedAt = null, DateTimeOffset? CompletedAt = null, int TotalItems = 0, int ArchivedItems = 0, int FailedItems = 0) : Entity(Guid.NewGuid()) { public List<DataArchiveItem> Items { get; init; } = []; }
+public record DataArchiveItem(Guid BatchId, string EntityType, Guid EntityId, string EntityReference, string OriginalStatus, string ArchiveStatus, string ArchiveReason, DateTimeOffset? ArchivedAt = null, string? ErrorMessage = null) : Entity(Guid.NewGuid());
+public record MigrationBatch(string BatchNumber, string SourceName, string EntityType, string FileName, string UploadedBy, DateTimeOffset UploadedAt, MigrationBatchStatus Status, DateTimeOffset? StartedAt = null, DateTimeOffset? CompletedAt = null, int TotalRows = 0, int SuccessfulRows = 0, int FailedRows = 0, string ValidationSummaryJson = "{}", string? Notes = null) : Entity(Guid.NewGuid()) { public List<MigrationImportItem> Items { get; init; } = []; public List<MigrationValidationIssue> Issues { get; init; } = []; }
+public record MigrationTemplate(string Code, string Name, string EntityType, string Description, string FileFormat, bool IsActive, string CreatedBy, DateTimeOffset CreatedAt) : Entity(Guid.NewGuid()) { public List<MigrationTemplateField> Fields { get; init; } = []; }
+public record MigrationTemplateField(Guid TemplateId, string FieldName, string DisplayName, string DataType, bool IsRequired, int? MaxLength, string? LookupType, string? ExampleValue, string? ValidationRule, int DisplayOrder) : Entity(Guid.NewGuid());
+public record MigrationImportItem(Guid BatchId, int RowNumber, string? ExternalReference, string EntityType, Guid? EntityId, string RawDataJson, string MappedDataJson, MigrationBatchStatus Status, string? ErrorMessage = null, DateTimeOffset? ImportedAt = null) : Entity(Guid.NewGuid());
+public record MigrationValidationIssue(Guid BatchId, Guid? ImportItemId, int? RowNumber, string? FieldName, MigrationIssueSeverity Severity, string Message, DateTimeOffset CreatedAt) : Entity(Guid.NewGuid());
+public record DataQualityCheck(string Code, string Name, string EntityType, string Description, string RuleExpression, MigrationIssueSeverity Severity, bool IsActive, DateTimeOffset CreatedAt) : Entity(Guid.NewGuid());
+public record DataPrivacyClassification(string EntityType, string FieldName, DataPrivacyClassificationLevel Classification, string Reason, bool IsSensitive, bool MaskInUi, bool MaskInExports, DateTimeOffset CreatedAt, string CreatedBy) : Entity(Guid.NewGuid());
+public record DataExportRequest(string RequestNumber, string EntityType, string RequestedBy, DateTimeOffset RequestedAt, DataExportStatus Status, string Format, bool IncludeSensitiveData, string Reason, DateTimeOffset? CompletedAt = null, string? DownloadReference = null, string? ErrorMessage = null) : Entity(Guid.NewGuid());
+public record DataProcessingLog(DataProcessingOperationType OperationType, string EntityType, Guid? EntityId, string Actor, string Purpose, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());

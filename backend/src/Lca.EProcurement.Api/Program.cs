@@ -20,7 +20,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 builder.Services.AddAuthorization(options =>
 {
     options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
-    foreach (var p in new[] { "Notifications.View", "Notifications.Manage", "NotificationTemplates.Manage", "NotificationLogs.View", "Settings.View", "Settings.Manage", "Document.View", "Document.Upload", "Document.Download", "Document.Publish", "Document.Archive", "Document.Delete", "Document.ManageRetention", "Document.ViewAccessLog", "Document.ManageRequirements" })
+    foreach (var p in new[] { "Notifications.View", "Notifications.Manage", "NotificationTemplates.Manage", "NotificationLogs.View", "Settings.View", "Settings.Manage", "Document.View", "Document.Upload", "Document.Download", "Document.Publish", "Document.Archive", "Document.Delete", "Document.ManageRetention", "Document.ViewAccessLog", "Document.ManageRequirements", "DataGovernance.View", "DataGovernance.Manage", "DataRetention.View", "DataRetention.Manage", "DataArchive.View", "DataArchive.Manage", "Migration.View", "Migration.Upload", "Migration.Validate", "Migration.Import", "Migration.Cancel", "DataQuality.View", "DataQuality.Manage", "DataQuality.Run", "DataExport.View", "DataExport.Request", "DataExport.Download", "DataExportSensitive", "PrivacyClassification.View", "PrivacyClassification.Manage" })
         options.AddPolicy(p, policy => policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", p) || ctx.User.IsInRole("Administrator")));
 });
 builder.Services.AddDbContext<EProcurementDbContext>(options => options.UseConfiguredProvider(builder.Configuration["Database:Provider"] ?? "SqlServer", builder.Configuration.GetConnectionString("Default")));
@@ -76,6 +76,11 @@ builder.Services.AddScoped<IDocumentIntegrationService, DocumentIntegrationServi
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IIdentityService, IdentityService>();
 builder.Services.AddScoped<ISecurityHardeningService, SecurityHardeningService>();
+builder.Services.AddScoped<IDataGovernanceApplicationService, DataGovernanceApplicationService>();
+builder.Services.AddScoped<IMigrationApplicationService, MigrationApplicationService>();
+builder.Services.AddScoped<IDataArchivalService, DataArchivalService>();
+builder.Services.AddScoped<IDataQualityApplicationService, DataQualityApplicationService>();
+builder.Services.AddScoped<IDataExportApplicationService, DataExportApplicationService>();
 
 var app = builder.Build();
 

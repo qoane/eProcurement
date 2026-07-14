@@ -155,6 +155,20 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
     public DbSet<LookupDefinition> LookupDefinitions => Set<LookupDefinition>();
     public DbSet<DocumentTypeDefinition> DocumentTypeDefinitions => Set<DocumentTypeDefinition>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+
+    public DbSet<DataGovernancePolicy> DataGovernancePolicies => Set<DataGovernancePolicy>();
+    public DbSet<DataRetentionRule> DataRetentionRules => Set<DataRetentionRule>();
+    public DbSet<DataArchiveBatch> DataArchiveBatches => Set<DataArchiveBatch>();
+    public DbSet<DataArchiveItem> DataArchiveItems => Set<DataArchiveItem>();
+    public DbSet<MigrationBatch> MigrationBatches => Set<MigrationBatch>();
+    public DbSet<MigrationTemplate> MigrationTemplates => Set<MigrationTemplate>();
+    public DbSet<MigrationTemplateField> MigrationTemplateFields => Set<MigrationTemplateField>();
+    public DbSet<MigrationImportItem> MigrationImportItems => Set<MigrationImportItem>();
+    public DbSet<MigrationValidationIssue> MigrationValidationIssues => Set<MigrationValidationIssue>();
+    public DbSet<DataQualityCheck> DataQualityChecks => Set<DataQualityCheck>();
+    public DbSet<DataPrivacyClassification> DataPrivacyClassifications => Set<DataPrivacyClassification>();
+    public DbSet<DataExportRequest> DataExportRequests => Set<DataExportRequest>();
+    public DbSet<DataProcessingLog> DataProcessingLogs => Set<DataProcessingLog>();
     public DbSet<AnnualProcurementPlan> AnnualProcurementPlans => Set<AnnualProcurementPlan>();
     public DbSet<ProcurementPlanItem> ProcurementPlanItems => Set<ProcurementPlanItem>();
     public DbSet<Budget> Budgets => Set<Budget>();
