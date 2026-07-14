@@ -116,6 +116,9 @@ import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { DataArchivePage, DataExportsPage, DataGovernanceDashboardPage, DataQualityPage, MigrationBatchDetailPage, MigrationPage, PoliciesPage, PrivacyPage, ProcessingLogsPage, RetentionPage } from "../modules/data-governance/DataGovernancePages";
 import { OperationsBackupsPage, OperationsChecklistPage, OperationsDashboardPage, OperationsHealthPage, OperationsLogsPage, OperationsPerformancePage } from "../modules/operations/OperationsPages";
 import { SupportCaseDetailPage, SupportCaseListPage } from "../modules/support/SupportPages";
+import { RfpEvidenceDashboardPage, ComplianceMatrixPage, ProposalCommitmentsPage, CoveragePage, EvidenceExportsPage, ArchitectureEvidencePage, IntegrationEvidencePage } from "../modules/rfp-evidence/RfpEvidencePages";
+import { DemoControlCenterPage, DemoScriptPage, UatPage, TrainingPage, ImplementationPage, SupportMaintenancePage, HandoverPage, ReadinessPage } from "../modules/rfp-evidence/ReadinessAndHandoverPages";
+
 function NotConfiguredPage({ title }: { title: string }) {
   return (
     <>
@@ -152,7 +155,7 @@ function ProtectedShell({ path, children }: { path: string; children: React.Reac
     [/^\/app\/purchase-orders/, "PurchaseOrder.View"], [/^\/app\/invoices/, "Invoice.View"], [/^\/app\/invoice-matching/, "InvoiceMatching.View"], [/^\/app\/purchase-order-returns/, "PurchaseOrderReturn.View"], [/^\/app\/contracts/, "Contract.View"], [/^\/app\/workflows|^\/app\/tasks/, "Workflow.View"],
     [/^\/app\/rules/, "Studio.Rules"], [/^\/app\/forms/, "Studio.Forms"], [/^\/app\/studio/, "Studio.View"], [/^\/app\/configuration/, "Settings.View"],
     [/^\/app\/reporting|^\/app\/dashboards/, "Reporting.View"], [/^\/app\/documents|^\/app\/document-retention|^\/app\/document-requirements/, "Document.View"],
-    [/^\/app\/operations/, "Operations.View"], [/^\/app\/support/, "SupportCase.View"],
+    [/^\/app\/operations/, "Operations.View"], [/^\/app\/rfp-evidence/, "RfpEvidence.View"], [/^\/app\/demo/, "Demo.View"], [/^\/app\/uat/, "Uat.View"], [/^\/app\/training/, "Training.View"], [/^\/app\/implementation/, "Implementation.View"], [/^\/app\/handover/, "Handover.View"], [/^\/app\/readiness/, "Readiness.View"], [/^\/app\/support-maintenance/, "SupportMaintenance.View"], [/^\/app\/support/, "SupportCase.View"],
     [/^\/app\/data-governance/, "DataGovernance.View"], [/^\/app\/migration/, "Migration.View"], [/^\/app\/data-quality/, "DataQuality.View"], [/^\/app\/data-archive/, "DataArchive.View"], [/^\/app\/data-exports/, "DataExport.View"]
   ];
   const required = rules.find(([regex]) => regex.test(path))?.[1];
@@ -263,6 +266,23 @@ function route(p: string) {
   else if (p === "/app/reporting") page = <ReportingPage />;
   else if (p === "/app/dashboards") page = <DashboardsPage />;
   else if (p.startsWith("/app/reporting/")) page = <ReportingPage reportCode={decodeURIComponent(p.split("/").pop() || "executive-dashboard")} />;
+
+  else if (p === "/app/rfp-evidence") page = <RfpEvidenceDashboardPage />;
+  else if (p === "/app/rfp-evidence/compliance-matrix") page = <ComplianceMatrixPage />;
+  else if (p === "/app/rfp-evidence/proposal-commitments") page = <ProposalCommitmentsPage />;
+  else if (p === "/app/rfp-evidence/coverage") page = <CoveragePage />;
+  else if (p === "/app/rfp-evidence/exports") page = <EvidenceExportsPage />;
+  else if (p === "/app/rfp-evidence/architecture") page = <ArchitectureEvidencePage />;
+  else if (p === "/app/rfp-evidence/integrations") page = <IntegrationEvidencePage />;
+  else if (p === "/app/demo") page = <DemoControlCenterPage />;
+  else if (p === "/app/demo/script") page = <DemoScriptPage />;
+  else if (p === "/app/uat" || p === "/app/uat/suites" || p.startsWith("/app/uat/suites/") || p.startsWith("/app/uat/runs")) page = <UatPage />;
+  else if (p === "/app/training") page = <TrainingPage />;
+  else if (p.startsWith("/app/training/")) page = <TrainingPage moduleCode={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p === "/app/implementation") page = <ImplementationPage />;
+  else if (p === "/app/support-maintenance") page = <SupportMaintenancePage />;
+  else if (p === "/app/handover") page = <HandoverPage />;
+  else if (p === "/app/readiness") page = <ReadinessPage />;
   else if (p === "/app/settings") page = <SettingsPage />;
   else if (p === "/app/data-governance") page = <DataGovernanceDashboardPage />;
   else if (p === "/app/data-governance/policies") page = <PoliciesPage />;
