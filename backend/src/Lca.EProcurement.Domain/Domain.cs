@@ -20,6 +20,8 @@ public enum TenderClarificationVisibility { Private, Public }
 public enum BidSubmissionStatus { Draft, Submitted, Locked, Withdrawn, Opened, Evaluated, Awarded, Rejected }
 public enum BidOpeningSessionStatus { Draft, Scheduled, InProgress, Completed, ReferredToEvaluation, Cancelled }
 public enum BidOpeningSubmissionStatus { Pending, Opened, Late, Disqualified, ReferredToEvaluation }
+public enum SealedBidEnvelopeStatus { Draft, Sealed, Opened, Rejected, Withdrawn }
+public enum BidAccessType { ViewSummary, ViewPricing, ViewDocument, DownloadDocument, OpenBid, IntegrityCheck }
 public enum EvaluationSessionStatus { Draft, Scheduled, InProgress, Consensus, Completed, Cancelled, ReferredToAward }
 public enum EvaluationStage { Administrative, Technical, Financial, Consensus }
 public enum EvaluationSubmissionStatus { Pending, Responsive, NonResponsive, Evaluated, Recommended, Rejected }
@@ -134,6 +136,12 @@ public record BidSubmissionDeclaration(Guid BidSubmissionId, string DeclarationT
 public record BidSubmissionVersion(Guid BidSubmissionId, int VersionNumber, DateTimeOffset CreatedAt, string CreatedBy) : Entity(Guid.NewGuid());
 public record BidSubmissionStatusHistory(Guid BidSubmissionId, BidSubmissionStatus FromStatus, BidSubmissionStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
 
+
+
+public record SealedBidEnvelope(Guid BidSubmissionId, Guid TenderId, Guid SupplierId, string EnvelopeNumber, SealedBidEnvelopeStatus Status, DateTimeOffset? SealedAt, string? SealedBy, DateTimeOffset? OpenedAt, string? OpenedBy, Guid? OpeningSessionId, string SubmissionHash, string DocumentManifestHash, string TimestampReference, string? DigitalSignatureReference, string? SecureVaultReference, string? OpeningKeyReference, DateTimeOffset CreatedAt) : Entity(Guid.NewGuid());
+public record SealedBidDocumentEvidence(Guid BidSubmissionDocumentId, Guid BidSubmissionId, string FileName, string DocumentType, string StorageReference, long FileSize, string ContentHash, string HashAlgorithm, DateTimeOffset UploadedAt, DateTimeOffset? SealedAt, bool IsPublicBeforeOpening, DateTimeOffset CreatedAt) : Entity(Guid.NewGuid());
+public record BidAccessLog(Guid BidSubmissionId, string UserId, string UserEmail, BidAccessType AccessType, bool AccessAllowed, string? DeniedReason, DateTimeOffset AccessedAt, string? IpAddress, string? UserAgent) : Entity(Guid.NewGuid());
+public record BidOpeningEvidence(Guid BidOpeningSessionId, Guid BidSubmissionId, string OpenedBy, DateTimeOffset OpenedAt, string OpeningReason, string SubmissionHashAtOpening, string DocumentManifestHashAtOpening, bool IntegrityCheckPassed, string IntegrityCheckResultJson, DateTimeOffset CreatedAt) : Entity(Guid.NewGuid());
 
 public record BidOpeningSession(string SessionNumber, Guid TenderId, string Title, DateTimeOffset ScheduledAt, BidOpeningSessionStatus Status, string CreatedBy, DateTimeOffset CreatedAt, string Chairperson, string? Notes = null, DateTimeOffset? StartedAt = null, DateTimeOffset? CompletedAt = null) : Entity(Guid.NewGuid())
 {
