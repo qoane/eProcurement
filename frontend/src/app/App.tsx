@@ -109,6 +109,7 @@ import {
   ProfilePage,
   SettingsPage,
 } from "../modules/notifications/NotificationPages";
+import { DataArchivePage, DataExportsPage, DataGovernanceDashboardPage, DataQualityPage, MigrationBatchDetailPage, MigrationPage, PoliciesPage, PrivacyPage, ProcessingLogsPage, RetentionPage } from "../modules/data-governance/DataGovernancePages";
 function NotConfiguredPage({ title }: { title: string }) {
   return (
     <>
@@ -144,7 +145,8 @@ function ProtectedShell({ path, children }: { path: string; children: React.Reac
     [/^\/app\/bid-opening/, "BidOpening.View"], [/^\/app\/evaluation/, "Evaluation.View"], [/^\/app\/awards/, "Award.View"],
     [/^\/app\/purchase-orders/, "PurchaseOrder.View"], [/^\/app\/invoices/, "Invoice.View"], [/^\/app\/invoice-matching/, "InvoiceMatching.View"], [/^\/app\/purchase-order-returns/, "PurchaseOrderReturn.View"], [/^\/app\/contracts/, "Contract.View"], [/^\/app\/workflows|^\/app\/tasks/, "Workflow.View"],
     [/^\/app\/rules/, "Studio.Rules"], [/^\/app\/forms/, "Studio.Forms"], [/^\/app\/studio/, "Studio.View"], [/^\/app\/configuration/, "Settings.View"],
-    [/^\/app\/reporting|^\/app\/dashboards/, "Reporting.View"], [/^\/app\/documents|^\/app\/document-retention|^\/app\/document-requirements/, "Document.View"]
+    [/^\/app\/reporting|^\/app\/dashboards/, "Reporting.View"], [/^\/app\/documents|^\/app\/document-retention|^\/app\/document-requirements/, "Document.View"],
+    [/^\/app\/data-governance/, "DataGovernance.View"], [/^\/app\/migration/, "Migration.View"], [/^\/app\/data-quality/, "DataQuality.View"], [/^\/app\/data-archive/, "DataArchive.View"], [/^\/app\/data-exports/, "DataExport.View"]
   ];
   const required = rules.find(([regex]) => regex.test(path))?.[1];
   if (required && !hasPermission(required)) return <AppShell><AccessDeniedPage /></AppShell>;
@@ -247,6 +249,16 @@ function route(p: string) {
   else if (p === "/app/dashboards") page = <DashboardsPage />;
   else if (p.startsWith("/app/reporting/")) page = <ReportingPage reportCode={decodeURIComponent(p.split("/").pop() || "executive-dashboard")} />;
   else if (p === "/app/settings") page = <SettingsPage />;
+  else if (p === "/app/data-governance") page = <DataGovernanceDashboardPage />;
+  else if (p === "/app/data-governance/policies") page = <PoliciesPage />;
+  else if (p === "/app/data-governance/retention") page = <RetentionPage />;
+  else if (p === "/app/data-governance/privacy") page = <PrivacyPage />;
+  else if (p === "/app/data-governance/processing-logs") page = <ProcessingLogsPage />;
+  else if (p === "/app/migration" || p === "/app/migration/templates" || p === "/app/migration/batches") page = <MigrationPage />;
+  else if (p.startsWith("/app/migration/batches/")) page = <MigrationBatchDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p === "/app/data-quality") page = <DataQualityPage />;
+  else if (p === "/app/data-archive") page = <DataArchivePage />;
+  else if (p === "/app/data-exports") page = <DataExportsPage />;
   else if (p === "/app/documents") page = <DocumentsPage />;
   else if (p.startsWith("/app/documents/")) page = <DocumentDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/document-retention") page = <DocumentRetentionPage />;
