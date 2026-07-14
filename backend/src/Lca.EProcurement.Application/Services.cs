@@ -46,7 +46,7 @@ public interface IBusinessRuleApplicationService
     Task<RuleSimulationResultDto> SimulateAsync(RuleSimulationDto dto, CancellationToken ct = default);
     Task<RuleResult> EvaluateAsync(string ruleCode, string entityType, Guid entityId, string actor, CancellationToken ct = default);
     Task<List<RuleResult>> EvaluatePublishedAsync(string appliesTo, string entityType, Guid entityId, string actor, Dictionary<string, string?>? values = null, CancellationToken ct = default);
-    RuleDesignerMetadataDto GetDesignerMetadata(string appliesTo = nameof(Supplier));
+    RuleDesignerMetadataDto GetDesignerMetadata(string appliesTo = nameof(Lca.EProcurement.Domain.Supplier));
 }
 public interface ISupplierApplicationService
 {
@@ -216,7 +216,7 @@ public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : I
         var rules = await db.BusinessRuleDefinitions.Where(r => r.AppliesTo == appliesTo && r.IsActive && r.Status == BusinessRuleStatus.Published).OrderBy(r => r.Category).ThenBy(r => r.Code).ToListAsync(ct);
         return await EvaluateRules(rules, entityType, entityId, actor, values, ct);
     }
-    public RuleDesignerMetadataDto GetDesignerMetadata(string appliesTo = nameof(Supplier)) => new(["Registration", "Compliance", "Risk", "Documents", "Eligibility"], Fields.ToList(), Functions.ToList(), ["&&", "||", "!", "==", "!="]);
+    public RuleDesignerMetadataDto GetDesignerMetadata(string appliesTo = nameof(Lca.EProcurement.Domain.Supplier)) => new(["Registration", "Compliance", "Risk", "Documents", "Eligibility"], Fields.ToList(), Functions.ToList(), ["&&", "||", "!", "==", "!="]);
     async Task<List<RuleResult>> EvaluateRules(List<BusinessRuleDefinition> rules, string entityType, Guid entityId, string actor, Dictionary<string, string?>? values, CancellationToken ct)
     {
         var entity = await LoadRuleEntity(entityType, entityId, ct);
@@ -235,7 +235,7 @@ public sealed class BusinessRuleApplicationService(EProcurementDbContext db) : I
 
     async Task<object> LoadRuleEntity(string entityType, Guid entityId, CancellationToken ct)
     {
-        object? entity = entityType == nameof(Supplier) ? await db.Suppliers.Include(s => s.Documents).Include(s => s.Categories).SingleOrDefaultAsync(s => s.Id == entityId, ct)
+        object? entity = entityType == nameof(Lca.EProcurement.Domain.Supplier) ? await db.Suppliers.Include(s => s.Documents).Include(s => s.Categories).SingleOrDefaultAsync(s => s.Id == entityId, ct)
             : entityType == nameof(Requisition) ? await db.Requisitions.Include(r => r.Items).SingleOrDefaultAsync(r => r.Id == entityId, ct)
             : entityType == nameof(BidSubmission) ? await db.BidSubmissions.Include(b => b.Documents).Include(b => b.Declarations).Include(b => b.Items).SingleOrDefaultAsync(b => b.Id == entityId, ct)
             : entityType == nameof(BidOpeningSession) ? await db.BidOpeningSessions.Include(b => b.CommitteeMembers).Include(b => b.Submissions).SingleOrDefaultAsync(b => b.Id == entityId, ct)
@@ -418,8 +418,8 @@ public sealed class WorkflowApplicationService(EProcurementDbContext db, IBusine
     async Task<WorkflowVersion?> DraftWorkflowVersion(string code, CancellationToken ct) => (await db.WorkflowDefinitions.Include(w => w.Versions).SingleOrDefaultAsync(w => w.Code == code && w.IsActive, ct))?.Versions.OrderByDescending(v => v.VersionNumber).FirstOrDefault(v => v.Status == WorkflowVersionStatus.Draft);
     static WorkflowVersion Published(WorkflowDefinition d) => d.Versions.Single(v => v.Id == d.PublishedVersionId || v.Status == WorkflowVersionStatus.Published);
     async Task CreateTask(WorkflowVersion v, WorkflowInstance i, string actor, CancellationToken ct) { var n = v.Nodes.Single(x => x.Code == i.CurrentNodeCode); if (!n.CreatesTask) return; db.WorkflowTasks.Add(new WorkflowTask(i.Id, n.Code, n.DefaultAssignedRole, CreatedAt: DateTimeOffset.UtcNow)); await Task.CompletedTask; }
-    async Task ApplyEffects(Guid transitionId, string entityType, Guid entityId, CancellationToken ct) { foreach (var e in await db.WorkflowTransitionEffects.Where(x => x.TriggerTransitionId == transitionId && x.EntityType == entityType).ToListAsync(ct)) if (entityType == nameof(Supplier) && e.PropertyName == nameof(Supplier.Status)) { var s = await db.Suppliers.SingleAsync(x => x.Id == entityId, ct); db.Entry(s).CurrentValues[e.PropertyName] = Enum.Parse<SupplierStatus>(e.ValueExpression.Trim('"'), true); } }
-    async Task<string> Reference(string entityType, Guid entityId, CancellationToken ct) => entityType == nameof(Supplier) ? (await db.Suppliers.SingleAsync(s => s.Id == entityId, ct)).ReferenceNumber : entityType == nameof(Requisition) ? (await db.Requisitions.SingleAsync(r => r.Id == entityId, ct)).RequisitionNumber : entityType == nameof(BidOpeningSession) ? (await db.BidOpeningSessions.SingleAsync(r => r.Id == entityId, ct)).SessionNumber : entityId.ToString();
+    async Task ApplyEffects(Guid transitionId, string entityType, Guid entityId, CancellationToken ct) { foreach (var e in await db.WorkflowTransitionEffects.Where(x => x.TriggerTransitionId == transitionId && x.EntityType == entityType).ToListAsync(ct)) if (entityType == nameof(Lca.EProcurement.Domain.Supplier) && e.PropertyName == nameof(Supplier.Status)) { var s = await db.Suppliers.SingleAsync(x => x.Id == entityId, ct); db.Entry(s).CurrentValues[e.PropertyName] = Enum.Parse<SupplierStatus>(e.ValueExpression.Trim('"'), true); } }
+    async Task<string> Reference(string entityType, Guid entityId, CancellationToken ct) => entityType == nameof(Lca.EProcurement.Domain.Supplier) ? (await db.Suppliers.SingleAsync(s => s.Id == entityId, ct)).ReferenceNumber : entityType == nameof(Requisition) ? (await db.Requisitions.SingleAsync(r => r.Id == entityId, ct)).RequisitionNumber : entityType == nameof(BidOpeningSession) ? (await db.BidOpeningSessions.SingleAsync(r => r.Id == entityId, ct)).SessionNumber : entityId.ToString();
 }
 
 public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkflowApplicationService workflows, IDynamicFormApplicationService forms, IBusinessRuleApplicationService rules) : ISupplierApplicationService
@@ -474,12 +474,12 @@ public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkfl
         else db.Entry(supplier).CurrentValues[nameof(Supplier.LegalName)] = legalName;
         foreach (var doc in dto.Documents) if (!supplier.Documents.Any(x => x.DocumentType == doc.DocumentType && x.FileName == doc.FileName)) db.SupplierDocuments.Add(new SupplierDocument(supplier.Id, doc.DocumentType, doc.FileName, dto.Actor, DateTimeOffset.UtcNow));
         await AssignSupplierCategoriesAsync(supplier, dto.Categories ?? CategoryValues(dto.Values), ct);
-        db.AuditEvents.Add(new AuditEvent("Supplier registration submitted", nameof(Supplier), supplier.Id, supplier.ReferenceNumber, dto.Actor, config.Process.Code, DateTimeOffset.UtcNow));
+        db.AuditEvents.Add(new AuditEvent("Supplier registration submitted", nameof(Lca.EProcurement.Domain.Supplier), supplier.Id, supplier.ReferenceNumber, dto.Actor, config.Process.Code, DateTimeOffset.UtcNow));
         await db.SaveChangesAsync(ct);
-        var ruleResults = await rules.EvaluatePublishedAsync("SupplierRegistration", nameof(Supplier), supplier.Id, dto.Actor, dto.Values, ct);
+        var ruleResults = await rules.EvaluatePublishedAsync("SupplierRegistration", nameof(Lca.EProcurement.Domain.Supplier), supplier.Id, dto.Actor, dto.Values, ct);
         if (ruleResults.Any(x => !x.Passed)) throw new InvalidOperationException($"Supplier registration blocked by published rules: {string.Join(", ", ruleResults.Where(x => !x.Passed).Select(x => x.RuleCode))}");
-        var submission = await forms.SubmitAsync(new SubmitFormDto(config.Form.Code, nameof(Supplier), supplier.Id, dto.Actor, dto.Values), ct);
-        var instance = await workflows.StartAsync(config.Workflow.Code, nameof(Supplier), supplier.Id, dto.Actor, ct);
+        var submission = await forms.SubmitAsync(new SubmitFormDto(config.Form.Code, nameof(Lca.EProcurement.Domain.Supplier), supplier.Id, dto.Actor, dto.Values), ct);
+        var instance = await workflows.StartAsync(config.Workflow.Code, nameof(Lca.EProcurement.Domain.Supplier), supplier.Id, dto.Actor, ct);
         var version = config.Workflow.Versions.Single(v => v.Id == config.Workflow.PublishedVersionId || v.Status == WorkflowVersionStatus.Published);
         var transition = version.Transitions.FirstOrDefault(t => t.FromNodeCode == instance.CurrentNodeCode);
         if (transition is not null) instance = await workflows.ExecuteActionAsync(instance.Id, transition.ActionCode, dto.Actor, ct) ?? instance;
@@ -497,7 +497,7 @@ public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkfl
         var task = await db.WorkflowTasks.AsNoTracking().SingleOrDefaultAsync(x => x.Id == taskId, ct); if (task is null) return null;
         var instance = await db.WorkflowInstances.AsNoTracking().SingleAsync(x => x.Id == task.WorkflowInstanceId, ct);
         SupplierDetailDto? supplier = null;
-        if (instance.EntityType == nameof(Supplier)) { var s = await db.Suppliers.AsNoTracking().Include(x => x.Documents).Include(x => x.Categories).SingleAsync(x => x.Id == instance.EntityId, ct); supplier = await BuildSupplierDetail(s, ct); }
+        if (instance.EntityType == nameof(Lca.EProcurement.Domain.Supplier)) { var s = await db.Suppliers.AsNoTracking().Include(x => x.Documents).Include(x => x.Categories).SingleAsync(x => x.Id == instance.EntityId, ct); supplier = await BuildSupplierDetail(s, ct); }
         return new(task, supplier, await db.WorkflowHistories.AsNoTracking().Where(x => x.WorkflowInstanceId == task.WorkflowInstanceId).OrderBy(x => x.OccurredAt).ToListAsync(ct), await db.WorkflowActions.AsNoTracking().Where(x => x.WorkflowInstanceId == task.WorkflowInstanceId).OrderBy(x => x.ActionedAt).ToListAsync(ct), await AvailableActions(instance, ct));
     }
 
@@ -513,7 +513,7 @@ public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkfl
     {
         var supplier = await db.Suppliers.SingleOrDefaultAsync(s => s.ReferenceNumber == referenceNumber, ct); if (supplier is null) return null;
         var config = await GetRegistrationConfigurationAsync(ct); if (config is null) return null;
-        return await workflows.StartAsync(config.Workflow.Code, nameof(Supplier), supplier.Id, actor, ct);
+        return await workflows.StartAsync(config.Workflow.Code, nameof(Lca.EProcurement.Domain.Supplier), supplier.Id, actor, ct);
     }
 
     async Task AssignSupplierCategoriesAsync(Supplier supplier, IEnumerable<string> categoryNames, CancellationToken ct)
@@ -534,8 +534,8 @@ public sealed class SupplierApplicationService(EProcurementDbContext db, IWorkfl
         .Where(x => string.Equals(x.Key, "category", StringComparison.OrdinalIgnoreCase) || string.Equals(x.Key, "supplierCategory", StringComparison.OrdinalIgnoreCase) || string.Equals(x.Key, "categories", StringComparison.OrdinalIgnoreCase))
         .SelectMany(x => (x.Value ?? string.Empty).Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 
-    async Task<BusinessProcessDefinition?> ActiveSupplierProcess(CancellationToken ct) => await db.BusinessProcessDefinitions.AsNoTracking().OrderBy(x => x.Code).FirstOrDefaultAsync(p => p.EntityType == nameof(Supplier) && p.Status == BusinessProcessStatus.Published, ct);
-    async Task<SupplierDetailDto> BuildSupplierDetail(Supplier supplier, CancellationToken ct) { var instance = await db.WorkflowInstances.AsNoTracking().Where(x => x.EntityType == nameof(Supplier) && x.EntityId == supplier.Id).OrderByDescending(x => x.StartedAt).FirstOrDefaultAsync(ct); return new(supplier, instance, instance?.CurrentNodeCode, supplier.Documents, await db.FormSubmissions.AsNoTracking().Include(x => x.Values).Where(x => x.EntityType == nameof(Supplier) && x.EntityId == supplier.Id).OrderByDescending(x => x.SubmittedAt).ToListAsync(ct), await db.AuditEvents.AsNoTracking().Where(x => x.EntityType == nameof(Supplier) && x.EntityId == supplier.Id).OrderBy(x => x.OccurredAt).ToListAsync(ct), instance is null ? [] : await AvailableActions(instance, ct)); }
+    async Task<BusinessProcessDefinition?> ActiveSupplierProcess(CancellationToken ct) => await db.BusinessProcessDefinitions.AsNoTracking().OrderBy(x => x.Code).FirstOrDefaultAsync(p => p.EntityType == nameof(Lca.EProcurement.Domain.Supplier) && p.Status == BusinessProcessStatus.Published, ct);
+    async Task<SupplierDetailDto> BuildSupplierDetail(Supplier supplier, CancellationToken ct) { var instance = await db.WorkflowInstances.AsNoTracking().Where(x => x.EntityType == nameof(Lca.EProcurement.Domain.Supplier) && x.EntityId == supplier.Id).OrderByDescending(x => x.StartedAt).FirstOrDefaultAsync(ct); return new(supplier, instance, instance?.CurrentNodeCode, supplier.Documents, await db.FormSubmissions.AsNoTracking().Include(x => x.Values).Where(x => x.EntityType == nameof(Lca.EProcurement.Domain.Supplier) && x.EntityId == supplier.Id).OrderByDescending(x => x.SubmittedAt).ToListAsync(ct), await db.AuditEvents.AsNoTracking().Where(x => x.EntityType == nameof(Lca.EProcurement.Domain.Supplier) && x.EntityId == supplier.Id).OrderBy(x => x.OccurredAt).ToListAsync(ct), instance is null ? [] : await AvailableActions(instance, ct)); }
     async Task<List<WorkflowTransition>> AvailableActions(WorkflowInstance instance, CancellationToken ct) => instance.Status == WorkflowInstanceStatus.Running ? await db.WorkflowTransitions.AsNoTracking().Where(x => x.WorkflowVersionId == instance.WorkflowVersionId && x.FromNodeCode == instance.CurrentNodeCode).OrderBy(x => x.ActionName).ToListAsync(ct) : [];
 }
 
@@ -1609,8 +1609,8 @@ public sealed class SupplierPortalApplicationService(EProcurementDbContext db, I
 {
     public async Task<SupplierPortalDashboardDto> GetDashboardAsync(SupplierPortalUserContext user, CancellationToken ct = default)
     {
-        var profile = await Supplier(user, ct);
-        var required = await db.DocumentRequirements.AsNoTracking().Where(x => x.Required && db.DocumentRequirementSets.Any(s => s.Id == x.DocumentRequirementSetId && s.EntityType == nameof(Supplier))).Select(x => x.DocumentType).Distinct().ToListAsync(ct);
+        var profile = await GetSupplierAsync(user, ct);
+        var required = await db.DocumentRequirements.AsNoTracking().Where(x => x.Required && db.DocumentRequirementSets.Any(s => s.Id == x.DocumentRequirementSetId && s.EntityType == nameof(Lca.EProcurement.Domain.Supplier))).Select(x => x.DocumentType).Distinct().ToListAsync(ct);
         var missing = required.Where(r => profile.Documents.All(d => d.DocumentType != r)).ToList();
         var open = await db.PublicTenderPublications.AsNoTracking().CountAsync(x => x.IsVisible && x.Status == TenderStatus.Published && x.ClosingDate > DateTimeOffset.UtcNow, ct);
         var ownBids = db.BidSubmissions.AsNoTracking().Where(x => x.SupplierId == user.SupplierId);
@@ -1620,7 +1620,7 @@ public sealed class SupplierPortalApplicationService(EProcurementDbContext db, I
         var unread = await db.NotificationMessages.AsNoTracking().CountAsync(x => x.Recipients.Any(r => r.Email == user.Email) && x.Status != NotificationStatus.Sent, ct);
         return new(profile.Status.ToString(), missing, open, draft, submitted, awaiting, unread);
     }
-    public async Task<SupplierPortalProfileDto> GetProfileAsync(SupplierPortalUserContext user, CancellationToken ct = default) => ToProfile(await Supplier(user, ct), await LatestValues(user.SupplierId, ct));
+    public async Task<SupplierPortalProfileDto> GetProfileAsync(SupplierPortalUserContext user, CancellationToken ct = default) => ToProfile(await GetSupplierAsync(user, ct), await LatestValues(user.SupplierId, ct));
     public async Task<SupplierPortalProfileDto> UpdateProfileAsync(SupplierPortalUserContext user, UpdateSupplierPortalProfileDto dto, CancellationToken ct = default)
     {
         var supplier = await db.Suppliers.Include(x=>x.Categories).Include(x=>x.Documents).SingleAsync(x => x.Id == user.SupplierId, ct);
@@ -1665,11 +1665,11 @@ public sealed class SupplierPortalApplicationService(EProcurementDbContext db, I
         return await bids.CreateAsync(new CreateBidSubmissionDto($"BID-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}", dto.TenderId, user.SupplierId, user.Email, dto.Items, dto.Declarations), ct);
     }
     public Task<List<NotificationMessage>> GetNotificationsAsync(SupplierPortalUserContext user, CancellationToken ct = default) => db.NotificationMessages.AsNoTracking().Include(x => x.Recipients).Where(x => x.Recipients.Any(r => r.Email == user.Email)).OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
-    async Task<Supplier> Supplier(SupplierPortalUserContext user, CancellationToken ct) => await db.Suppliers.AsNoTracking().Include(x=>x.Documents).Include(x=>x.Categories).SingleAsync(x => x.Id == user.SupplierId, ct);
-    async Task<Dictionary<string,string?>> LatestValues(Guid supplierId, CancellationToken ct) => await db.FormSubmissions.AsNoTracking().Include(x=>x.Values).Where(x => x.EntityType == nameof(Supplier) && x.EntityId == supplierId).OrderByDescending(x => x.SubmittedAt).Select(x => x.Values.ToDictionary(v => v.FieldCode, v => v.Value)).FirstOrDefaultAsync(ct) ?? [];
+    async Task<Supplier> GetSupplierAsync(SupplierPortalUserContext user, CancellationToken ct) => await db.Suppliers.AsNoTracking().Include(x=>x.Documents).Include(x=>x.Categories).SingleAsync(x => x.Id == user.SupplierId, ct);
+    async Task<Dictionary<string,string?>> LatestValues(Guid supplierId, CancellationToken ct) => await db.FormSubmissions.AsNoTracking().Include(x=>x.Values).Where(x => x.EntityType == nameof(Lca.EProcurement.Domain.Supplier) && x.EntityId == supplierId).OrderByDescending(x => x.SubmittedAt).Select(x => x.Values.ToDictionary(v => v.FieldCode, v => v.Value)).FirstOrDefaultAsync(ct) ?? [];
     async Task SaveProfileValues(SupplierPortalUserContext user, UpdateSupplierPortalProfileDto dto, CancellationToken ct)
     {
-        var submission = new FormSubmission(Guid.Empty, Guid.Empty, nameof(Supplier), user.SupplierId, user.Email, DateTimeOffset.UtcNow);
+        var submission = new FormSubmission(Guid.Empty, Guid.Empty, nameof(Lca.EProcurement.Domain.Supplier), user.SupplierId, user.Email, DateTimeOffset.UtcNow);
         foreach (var (k,v) in new Dictionary<string,string?>{{"tradingName",dto.TradingName},{"registrationNumber",dto.RegistrationNumber},{"taxNumber",dto.TaxNumber},{"contactPerson",dto.ContactPerson},{"email",dto.Email},{"phone",dto.Phone},{"address",dto.Address}}) submission.Values.Add(new FormSubmissionValue(submission.Id, k, v));
         db.FormSubmissions.Add(submission); await Task.CompletedTask;
     }
