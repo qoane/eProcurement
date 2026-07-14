@@ -1251,7 +1251,7 @@ public sealed class TenderApplicationService(EProcurementDbContext db, INotifica
         if (tender.ClosingDate <= now) throw new InvalidOperationException("Clarifications cannot be asked after the tender closing date.");
         var clarification = new TenderClarification(tenderId, dto.Question, dto.AskedBy, now, dto.IsPublic) with { SupplierId = dto.SupplierId, SupplierName = string.IsNullOrWhiteSpace(dto.SupplierName) ? dto.AskedBy : dto.SupplierName!, QuestionReference = $"CLR-{now:yyyyMMddHHmmss}-{Random.Shared.Next(100,999)}" };
         db.TenderClarifications.Add(clarification);
-        QueueClarificationNotification("TenderClarificationSubmitted", tender, clarification, "Procurement clarification required", $"A supplier clarification question has been submitted for {tender.TenderNumber}.", "procurement@lca.org.ls", "Procurement Officer", now, $"/app/tenders/{tender.Id}/clarifications");
+        QueueClarificationNotification("TenderClarificationSubmitted", tender, clarification, "Procurement clarification required", $"A supplier clarification question has been submitted for {tender.TenderNumber}.", "", "Procurement Officer", now, $"/app/tenders/{tender.Id}/clarifications");
         if (tender.Status == TenderStatus.Published) db.TenderStatusHistories.Add(new TenderStatusHistory(tender.Id, TenderStatus.Published, TenderStatus.Clarification, dto.AskedBy, now, "Clarification opened"));
         db.AuditEvents.Add(new AuditEvent("Tender clarification created", nameof(Tender), tender.Id, tender.TenderNumber, dto.AskedBy, dto.Question, now));
         await db.SaveChangesAsync(ct);
@@ -1374,8 +1374,20 @@ public sealed class TenderApplicationService(EProcurementDbContext db, INotifica
     void QueueClarificationNotification(string eventCode, Tender tender, TenderClarification clarification, string subject, string body, string recipientEmail, string recipientName, DateTimeOffset now, string relatedUrl)
     {
         var message = new NotificationMessage(eventCode, nameof(Tender), tender.Id, NotificationChannel.InApp, subject, body, NotificationPriority.Normal, NotificationStatus.Unread, now, RelatedUrl: relatedUrl);
-        message.Recipients.Add(new NotificationRecipient(message.Id, recipientEmail, eventCode == "TenderClarificationSubmitted" ? "ProcurementOfficer" : "Supplier", recipientName, recipientEmail, null, null, NotificationStatus.Unread));
+        if (eventCode == "TenderClarificationSubmitted")
+        {
+            var officers = db.ApplicationUsers.Where(u => u.IsActive && u.UserRoles.Any(ur => db.Roles.Any(r => r.Id == ur.RoleId && r.Name == "ProcurementOfficer"))).ToList();
+            foreach (var officer in officers) message.Recipients.Add(new NotificationRecipient(message.Id, officer.Id.ToString(), "ProcurementOfficer", officer.FullName, officer.Email, officer.PhoneNumber, "ProcurementOfficer", NotificationStatus.Unread));
+            if (officers.Count == 0) message.Recipients.Add(new NotificationRecipient(message.Id, tender.CreatedBy, "TenderOwner", tender.CreatedBy, null, null, null, NotificationStatus.Unread));
+        }
+        else
+        {
+            message.Recipients.Add(new NotificationRecipient(message.Id, recipientEmail, "Supplier", recipientName, recipientEmail, null, null, NotificationStatus.Unread));
+        }
         db.NotificationMessages.Add(message);
+        var thread = new CommunicationThread($"COM-{now:yyyyMMddHHmmssfff}", nameof(Tender), tender.Id, tender.TenderNumber, subject, eventCode == "TenderClarificationSubmitted" ? "Internal" : "Supplier", clarification.AskedBy, now, SupplierId: clarification.SupplierId);
+        thread.Messages.Add(new CommunicationMessage(thread.Id, clarification.AskedBy, clarification.SupplierName, "Supplier", clarification.Question, false, clarification.IsPublic, now));
+        db.CommunicationThreads.Add(thread);
     }
 
     static string Slug(string value) => string.Join("-", new string(value.ToLowerInvariant().Select(ch => char.IsLetterOrDigit(ch) ? ch : ' ').ToArray()).Split(' ', StringSplitOptions.RemoveEmptyEntries));

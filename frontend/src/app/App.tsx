@@ -108,6 +108,9 @@ import {
   NotificationPreferencesPage,
   ProfilePage,
   SettingsPage,
+  NotificationEventMappingsPage,
+  CommunicationsPage,
+  CommunicationDetailPage,
 } from "../modules/notifications/NotificationPages";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { DataArchivePage, DataExportsPage, DataGovernanceDashboardPage, DataQualityPage, MigrationBatchDetailPage, MigrationPage, PoliciesPage, PrivacyPage, ProcessingLogsPage, RetentionPage } from "../modules/data-governance/DataGovernancePages";
@@ -281,6 +284,9 @@ function route(p: string) {
   else if (p === "/app/notification-logs") page = <NotificationLogsPage />;
   else if (p === "/app/notification-preferences")
     page = <NotificationPreferencesPage />;
+  else if (p === "/app/notification-event-mappings") page = <NotificationEventMappingsPage />;
+  else if (p === "/app/communications") page = <CommunicationsPage />;
+  else if (p.startsWith("/app/communications/")) page = <CommunicationDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/profile") page = <ProfilePage />;
   else if (p === "/app/planning") page = <PlanningPage />;
   else if (p === "/app/planning/new") page = <NewPlanningPage />;

@@ -22,3 +22,18 @@ export const deleteSetting = (key: string) => apiDelete(`/api/settings/${encodeU
 export type SendResult = { success: boolean; response: string; error?: string | null; rawJson?: unknown | null };
 export const testEmailSettings = (to: string) => apiPost<SendResult>("/api/settings/test-email", { to }, { success: false, response: "", rawJson: null });
 export const testSmsSettings = (destinationAddress: string) => apiPost<SendResult>("/api/settings/test-sms", { destinationAddress }, { success: false, response: "", rawJson: null });
+export type NotificationEventMapping = { id?: string; eventCode: string; templateCode: string; channel: string; entityType: string; recipientRoleCode?: string | null; isActive: boolean };
+export type CommunicationMessage = { id: string; senderName: string; senderType: string; body: string; isInternal: boolean; isPublic: boolean; createdAt: string };
+export type CommunicationThread = { id: string; threadNumber: string; entityType: string; entityReference: string; subject: string; visibility: string; status: string; messages: CommunicationMessage[] };
+export const retryDeliveryLog = (id: string) => apiPost<DeliveryLog>(`/api/notification-delivery-logs/${id}/retry`, {}, {} as DeliveryLog);
+export const getEventMappings = () => apiGet<NotificationEventMapping[]>('/api/notification-event-mappings', []);
+export const saveEventMapping = (m: NotificationEventMapping) => m.id ? apiPut(`/api/notification-event-mappings/${m.id}`, m, m) : apiPost('/api/notification-event-mappings', m, m);
+export const runDeadlineReminders = () => apiPost('/api/notifications/reminders/run', {}, []);
+export const getCommunicationThreads = () => apiGet<CommunicationThread[]>('/api/communications/threads', []);
+export const getCommunicationThread = (id: string) => apiGet<CommunicationThread | null>(`/api/communications/threads/${id}`, null);
+export const createCommunicationThread = (dto: unknown) => apiPost<CommunicationThread>('/api/communications/threads', dto, {} as CommunicationThread);
+export const addCommunicationMessage = (id: string, dto: unknown) => apiPost<CommunicationMessage>(`/api/communications/threads/${id}/messages`, dto, {} as CommunicationMessage);
+export const closeCommunicationThread = (id: string) => apiPost(`/api/communications/threads/${id}/close`, {}, { success: true });
+export const getSupplierCommunicationThreads = () => apiGet<CommunicationThread[]>('/api/supplier/communications', []);
+export const getSupplierCommunicationThread = (id: string) => apiGet<CommunicationThread | null>(`/api/supplier/communications/${id}`, null);
+export const addSupplierCommunicationMessage = (id: string, dto: unknown) => apiPost<CommunicationMessage>(`/api/supplier/communications/${id}/messages`, dto, {} as CommunicationMessage);
