@@ -109,7 +109,10 @@ import {
   ProfilePage,
   SettingsPage,
 } from "../modules/notifications/NotificationPages";
+import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { DataArchivePage, DataExportsPage, DataGovernanceDashboardPage, DataQualityPage, MigrationBatchDetailPage, MigrationPage, PoliciesPage, PrivacyPage, ProcessingLogsPage, RetentionPage } from "../modules/data-governance/DataGovernancePages";
+import { OperationsBackupsPage, OperationsChecklistPage, OperationsDashboardPage, OperationsHealthPage, OperationsLogsPage, OperationsPerformancePage } from "../modules/operations/OperationsPages";
+import { SupportCaseDetailPage, SupportCaseListPage } from "../modules/support/SupportPages";
 function NotConfiguredPage({ title }: { title: string }) {
   return (
     <>
@@ -146,6 +149,7 @@ function ProtectedShell({ path, children }: { path: string; children: React.Reac
     [/^\/app\/purchase-orders/, "PurchaseOrder.View"], [/^\/app\/invoices/, "Invoice.View"], [/^\/app\/invoice-matching/, "InvoiceMatching.View"], [/^\/app\/purchase-order-returns/, "PurchaseOrderReturn.View"], [/^\/app\/contracts/, "Contract.View"], [/^\/app\/workflows|^\/app\/tasks/, "Workflow.View"],
     [/^\/app\/rules/, "Studio.Rules"], [/^\/app\/forms/, "Studio.Forms"], [/^\/app\/studio/, "Studio.View"], [/^\/app\/configuration/, "Settings.View"],
     [/^\/app\/reporting|^\/app\/dashboards/, "Reporting.View"], [/^\/app\/documents|^\/app\/document-retention|^\/app\/document-requirements/, "Document.View"],
+    [/^\/app\/operations/, "Operations.View"], [/^\/app\/support/, "SupportCase.View"],
     [/^\/app\/data-governance/, "DataGovernance.View"], [/^\/app\/migration/, "Migration.View"], [/^\/app\/data-quality/, "DataQuality.View"], [/^\/app\/data-archive/, "DataArchive.View"], [/^\/app\/data-exports/, "DataExport.View"]
   ];
   const required = rules.find(([regex]) => regex.test(path))?.[1];
@@ -211,6 +215,14 @@ function route(p: string) {
   else if (p === "/app/supplier/invoices/new") page = <NewInvoicePage />;
   else if (p.startsWith("/app/supplier/invoices/")) page = <InvoiceDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app" || p === "/app/dashboard") page = <DashboardPage />;
+  else if (p === "/app/operations") page = <OperationsDashboardPage />;
+  else if (p === "/app/operations/health") page = <OperationsHealthPage />;
+  else if (p === "/app/operations/performance") page = <OperationsPerformancePage />;
+  else if (p === "/app/operations/logs") page = <OperationsLogsPage />;
+  else if (p === "/app/operations/backups") page = <OperationsBackupsPage />;
+  else if (p === "/app/operations/checklist") page = <OperationsChecklistPage />;
+  else if (p === "/app/support") page = <SupportCaseListPage />;
+  else if (p.startsWith("/app/support/")) page = <SupportCaseDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/suppliers") page = <SupplierListPage />;
   else if (p === "/app/suppliers/register") page = <SupplierRegistrationPage />;
   else if (p === "/app/suppliers/verification")

@@ -9,8 +9,9 @@ function authHeaders(extra: Record<string, string> = {}) { return accessToken ? 
 export type ApiResult<T> = { data: T; error?: string; loading: false };
 async function responseError(response: Response) {
   try {
-    const problem = (await response.json()) as { detail?: string; title?: string };
-    return problem.detail || problem.title || `${response.status} ${response.statusText}`;
+    const problem = (await response.json()) as { detail?: string; title?: string; message?: string; correlationId?: string };
+    const message = problem.message || problem.detail || problem.title || `${response.status} ${response.statusText}`;
+    return problem.correlationId ? `${message} Reference: ${problem.correlationId}` : message;
   } catch {
     return `${response.status} ${response.statusText}`;
   }

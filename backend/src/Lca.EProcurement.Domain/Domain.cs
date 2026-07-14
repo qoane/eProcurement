@@ -418,3 +418,13 @@ public record NotificationDeliveryLog(Guid NotificationMessageId, NotificationCh
 public record NotificationPreference(string UserId, string EventCode, bool InAppEnabled = true, bool EmailEnabled = true, bool SmsEnabled = true) : Entity(Guid.NewGuid());
 public record NotificationEventMapping(string EventCode, string TemplateCode, NotificationChannel Channel, string EntityType, string? RecipientRoleCode, bool IsActive = true) : Entity(Guid.NewGuid());
 public record SystemSettingOverride(string Key, string Value, bool IsSecret, string Category, string UpdatedBy, DateTimeOffset UpdatedAt) : Entity(Guid.NewGuid());
+
+public enum BackupRunStatus { Pending, Running, Completed, Failed, Cancelled }
+public enum BackupType { Database, Documents, Configuration, Full }
+public enum SupportCaseStatus { Open, InProgress, WaitingForUser, Resolved, Closed, Cancelled }
+public enum SupportCaseSeverity { Low, Medium, High, Critical }
+public record ApiPerformanceSample(string CorrelationId, string Path, string Method, int StatusCode, long DurationMs, string? UserId, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
+public record BackupPlan(string Code, string Name, BackupType BackupType, string ScheduleDescription, string StorageLocation, bool IsEnabled, int RetentionDays, DateTimeOffset CreatedAt, string CreatedBy) : Entity(Guid.NewGuid());
+public record BackupRun(Guid BackupPlanId, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, BackupRunStatus Status, string BackupReference, long? SizeBytes, string? ErrorMessage, string TriggeredBy) : Entity(Guid.NewGuid());
+public record RestoreRun(Guid BackupRunId, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, BackupRunStatus Status, string RestoreTarget, string? ErrorMessage, string TriggeredBy) : Entity(Guid.NewGuid());
+public record SupportCase(string CaseNumber, string Title, string Description, SupportCaseSeverity Severity, SupportCaseStatus Status, string Module, string ReportedBy, string? AssignedTo, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, DateTimeOffset? ResolvedAt, string? ResolutionNotes, string? CorrelationId) : Entity(Guid.NewGuid());

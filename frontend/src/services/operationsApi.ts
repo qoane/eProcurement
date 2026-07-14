@@ -1,0 +1,14 @@
+import { apiGet, apiPost } from "./apiClient";
+export type HealthResponse = { status: string; timestamp: string; environment: string; checks: { name: string; status: string; description?: string }[]; durationMs: number };
+export type PerformanceSummary = { totalSamples: number; errorCount: number; slowRequestCount: number; averageDurationMs: number; p95DurationMs: number };
+export type BackupPlan = { id: string; code: string; name: string; backupType: string; scheduleDescription: string; storageLocation: string; isEnabled: boolean; retentionDays: number };
+export type BackupRun = { id: string; backupReference: string; status: string; startedAt: string; completedAt?: string };
+export type SupportCase = { id: string; caseNumber: string; title: string; description: string; severity: string; status: string; module: string; reportedBy: string; assignedTo?: string; createdAt: string; correlationId?: string };
+export type PagedResult<T> = { items: T[]; page: number; pageSize: number; totalCount: number; totalPages: number };
+export const getHealth = (kind = "ready") => apiGet<HealthResponse>(`/health/${kind}`, { status: "Unknown", timestamp: "", environment: "", checks: [], durationMs: 0 });
+export const getPerformanceSummary = () => apiGet<PerformanceSummary>("/api/operations/performance/summary", { totalSamples: 0, errorCount: 0, slowRequestCount: 0, averageDurationMs: 0, p95DurationMs: 0 });
+export const getBackupPlans = () => apiGet<BackupPlan[]>("/api/operations/backups/plans", []);
+export const getBackupRuns = () => apiGet<BackupRun[]>("/api/operations/backups/runs", []);
+export const getConfigurationValidation = () => apiGet<{ status: string; warnings: string[]; errors: string[]; recommendations: string[] }>("/api/operations/configuration/validate", { status: "Unknown", warnings: [], errors: [], recommendations: [] });
+export const getSupportCases = () => apiGet<PagedResult<SupportCase>>("/api/support-cases", { items: [], page: 1, pageSize: 25, totalCount: 0, totalPages: 0 });
+export const createSupportCase = (body: Partial<SupportCase>) => apiPost<SupportCase>("/api/support-cases", body);

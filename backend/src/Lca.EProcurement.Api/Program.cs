@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Lca.EProcurement.Application;
 using Lca.EProcurement.EntityFrameworkCore;
+using Lca.EProcurement.Api.Middleware;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 
@@ -20,7 +21,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 builder.Services.AddAuthorization(options =>
 {
     options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
-    foreach (var p in new[] { "Notifications.View", "Notifications.Manage", "NotificationTemplates.Manage", "NotificationLogs.View", "Settings.View", "Settings.Manage", "Document.View", "Document.Upload", "Document.Download", "Document.Publish", "Document.Archive", "Document.Delete", "Document.ManageRetention", "Document.ViewAccessLog", "Document.ManageRequirements", "DataGovernance.View", "DataGovernance.Manage", "DataRetention.View", "DataRetention.Manage", "DataArchive.View", "DataArchive.Manage", "Migration.View", "Migration.Upload", "Migration.Validate", "Migration.Import", "Migration.Cancel", "DataQuality.View", "DataQuality.Manage", "DataQuality.Run", "DataExport.View", "DataExport.Request", "DataExport.Download", "DataExportSensitive", "PrivacyClassification.View", "PrivacyClassification.Manage" })
+    foreach (var p in new[] { "Operations.View", "Operations.Manage", "Operations.Health.View", "Operations.Performance.View", "Operations.Backup.View", "Operations.Backup.Manage", "Operations.Configuration.Validate", "SupportCase.View", "SupportCase.Create", "SupportCase.Manage", "Notifications.View", "Notifications.Manage", "NotificationTemplates.Manage", "NotificationLogs.View", "Settings.View", "Settings.Manage", "Document.View", "Document.Upload", "Document.Download", "Document.Publish", "Document.Archive", "Document.Delete", "Document.ManageRetention", "Document.ViewAccessLog", "Document.ManageRequirements", "DataGovernance.View", "DataGovernance.Manage", "DataRetention.View", "DataRetention.Manage", "DataArchive.View", "DataArchive.Manage", "Migration.View", "Migration.Upload", "Migration.Validate", "Migration.Import", "Migration.Cancel", "DataQuality.View", "DataQuality.Manage", "DataQuality.Run", "DataExport.View", "DataExport.Request", "DataExport.Download", "DataExportSensitive", "PrivacyClassification.View", "PrivacyClassification.Manage" })
         options.AddPolicy(p, policy => policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", p) || ctx.User.IsInRole("Administrator")));
 });
 builder.Services.AddDbContext<EProcurementDbContext>(options => options.UseConfiguredProvider(builder.Configuration["Database:Provider"] ?? "SqlServer", builder.Configuration.GetConnectionString("Default")));
@@ -81,6 +82,8 @@ builder.Services.AddScoped<IMigrationApplicationService, MigrationApplicationSer
 builder.Services.AddScoped<IDataArchivalService, DataArchivalService>();
 builder.Services.AddScoped<IDataQualityApplicationService, DataQualityApplicationService>();
 builder.Services.AddScoped<IDataExportApplicationService, DataExportApplicationService>();
+builder.Services.AddScoped<IOperationsApplicationService, OperationsApplicationService>();
+builder.Services.AddScoped<IConfigurationValidationService, ConfigurationValidationService>();
 
 var app = builder.Build();
 
@@ -106,28 +109,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-app.UseExceptionHandler(errorApp =>
-{
-    errorApp.Run(async context =>
-    {
-        var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
-        if (exception is UnauthorizedAccessException unauthorizedAccess)
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await Results.Problem(title: "Forbidden", detail: unauthorizedAccess.Message, statusCode: StatusCodes.Status403Forbidden).ExecuteAsync(context);
-            return;
-        }
-        if (exception is InvalidOperationException invalidOperation)
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await Results.Problem(title: "Action cannot be completed", detail: invalidOperation.Message, statusCode: StatusCodes.Status400BadRequest).ExecuteAsync(context);
-            return;
-        }
-
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await Results.Problem(title: "An unexpected error occurred", detail: app.Environment.IsDevelopment() ? exception?.Message : null, statusCode: StatusCodes.Status500InternalServerError).ExecuteAsync(context);
-    });
-});
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseCors(FrontendCors);
 app.UseAuthentication();
 app.UseAuthorization();
@@ -143,6 +127,5 @@ app.Use(async (context, next) =>
     }
 });
 app.MapGet("/", () => Results.Ok(new { name = "LCA eProcurement API", status = "running", documentation = "/swagger", health = "/health" })).AllowAnonymous();
-app.MapGet("/health", async (EProcurementDbContext db) => Results.Ok(new { status = "healthy", platform = "LCA eProcurement", provider = db.Database.ProviderName, database = db.Database.GetDbConnection().Database })).AllowAnonymous();
 app.MapControllers();
 app.Run();

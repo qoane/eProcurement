@@ -196,6 +196,11 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
     public DbSet<DelegationRule> DelegationRules => Set<DelegationRule>();
     public DbSet<EscalationRule> EscalationRules => Set<EscalationRule>();
     public DbSet<WorkflowTaskEscalation> WorkflowTaskEscalations => Set<WorkflowTaskEscalation>();
+    public DbSet<ApiPerformanceSample> ApiPerformanceSamples => Set<ApiPerformanceSample>();
+    public DbSet<BackupPlan> BackupPlans => Set<BackupPlan>();
+    public DbSet<BackupRun> BackupRuns => Set<BackupRun>();
+    public DbSet<RestoreRun> RestoreRuns => Set<RestoreRun>();
+    public DbSet<SupportCase> SupportCases => Set<SupportCase>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -207,6 +212,12 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
         modelBuilder.Entity<UserProfile>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.UserId).IsUnique(); b.Property(x => x.Department).HasMaxLength(128); b.Property(x => x.JobTitle).HasMaxLength(128); b.Property(x => x.PreferencesJson).HasColumnType("nvarchar(max)"); });
         modelBuilder.Entity<SupplierUserLink>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.UserId, x.SupplierId }).IsUnique(); });
 
+
+        modelBuilder.Entity<ApiPerformanceSample>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.OccurredAt); b.HasIndex(x => x.StatusCode); b.Property(x => x.CorrelationId).HasMaxLength(128); b.Property(x => x.Path).HasMaxLength(512); b.Property(x => x.Method).HasMaxLength(16); b.Property(x => x.UserId).HasMaxLength(256); });
+        modelBuilder.Entity<BackupPlan>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Code).IsUnique(); b.Property(x => x.Code).HasMaxLength(128); b.Property(x => x.Name).HasMaxLength(256); b.Property(x => x.BackupType).HasConversion<string>().HasMaxLength(64); b.Property(x => x.ScheduleDescription).HasMaxLength(512); b.Property(x => x.StorageLocation).HasMaxLength(512); b.Property(x => x.CreatedBy).HasMaxLength(256); });
+        modelBuilder.Entity<BackupRun>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.StartedAt); b.Property(x => x.Status).HasConversion<string>().HasMaxLength(64); b.Property(x => x.BackupReference).HasMaxLength(512); b.Property(x => x.ErrorMessage).HasMaxLength(2000); b.Property(x => x.TriggeredBy).HasMaxLength(256); });
+        modelBuilder.Entity<RestoreRun>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.StartedAt); b.Property(x => x.Status).HasConversion<string>().HasMaxLength(64); b.Property(x => x.RestoreTarget).HasMaxLength(512); b.Property(x => x.ErrorMessage).HasMaxLength(2000); b.Property(x => x.TriggeredBy).HasMaxLength(256); });
+        modelBuilder.Entity<SupportCase>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.CaseNumber).IsUnique(); b.HasIndex(x => x.Status); b.Property(x => x.CaseNumber).HasMaxLength(64); b.Property(x => x.Title).HasMaxLength(256); b.Property(x => x.Description).HasMaxLength(4000); b.Property(x => x.Severity).HasConversion<string>().HasMaxLength(64); b.Property(x => x.Status).HasConversion<string>().HasMaxLength(64); b.Property(x => x.Module).HasMaxLength(128); b.Property(x => x.ReportedBy).HasMaxLength(256); b.Property(x => x.AssignedTo).HasMaxLength(256); b.Property(x => x.ResolutionNotes).HasMaxLength(4000); b.Property(x => x.CorrelationId).HasMaxLength(128); });
         modelBuilder.Entity<UserMfaSetting>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.UserId).IsUnique(); b.Property(x => x.PreferredMethod).HasConversion<string>().HasMaxLength(64); b.Property(x => x.AuthenticatorSecretEncrypted).HasMaxLength(2048); });
         modelBuilder.Entity<UserMfaChallenge>(b => { b.HasKey(x => x.Id); b.Property(x => x.Method).HasConversion<string>().HasMaxLength(64); b.Property(x => x.CodeHash).HasMaxLength(512); });
         modelBuilder.Entity<TrustedDevice>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.UserId, x.DeviceHash }).IsUnique(); b.Property(x => x.DeviceHash).HasMaxLength(512); b.Property(x => x.Name).HasMaxLength(256); });
