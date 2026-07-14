@@ -91,6 +91,7 @@ import {
   NewContractPage,
 } from "../modules/contracts/ContractPages";
 import { PageHeader } from "../components/ui/PageHeader";
+import { InvoiceDetailPage, InvoiceListPage, InvoiceMatchingDetailPage, InvoiceMatchingListPage, NewInvoicePage, NewPurchaseOrderReturnPage, PurchaseOrderReturnDetailPage, PurchaseOrderReturnListPage } from "../modules/invoices/InvoicePages";
 import { ContractIntegrationPage, DocumentIntegrationPage, IntegrationDashboardPage, IntegrationLogsPage } from "../modules/integrations/IntegrationPages";
 import { AuthProvider, useAuth } from "../auth/AuthContext";
 import {
@@ -140,7 +141,7 @@ function ProtectedShell({ path, children }: { path: string; children: React.Reac
     [/^\/app\/suppliers/, "Supplier.View"], [/^\/app\/planning/, "Planning.View"], [/^\/app\/budgets/, "Budget.View"],
     [/^\/app\/requisitions/, "Requisition.View"], [/^\/app\/tenders/, "Tender.View"], [/^\/app\/bids/, "Bid.View"],
     [/^\/app\/bid-opening/, "BidOpening.View"], [/^\/app\/evaluation/, "Evaluation.View"], [/^\/app\/awards/, "Award.View"],
-    [/^\/app\/purchase-orders/, "PurchaseOrder.View"], [/^\/app\/contracts/, "Contract.View"], [/^\/app\/workflows|^\/app\/tasks/, "Workflow.View"],
+    [/^\/app\/purchase-orders/, "PurchaseOrder.View"], [/^\/app\/invoices/, "Invoice.View"], [/^\/app\/invoice-matching/, "InvoiceMatching.View"], [/^\/app\/purchase-order-returns/, "PurchaseOrderReturn.View"], [/^\/app\/contracts/, "Contract.View"], [/^\/app\/workflows|^\/app\/tasks/, "Workflow.View"],
     [/^\/app\/rules/, "Studio.Rules"], [/^\/app\/forms/, "Studio.Forms"], [/^\/app\/studio/, "Studio.View"], [/^\/app\/configuration/, "Settings.View"],
     [/^\/app\/reporting|^\/app\/dashboards/, "Reporting.View"]
   ];
@@ -203,6 +204,9 @@ function route(p: string) {
   else if (p.startsWith("/app/supplier/bids/")) page = <SupplierBidDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/supplier/clarifications") page = <SupplierClarificationsPage />;
   else if (p === "/app/supplier/notifications") page = <SupplierNotificationsPage />;
+  else if (p === "/app/supplier/invoices") page = <InvoiceListPage />;
+  else if (p === "/app/supplier/invoices/new") page = <NewInvoicePage />;
+  else if (p.startsWith("/app/supplier/invoices/")) page = <InvoiceDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app" || p === "/app/dashboard") page = <DashboardPage />;
   else if (p === "/app/suppliers") page = <SupplierListPage />;
   else if (p === "/app/suppliers/register") page = <SupplierRegistrationPage />;
@@ -323,6 +327,14 @@ function route(p: string) {
         id={decodeURIComponent(p.split("/").pop() || "")}
       />
     );
+  else if (p === "/app/invoices") page = <InvoiceListPage />;
+  else if (p === "/app/invoices/new") page = <NewInvoicePage />;
+  else if (p.startsWith("/app/invoices/")) page = <InvoiceDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p === "/app/invoice-matching") page = <InvoiceMatchingListPage />;
+  else if (p.startsWith("/app/invoice-matching/")) page = <InvoiceMatchingDetailPage invoiceId={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p === "/app/purchase-order-returns") page = <PurchaseOrderReturnListPage />;
+  else if (p === "/app/purchase-order-returns/new") page = <NewPurchaseOrderReturnPage />;
+  else if (p.startsWith("/app/purchase-order-returns/")) page = <PurchaseOrderReturnDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
   else if (p === "/app/contracts") page = <ContractListPage />;
   else if (p === "/app/contracts/new") page = <NewContractPage />;
   else if (p.endsWith("/milestones") && p.startsWith("/app/contracts/"))

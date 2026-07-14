@@ -33,6 +33,10 @@ public enum ContractType { FrameworkAgreement, ServiceContract, SupplyContract, 
 public enum IntegrationSystemType { ContractManagement, DocumentManagement, Finance, Email, Sms, Identity, Other }
 public enum IntegrationDirection { Outbound, Inbound }
 public enum IntegrationMessageStatus { Pending, Sent, Failed, PendingExternalConfiguration, Simulated }
+public enum PurchaseOrderReturnStatus { Draft, Submitted, Approved, Rejected, Completed, Cancelled }
+public enum SupplierInvoiceStatus { Draft, Submitted, UnderReview, Matched, Mismatch, ApprovedForPayment, Rejected, Cancelled }
+public enum InvoiceMatchStatus { NotMatched, Matched, PartiallyMatched, Mismatch, Exception }
+public enum PaymentPreparationStatus { Pending, Prepared, SentToFinance, Failed, Cancelled }
 
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }
@@ -215,6 +219,28 @@ public record GoodsReceipt(Guid PurchaseOrderId, string ReceiptNumber, DateTimeO
 public record PurchaseOrderHistory(Guid PurchaseOrderId, string EventType, string Actor, string Details, DateTimeOffset OccurredAt) : Entity(Guid.NewGuid());
 public record PurchaseOrderStatusHistory(Guid PurchaseOrderId, PurchaseOrderStatus FromStatus, PurchaseOrderStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
 
+
+
+public record PurchaseOrderReturn(string ReturnNumber, Guid PurchaseOrderId, Guid SupplierId, string SupplierName, string Reason, PurchaseOrderReturnStatus Status, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? SubmittedAt = null, string? ApprovedBy = null, DateTimeOffset? ApprovedAt = null, DateTimeOffset? CompletedAt = null, DateTimeOffset? CancelledAt = null, string? Notes = null) : Entity(Guid.NewGuid())
+{
+    public List<PurchaseOrderReturnLine> Lines { get; init; } = [];
+}
+public record PurchaseOrderReturnLine(Guid PurchaseOrderReturnId, Guid PurchaseOrderLineId, int ItemNumber, string Description, decimal ReturnedQuantity, decimal UnitPrice, decimal TotalAmount, string Reason, string? ConditionNotes = null) : Entity(Guid.NewGuid());
+public record SupplierInvoice(string InvoiceNumber, string SupplierInvoiceNumber, Guid PurchaseOrderId, Guid? GoodsReceiptId, Guid SupplierId, string SupplierName, DateTimeOffset InvoiceDate, DateTimeOffset ReceivedDate, string Currency, decimal SubtotalAmount, decimal TaxAmount, decimal TotalAmount, SupplierInvoiceStatus Status, string SubmittedBy, DateTimeOffset? SubmittedAt = null, string? ReviewedBy = null, DateTimeOffset? ReviewedAt = null, DateTimeOffset? ApprovedForPaymentAt = null, DateTimeOffset? RejectedAt = null, string? RejectionReason = null, string? Notes = null) : Entity(Guid.NewGuid())
+{
+    public List<SupplierInvoiceLine> Lines { get; init; } = [];
+    public List<InvoiceAttachment> Attachments { get; init; } = [];
+}
+public record SupplierInvoiceLine(Guid SupplierInvoiceId, Guid? PurchaseOrderLineId, Guid? GoodsReceiptId, int ItemNumber, string Description, decimal Quantity, decimal UnitPrice, decimal TaxAmount, decimal TotalAmount) : Entity(Guid.NewGuid());
+public record InvoiceAttachment(Guid SupplierInvoiceId, string DocumentType, string FileName, string StorageReference, string UploadedBy, DateTimeOffset UploadedAt) : Entity(Guid.NewGuid());
+public record InvoiceStatusHistory(Guid SupplierInvoiceId, SupplierInvoiceStatus FromStatus, SupplierInvoiceStatus ToStatus, string Actor, DateTimeOffset ChangedAt, string Notes) : Entity(Guid.NewGuid());
+public record InvoiceReview(Guid SupplierInvoiceId, string ReviewerUserId, string ReviewerName, string Decision, string Comments, DateTimeOffset ReviewedAt) : Entity(Guid.NewGuid());
+public record PaymentPreparation(Guid SupplierInvoiceId, string PaymentReference, PaymentPreparationStatus Status, string PreparedBy, DateTimeOffset PreparedAt, DateTimeOffset? SentToFinanceAt = null, string? ErrorMessage = null) : Entity(Guid.NewGuid());
+public record ThreeWayMatch(Guid SupplierInvoiceId, Guid PurchaseOrderId, Guid? GoodsReceiptId, InvoiceMatchStatus MatchStatus, decimal PoAmount, decimal ReceiptAmount, decimal InvoiceAmount, decimal VarianceAmount, decimal VariancePercentage, bool QuantityMatched, bool PriceMatched, bool ReceiptMatched, bool TaxMatched, string ResultJson, DateTimeOffset CreatedAt, string CreatedBy) : Entity(Guid.NewGuid())
+{
+    public List<InvoiceMatchingResult> Results { get; init; } = [];
+}
+public record InvoiceMatchingResult(Guid ThreeWayMatchId, Guid SupplierInvoiceLineId, Guid? PurchaseOrderLineId, InvoiceMatchStatus MatchStatus, decimal ExpectedQuantity, decimal InvoicedQuantity, decimal ReceivedQuantity, decimal ExpectedUnitPrice, decimal InvoicedUnitPrice, decimal VarianceAmount, string Message) : Entity(Guid.NewGuid());
 
 public record Contract(string ContractNumber, Guid? AwardId, Guid? PurchaseOrderId, Guid SupplierId, string SupplierName, string Title, string Description, ContractType ContractType, DateTimeOffset StartDate, DateTimeOffset EndDate, decimal OriginalValue, decimal CurrentValue, ContractStatus Status, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? ActivatedAt = null, DateTimeOffset? CompletedAt = null) : Entity(Guid.NewGuid())
 {
