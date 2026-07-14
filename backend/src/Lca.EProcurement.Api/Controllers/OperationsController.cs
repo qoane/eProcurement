@@ -12,11 +12,11 @@ namespace Lca.EProcurement.Api.Controllers;
 public sealed class OperationsController(IOperationsApplicationService ops, IConfigurationValidationService validation, EProcurementDbContext db, IConfiguration config, IWebHostEnvironment env) : ControllerBase
 {
     [AllowAnonymous, HttpGet("health")]
-    [AllowAnonymous, HttpGet("health/live")]
+    [HttpGet("health/live")]
     public IActionResult Live() => Ok(Health("Healthy", new[] { new { name = "process", status = "Healthy", description = "Application process is running." } }, 0));
 
     [AllowAnonymous, HttpGet("health/ready")]
-    [AllowAnonymous, HttpGet("health/database")]
+    [HttpGet("health/database")]
     public async Task<IActionResult> Ready(CancellationToken ct) { var sw=Stopwatch.StartNew(); var ok=await db.Database.CanConnectAsync(ct); var checks=new[] { new { name="database", status= ok?"Healthy":"Failed", description=db.Database.ProviderName ?? "Database provider" }, new { name="configuration", status=validation.Validate().Errors.Count==0?"Healthy":"Failed", description="Required settings validation" } }; return StatusCode(ok?200:503, Health(ok?"Healthy":"Failed", checks, sw.ElapsedMilliseconds)); }
     [AllowAnonymous, HttpGet("health/storage")] public IActionResult Storage() { var root=config["Documents:RootPath"]; var status=string.IsNullOrWhiteSpace(root)?"NotConfigured":(Directory.Exists(root)?"Healthy":"Failed"); return Ok(Health(status, new[]{new{name="documentStorage",status,description=string.IsNullOrWhiteSpace(root)?"Document root not configured":"Document root configured"}}, 0)); }
     [AllowAnonymous, HttpGet("health/integrations")] public async Task<IActionResult> Integrations(CancellationToken ct) { var items=await db.IntegrationEndpoints.AsNoTracking().Select(x=>new{name=x.Name,status=x.IsEnabled?"Healthy":"NotConfigured",description=x.IsEnabled?"Enabled endpoint registered":"Integration disabled"}).ToListAsync(ct); return Ok(Health(items.Any(x=>x.status=="Failed")?"Failed":"Healthy", items, 0)); }
