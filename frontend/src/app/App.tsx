@@ -94,6 +94,7 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { InvoiceDetailPage, InvoiceListPage, InvoiceMatchingDetailPage, InvoiceMatchingListPage, NewInvoicePage, NewPurchaseOrderReturnPage, PurchaseOrderReturnDetailPage, PurchaseOrderReturnListPage } from "../modules/invoices/InvoicePages";
 import { ContractIntegrationPage, DocumentIntegrationPage, IntegrationDashboardPage, IntegrationLogsPage } from "../modules/integrations/IntegrationPages";
 import { AuthProvider, useAuth } from "../auth/AuthContext";
+import { DocumentDetailPage, DocumentRequirementsPage, DocumentRetentionPage, DocumentsPage } from "../modules/documents/DocumentsPages";
 import {
   SecurityPage,
   RolesPage,
@@ -143,7 +144,7 @@ function ProtectedShell({ path, children }: { path: string; children: React.Reac
     [/^\/app\/bid-opening/, "BidOpening.View"], [/^\/app\/evaluation/, "Evaluation.View"], [/^\/app\/awards/, "Award.View"],
     [/^\/app\/purchase-orders/, "PurchaseOrder.View"], [/^\/app\/invoices/, "Invoice.View"], [/^\/app\/invoice-matching/, "InvoiceMatching.View"], [/^\/app\/purchase-order-returns/, "PurchaseOrderReturn.View"], [/^\/app\/contracts/, "Contract.View"], [/^\/app\/workflows|^\/app\/tasks/, "Workflow.View"],
     [/^\/app\/rules/, "Studio.Rules"], [/^\/app\/forms/, "Studio.Forms"], [/^\/app\/studio/, "Studio.View"], [/^\/app\/configuration/, "Settings.View"],
-    [/^\/app\/reporting|^\/app\/dashboards/, "Reporting.View"]
+    [/^\/app\/reporting|^\/app\/dashboards/, "Reporting.View"], [/^\/app\/documents|^\/app\/document-retention|^\/app\/document-requirements/, "Document.View"]
   ];
   const required = rules.find(([regex]) => regex.test(path))?.[1];
   if (required && !hasPermission(required)) return <AppShell><AccessDeniedPage /></AppShell>;
@@ -246,6 +247,10 @@ function route(p: string) {
   else if (p === "/app/dashboards") page = <DashboardsPage />;
   else if (p.startsWith("/app/reporting/")) page = <ReportingPage reportCode={decodeURIComponent(p.split("/").pop() || "executive-dashboard")} />;
   else if (p === "/app/settings") page = <SettingsPage />;
+  else if (p === "/app/documents") page = <DocumentsPage />;
+  else if (p.startsWith("/app/documents/")) page = <DocumentDetailPage id={decodeURIComponent(p.split("/").pop() || "")} />;
+  else if (p === "/app/document-retention") page = <DocumentRetentionPage />;
+  else if (p === "/app/document-requirements") page = <DocumentRequirementsPage />;
   else if (p === "/app/notifications") page = <NotificationsPage />;
   else if (p === "/app/notification-templates")
     page = <NotificationTemplatesPage />;
