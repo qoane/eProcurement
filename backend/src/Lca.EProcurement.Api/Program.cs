@@ -59,6 +59,9 @@ builder.Services.AddScoped<IEvaluationApplicationService, EvaluationApplicationS
 builder.Services.AddScoped<IAwardApplicationService, AwardApplicationService>();
 builder.Services.AddScoped<IPurchaseOrderApplicationService, PurchaseOrderApplicationService>();
 builder.Services.AddScoped<IContractApplicationService, ContractApplicationService>();
+builder.Services.AddScoped<IPurchaseOrderReturnApplicationService, PurchaseOrderReturnApplicationService>();
+builder.Services.AddScoped<IInvoiceMatchingApplicationService, InvoiceMatchingApplicationService>();
+builder.Services.AddScoped<ISupplierInvoiceApplicationService, SupplierInvoiceApplicationService>();
 builder.Services.AddScoped<IIntegrationApplicationService, IntegrationApplicationService>();
 builder.Services.AddScoped<IProcurementCaseApplicationService, ProcurementCaseApplicationService>();
 builder.Services.AddScoped<IReportingApplicationService, ReportingApplicationService>();

@@ -74,6 +74,16 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
     public DbSet<GoodsReceipt> GoodsReceipts => Set<GoodsReceipt>();
     public DbSet<PurchaseOrderHistory> PurchaseOrderHistories => Set<PurchaseOrderHistory>();
     public DbSet<PurchaseOrderStatusHistory> PurchaseOrderStatusHistories => Set<PurchaseOrderStatusHistory>();
+    public DbSet<PurchaseOrderReturn> PurchaseOrderReturns => Set<PurchaseOrderReturn>();
+    public DbSet<PurchaseOrderReturnLine> PurchaseOrderReturnLines => Set<PurchaseOrderReturnLine>();
+    public DbSet<SupplierInvoice> SupplierInvoices => Set<SupplierInvoice>();
+    public DbSet<SupplierInvoiceLine> SupplierInvoiceLines => Set<SupplierInvoiceLine>();
+    public DbSet<InvoiceAttachment> InvoiceAttachments => Set<InvoiceAttachment>();
+    public DbSet<InvoiceStatusHistory> InvoiceStatusHistories => Set<InvoiceStatusHistory>();
+    public DbSet<InvoiceReview> InvoiceReviews => Set<InvoiceReview>();
+    public DbSet<PaymentPreparation> PaymentPreparations => Set<PaymentPreparation>();
+    public DbSet<ThreeWayMatch> ThreeWayMatches => Set<ThreeWayMatch>();
+    public DbSet<InvoiceMatchingResult> InvoiceMatchingResults => Set<InvoiceMatchingResult>();
     public DbSet<Contract> Contracts => Set<Contract>();
     public DbSet<ContractLine> ContractLines => Set<ContractLine>();
     public DbSet<ContractDocument> ContractDocuments => Set<ContractDocument>();
