@@ -51,6 +51,8 @@ builder.Services.AddScoped<IFinancialYearApplicationService, FinancialYearApplic
 builder.Services.AddScoped<IRequisitionApplicationService, RequisitionApplicationService>();
 builder.Services.AddScoped<ITenderApplicationService, TenderApplicationService>();
 builder.Services.AddScoped<IPublicTenderApplicationService, PublicTenderApplicationService>();
+builder.Services.AddScoped<ISealedBidApplicationService, SealedBidApplicationService>();
+builder.Services.AddScoped<ISealedBidAccessService>(sp => sp.GetRequiredService<ISealedBidApplicationService>());
 builder.Services.AddScoped<IBidSubmissionApplicationService, BidSubmissionApplicationService>();
 builder.Services.AddScoped<IBidOpeningApplicationService, BidOpeningApplicationService>();
 builder.Services.AddScoped<IEvaluationApplicationService, EvaluationApplicationService>();

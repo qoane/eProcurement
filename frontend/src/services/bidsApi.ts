@@ -13,3 +13,9 @@ export const updateBid = (id: string, body: unknown) => apiPut<BidSubmission>(`/
 export const submitBid = (id: string) => apiPost<BidSubmission>(`/api/bids/${id}/submit`, { actor: "supplier@demo.ls" });
 export const withdrawBid = (id: string) => apiPost<BidSubmission>(`/api/bids/${id}/withdraw`, { actor: "supplier@demo.ls" });
 export const uploadBidDocument = (id: string, body: unknown) => apiPost<BidSubmissionDocument>(`/api/bids/${id}/documents`, body);
+
+export type SealedBidEnvelope = { id: string; bidSubmissionId: string; envelopeNumber: string; status: string; sealedAt?: string; openedAt?: string; submissionHash: string; documentManifestHash: string; timestampReference: string; secureVaultReference?: string };
+export type SealedBidDocumentEvidence = { id: string; fileName: string; documentType: string; contentHash: string; hashAlgorithm: string; fileSize: number; uploadedAt: string; sealedAt?: string };
+export type BidSubmissionReceipt = { submissionNumber: string; tenderNumber: string; tenderTitle: string; supplierName: string; submittedBy: string; submittedAt?: string; envelopeNumber: string; submissionHash: string; documentManifestHash: string; documents: SealedBidDocumentEvidence[]; declarations: BidSubmissionDeclaration[]; systemTimestamp: string; receiptReference: string };
+export const getSealedEnvelope = (id: string) => apiGet<SealedBidEnvelope | null>(`/api/bids/${id}/sealed-envelope`, null);
+export const getBidReceipt = (id: string) => apiGet<BidSubmissionReceipt | null>(`/api/bids/${id}/receipt`, null);
