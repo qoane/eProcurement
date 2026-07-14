@@ -41,6 +41,14 @@ public enum PaymentPreparationStatus { Pending, Prepared, SentToFinance, Failed,
 public enum MetadataStatus { Draft, Active, Inactive, Archived }
 public enum PageType { Dashboard, DataGrid, DetailPage, Form, Wizard, Report, Timeline, Kanban, Calendar, MasterDetail, SplitView }
 
+public enum RequirementEvidenceSource { RFP, TechnicalProposal }
+public enum RequirementEvidenceStatus { Covered, PartiallyCovered, NotCovered, NeedsConfiguration, NotApplicable }
+public record KpiDefinition(string Code, string Name, string Description, string Category, string CalculationType, decimal? TargetValue, string Unit, string Status, bool IsActive = true) : Entity(Guid.NewGuid());
+public record KpiCalculationResult(string KpiCode, decimal Value, decimal? TargetValue, string Status, DateTimeOffset CalculatedAt, string FilterJson, string Explanation) : Entity(Guid.NewGuid());
+public record RequirementEvidenceItem(string Code, RequirementEvidenceSource Source, string RequirementArea, string RequirementText, string ResponseCommitment, string SystemFeature, string Module, string Route, string ApiEndpoint, RequirementEvidenceStatus Status, string EvidenceNotes, DateTimeOffset LastVerifiedAt) : Entity(Guid.NewGuid());
+public record ReportSubscription(string ReportCode, string UserId, string Frequency, string Format, string FiltersJson, bool IsActive, DateTimeOffset CreatedAt) : Entity(Guid.NewGuid());
+public record ReportRunHistory(string ReportCode, string UserId, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, string Status, string? OutputReference, string? ErrorMessage) : Entity(Guid.NewGuid());
+
 public abstract record MetadataEntity(Guid Id, string Code, string Name, string Description, int Version, MetadataStatus Status, DateTimeOffset Created, DateTimeOffset? Modified, string CreatedBy, string? ModifiedBy) : Entity(Id);
 public record Application(string Code, string Name, string Description, string Icon = "AppWindow", string Theme = "LCA Default", string DefaultLandingPage = "/app/dashboard", string NavigationRoot = "/app", string ModulesJson = "[]", int Version = 1, MetadataStatus Status = MetadataStatus.Draft, DateTimeOffset Created = default, DateTimeOffset? Modified = null, string CreatedBy = "system", string? ModifiedBy = null) : MetadataEntity(Guid.NewGuid(), Code, Name, Description, Version, Status, Created == default ? DateTimeOffset.UtcNow : Created, Modified, CreatedBy, ModifiedBy);
 public record BusinessProcess(string Code, string Name, string Description, int Version = 1, MetadataStatus Status = MetadataStatus.Draft, DateTimeOffset Created = default, DateTimeOffset? Modified = null, string CreatedBy = "system", string? ModifiedBy = null) : MetadataEntity(Guid.NewGuid(), Code, Name, Description, Version, Status, Created == default ? DateTimeOffset.UtcNow : Created, Modified, CreatedBy, ModifiedBy);
