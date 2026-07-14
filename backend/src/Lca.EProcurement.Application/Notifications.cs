@@ -132,7 +132,7 @@ public sealed class NotificationTemplateRenderer(EProcurementDbContext db) : INo
         var t = await db.NotificationTemplates.AsNoTracking().FirstOrDefaultAsync(x => x.Code == code && x.Channel == channel && x.IsActive, ct) ?? throw new InvalidOperationException($"Notification template '{code}' for {channel} was not found.");
         return new(RenderStrict(t.SubjectTemplate, model), RenderStrict(t.BodyTemplate, model));
     }
-    static string RenderStrict(string template, Dictionary<string,string?> model) => System.Text.RegularExpressions.Regex.Replace(template, "{{\s*(?<key>[A-Za-z0-9_]+)\s*}}", m => model.TryGetValue(m.Groups["key"].Value, out var v) ? v ?? "" : throw new InvalidOperationException($"Missing notification template placeholder '{m.Groups["key"].Value}'."));
+    static string RenderStrict(string template, Dictionary<string,string?> model) => System.Text.RegularExpressions.Regex.Replace(template, @"{{\s*(?<key>[A-Za-z0-9_]+)\s*}}", m => model.TryGetValue(m.Groups["key"].Value, out var v) ? v ?? "" : throw new InvalidOperationException($"Missing notification template placeholder '{m.Groups["key"].Value}'."));
 }
 
 public interface INotificationRecipientResolver { Task<List<NotificationRecipientDto>> ResolveAsync(string recipientRule, object context, CancellationToken ct = default); }
