@@ -416,7 +416,7 @@ public record EscalationRule(string EntityType, string WorkflowCode, string Node
 public record WorkflowTaskEscalation(Guid WorkflowTaskId, Guid? EscalatedFromUserId, Guid? EscalatedToUserId, string? EscalatedToRole, string Reason, DateTimeOffset EscalatedAt) : Entity(Guid.NewGuid());
 
 public enum NotificationChannel { InApp, Email, Sms }
-public enum NotificationStatus { Pending, Sent, Failed, Cancelled, Read, Unread }
+public enum NotificationStatus { Pending, Sent, Failed, Cancelled, Read, Unread, Skipped, Retrying, Completed }
 public enum NotificationPriority { Low, Normal, High, Critical }
 
 public record NotificationTemplate(string Code, string Name, string Description, string EventCode, NotificationChannel Channel, string SubjectTemplate, string BodyTemplate, bool IsActive = true, DateTimeOffset CreatedAt = default, DateTimeOffset? UpdatedAt = null) : Entity(Guid.NewGuid());
@@ -425,6 +425,11 @@ public record NotificationRecipient(Guid NotificationMessageId, string UserId, s
 public record NotificationDeliveryLog(Guid NotificationMessageId, NotificationChannel Channel, string RequestPayload, string ResponsePayload, NotificationStatus Status, DateTimeOffset SentAt, string? Error = null) : Entity(Guid.NewGuid());
 public record NotificationPreference(string UserId, string EventCode, bool InAppEnabled = true, bool EmailEnabled = true, bool SmsEnabled = true) : Entity(Guid.NewGuid());
 public record NotificationEventMapping(string EventCode, string TemplateCode, NotificationChannel Channel, string EntityType, string? RecipientRoleCode, bool IsActive = true) : Entity(Guid.NewGuid());
+public record NotificationRetryQueue(Guid DeliveryLogId, DateTimeOffset NextAttemptAt, int AttemptCount, int MaxAttempts, NotificationStatus Status, string? LastError = null) : Entity(Guid.NewGuid());
+public record CommunicationThread(string ThreadNumber, string EntityType, Guid EntityId, string EntityReference, string Subject, string Visibility, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? ClosedAt = null, string Status = "Open", Guid? SupplierId = null) : Entity(Guid.NewGuid()) { public List<CommunicationMessage> Messages { get; init; } = []; }
+public record CommunicationMessage(Guid ThreadId, string SenderUserId, string SenderName, string SenderType, string Body, bool IsInternal, bool IsPublic, DateTimeOffset CreatedAt) : Entity(Guid.NewGuid());
+public record DeadlineReminderRule(string Code, string Name, string EntityType, string DateField, int ReminderOffsetHours, string TemplateCode, string RecipientRule, bool IsEnabled, DateTimeOffset CreatedAt) : Entity(Guid.NewGuid());
+public record DeadlineReminderRun(Guid RuleId, string EntityType, Guid EntityId, string EntityReference, DateTimeOffset ScheduledFor, DateTimeOffset? ExecutedAt, NotificationStatus Status, string? ErrorMessage = null) : Entity(Guid.NewGuid());
 public record SystemSettingOverride(string Key, string Value, bool IsSecret, string Category, string UpdatedBy, DateTimeOffset UpdatedAt) : Entity(Guid.NewGuid());
 
 public enum BackupRunStatus { Pending, Running, Completed, Failed, Cancelled }
