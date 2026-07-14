@@ -150,6 +150,14 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<SupplierUserLink> SupplierUserLinks => Set<SupplierUserLink>();
+    public DbSet<UserMfaSetting> UserMfaSettings => Set<UserMfaSetting>();
+    public DbSet<UserMfaChallenge> UserMfaChallenges => Set<UserMfaChallenge>();
+    public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
+    public DbSet<IdentityProviderConfiguration> IdentityProviderConfigurations => Set<IdentityProviderConfiguration>();
+    public DbSet<ExternalIdentityLink> ExternalIdentityLinks => Set<ExternalIdentityLink>();
+    public DbSet<DelegationRule> DelegationRules => Set<DelegationRule>();
+    public DbSet<EscalationRule> EscalationRules => Set<EscalationRule>();
+    public DbSet<WorkflowTaskEscalation> WorkflowTaskEscalations => Set<WorkflowTaskEscalation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -160,6 +168,15 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
         modelBuilder.Entity<UserRole>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.UserId, x.RoleId }).IsUnique(); });
         modelBuilder.Entity<UserProfile>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.UserId).IsUnique(); b.Property(x => x.Department).HasMaxLength(128); b.Property(x => x.JobTitle).HasMaxLength(128); b.Property(x => x.PreferencesJson).HasColumnType("nvarchar(max)"); });
         modelBuilder.Entity<SupplierUserLink>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.UserId, x.SupplierId }).IsUnique(); });
+
+        modelBuilder.Entity<UserMfaSetting>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.UserId).IsUnique(); b.Property(x => x.PreferredMethod).HasConversion<string>().HasMaxLength(64); b.Property(x => x.AuthenticatorSecretEncrypted).HasMaxLength(2048); });
+        modelBuilder.Entity<UserMfaChallenge>(b => { b.HasKey(x => x.Id); b.Property(x => x.Method).HasConversion<string>().HasMaxLength(64); b.Property(x => x.CodeHash).HasMaxLength(512); });
+        modelBuilder.Entity<TrustedDevice>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.UserId, x.DeviceHash }).IsUnique(); b.Property(x => x.DeviceHash).HasMaxLength(512); b.Property(x => x.Name).HasMaxLength(256); });
+        modelBuilder.Entity<IdentityProviderConfiguration>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Code).IsUnique(); b.Property(x => x.Code).HasMaxLength(128); b.Property(x => x.Name).HasMaxLength(256); b.Property(x => x.ProviderType).HasConversion<string>().HasMaxLength(64); b.Property(x => x.ClientSecretEncrypted).HasMaxLength(2048); b.Property(x => x.SettingsJson).HasColumnType("nvarchar(max)"); });
+        modelBuilder.Entity<ExternalIdentityLink>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.ProviderCode, x.ExternalSubjectId }).IsUnique(); b.Property(x => x.ProviderCode).HasMaxLength(128); b.Property(x => x.ExternalSubjectId).HasMaxLength(512); });
+        modelBuilder.Entity<DelegationRule>(b => { b.HasKey(x => x.Id); b.Property(x => x.RoleCode).HasMaxLength(128); b.Property(x => x.Reason).HasMaxLength(1000); b.Property(x => x.CreatedBy).HasMaxLength(256); });
+        modelBuilder.Entity<EscalationRule>(b => { b.HasKey(x => x.Id); b.Property(x => x.EntityType).HasMaxLength(128); b.Property(x => x.WorkflowCode).HasMaxLength(128); b.Property(x => x.NodeCode).HasMaxLength(128); b.Property(x => x.AssignedRole).HasMaxLength(128); b.Property(x => x.EscalateToRole).HasMaxLength(128); });
+        modelBuilder.Entity<WorkflowTaskEscalation>(b => { b.HasKey(x => x.Id); b.Property(x => x.EscalatedToRole).HasMaxLength(128); b.Property(x => x.Reason).HasMaxLength(1000); });
 
         modelBuilder.Entity<NotificationTemplate>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Code).IsUnique(); b.Property(x => x.Code).HasMaxLength(128); b.Property(x => x.Name).HasMaxLength(256); b.Property(x => x.Description).HasMaxLength(2000); b.Property(x => x.EventCode).HasMaxLength(128); b.Property(x => x.Channel).HasConversion<string>().HasMaxLength(32); b.Property(x => x.SubjectTemplate).HasMaxLength(512); b.Property(x => x.BodyTemplate).HasColumnType("nvarchar(max)"); });
         modelBuilder.Entity<NotificationMessage>(b => { b.HasKey(x => x.Id); b.Property(x => x.EventCode).HasMaxLength(128); b.Property(x => x.EntityType).HasMaxLength(128); b.Property(x => x.Channel).HasConversion<string>().HasMaxLength(32); b.Property(x => x.Subject).HasMaxLength(512); b.Property(x => x.Body).HasColumnType("nvarchar(max)"); b.Property(x => x.Priority).HasConversion<string>().HasMaxLength(32); b.Property(x => x.Status).HasConversion<string>().HasMaxLength(32); b.Property(x => x.FailureReason).HasMaxLength(2000); b.Property(x => x.RelatedUrl).HasMaxLength(512); b.HasMany(x => x.Recipients).WithOne().HasForeignKey(x => x.NotificationMessageId).OnDelete(DeleteBehavior.Cascade); });

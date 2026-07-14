@@ -17,7 +17,12 @@ builder.Services.AddSwaggerGen();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtSettings>() ?? new JwtSettings();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options => { options.TokenValidationParameters = new TokenValidationParameters { ValidateIssuer = true, ValidateAudience = true, ValidateIssuerSigningKey = true, ValidateLifetime = true, ValidIssuer = jwt.Issuer, ValidAudience = jwt.Audience, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey)) }; });
-builder.Services.AddAuthorization(options => { foreach (var p in new[] { "Notifications.View", "Notifications.Manage", "NotificationTemplates.Manage", "NotificationLogs.View", "Settings.View", "Settings.Manage" }) options.AddPolicy(p, policy => policy.RequireAssertion(_ => true)); });
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+    foreach (var p in new[] { "Notifications.View", "Notifications.Manage", "NotificationTemplates.Manage", "NotificationLogs.View", "Settings.View", "Settings.Manage" })
+        options.AddPolicy(p, policy => policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", p) || ctx.User.IsInRole("Administrator")));
+});
 builder.Services.AddDbContext<EProcurementDbContext>(options => options.UseConfiguredProvider(builder.Configuration["Database:Provider"] ?? "SqlServer", builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddScoped<IWorkflowApplicationService, WorkflowApplicationService>();
 builder.Services.AddScoped<IBusinessRuleApplicationService, BusinessRuleApplicationService>();
@@ -57,6 +62,7 @@ builder.Services.AddScoped<IProcurementCaseApplicationService, ProcurementCaseAp
 builder.Services.AddScoped<IReportingApplicationService, ReportingApplicationService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IIdentityService, IdentityService>();
+builder.Services.AddScoped<ISecurityHardeningService, SecurityHardeningService>();
 
 var app = builder.Build();
 
@@ -107,7 +113,18 @@ app.UseExceptionHandler(errorApp =>
 app.UseCors(FrontendCors);
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapGet("/", () => Results.Ok(new { name = "LCA eProcurement API", status = "running", documentation = "/swagger", health = "/health" }));
-app.MapGet("/health", async (EProcurementDbContext db) => Results.Ok(new { status = "healthy", platform = "LCA eProcurement", provider = db.Database.ProviderName, database = db.Database.GetDbConnection().Database }));
+app.Use(async (context, next) =>
+{
+    await next();
+    if (context.Response.StatusCode is StatusCodes.Status401Unauthorized or StatusCodes.Status403Forbidden)
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<EProcurementDbContext>();
+        db.AuditEvents.Add(new Lca.EProcurement.Domain.AuditEvent("Access denied", context.Request.Path.Value ?? "HTTP", Guid.Empty, context.Request.Method, context.User.Identity?.Name ?? "anonymous", $"{context.Response.StatusCode} for {context.Request.Path}", DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync();
+    }
+});
+app.MapGet("/", () => Results.Ok(new { name = "LCA eProcurement API", status = "running", documentation = "/swagger", health = "/health" })).AllowAnonymous();
+app.MapGet("/health", async (EProcurementDbContext db) => Results.Ok(new { status = "healthy", platform = "LCA eProcurement", provider = db.Database.ProviderName, database = db.Database.GetDbConnection().Database })).AllowAnonymous();
 app.MapControllers();
 app.Run();
