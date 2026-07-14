@@ -20,7 +20,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 builder.Services.AddAuthorization(options =>
 {
     options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
-    foreach (var p in new[] { "Notifications.View", "Notifications.Manage", "NotificationTemplates.Manage", "NotificationLogs.View", "Settings.View", "Settings.Manage" })
+    foreach (var p in new[] { "Notifications.View", "Notifications.Manage", "NotificationTemplates.Manage", "NotificationLogs.View", "Settings.View", "Settings.Manage", "Document.View", "Document.Upload", "Document.Download", "Document.Publish", "Document.Archive", "Document.Delete", "Document.ManageRetention", "Document.ViewAccessLog", "Document.ManageRequirements" })
         options.AddPolicy(p, policy => policy.RequireAssertion(ctx => ctx.User.HasClaim("permission", p) || ctx.User.IsInRole("Administrator")));
 });
 builder.Services.AddDbContext<EProcurementDbContext>(options => options.UseConfiguredProvider(builder.Configuration["Database:Provider"] ?? "SqlServer", builder.Configuration.GetConnectionString("Default")));
@@ -65,6 +65,14 @@ builder.Services.AddScoped<ISupplierInvoiceApplicationService, SupplierInvoiceAp
 builder.Services.AddScoped<IIntegrationApplicationService, IntegrationApplicationService>();
 builder.Services.AddScoped<IProcurementCaseApplicationService, ProcurementCaseApplicationService>();
 builder.Services.AddScoped<IReportingApplicationService, ReportingApplicationService>();
+builder.Services.AddScoped<ILocalDocumentStorageProvider, LocalDocumentStorageProvider>();
+builder.Services.AddScoped<IDocumentStorageProvider>(sp => sp.GetRequiredService<ILocalDocumentStorageProvider>());
+builder.Services.AddScoped<IDocumentAccessService, DocumentAccessService>();
+builder.Services.AddScoped<IDocumentVirusScanner, NoOpVirusScanner>();
+builder.Services.AddScoped<IDocumentApplicationService, DocumentApplicationService>();
+builder.Services.AddScoped<IDocumentRequirementValidationService, DocumentRequirementValidationService>();
+builder.Services.AddScoped<IDocumentRetentionService, DocumentRetentionService>();
+builder.Services.AddScoped<IDocumentIntegrationService, DocumentIntegrationService>();
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IIdentityService, IdentityService>();
 builder.Services.AddScoped<ISecurityHardeningService, SecurityHardeningService>();
