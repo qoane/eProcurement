@@ -8,8 +8,8 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { getReportingDashboard, reportCatalog, type ReportingDashboard, type ReportingFilters } from "../../services/reportingApi";
 
-const titleByCode: Record<string, string> = { ...Object.fromEntries(reportCatalog), "procurement-activity": "Procurement activity" };
-const apiCode = (code: string) => code === "procurement-activity" ? "executive-dashboard" : code;
+const titleByCode: Record<string, string> = { ...Object.fromEntries(reportCatalog) };
+const apiCode = (code: string) => code;
 const currency = new Intl.NumberFormat(undefined, { style: "currency", currency: "LSL", maximumFractionDigits: 0 });
 function formatMetric(value: number, unit: string) {
   if (unit === "currency") return currency.format(value);
@@ -36,11 +36,11 @@ function ReportView({ code, filters }: { code: string; filters: ReportingFilters
   const exportPath = `/api/reporting/${resolvedCode}/export.csv`;
   return <>
     <div className="grid cols-4 dashboard-section">
-      {report.metrics.map((m, i) => <InfoBox key={m.code} icon={i % 2 ? "📈" : "📊"} label={m.label} value={formatMetric(m.value, m.unit)} variant={m.unit === "currency" ? "success" : "primary"} />)}
+      {report.metrics.map((m, i) => <InfoBox key={m.code} icon={i % 2 ? "📈" : "📊"} label={m.label} value={formatMetric(m.value, m.unit)} variant={m.status === "empty" ? "warning" : m.unit === "currency" ? "success" : "primary"} />)}
     </div>
     {report.metrics.length === 0 && <EmptyState title="No report data" message="No procurement records match the selected filters yet." />}
     <AdminCard title={`${report.title} details`} subtitle="CSV export is available now; the report contract can add PDF rendering later.">
-      <p><a href={exportPath}>Export CSV</a></p>
+      <p><a href={exportPath}>Export CSV</a>{report.lastRefreshedAt ? <span className="muted"> · Last refreshed {new Date(report.lastRefreshedAt).toLocaleString()}</span> : null}</p>{report.warnings?.map((w) => <p key={w} className="alert alert-warning">{w}</p>)}
       <DataTable rows={report.rows} striped compact columns={[{ header: "Area", cell: (r) => r.area, sortable: true }, { header: "Metric", cell: (r) => r.metric, sortable: true }, { header: "Value", cell: (r) => r.value, sortable: true }, { header: "Source", cell: (r) => r.source, sortable: true }]} />
     </AdminCard>
   </>;

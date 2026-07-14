@@ -42,6 +42,36 @@ public sealed class ReportingDashboardTests
         var report = await new ReportingApplicationService(db).GetComplianceAsync(new ReportingFilters());
         Assert.Equal(1, report.Metrics.Single(x => x.Code == "auditExceptions").Value);
     }
+
+    [Fact] public async Task Procurement_activity_dashboard_returns_lifecycle_counts()
+    {
+        await using var db = Db(); db.ProcurementCases.Add(new ProcurementCase("CASE-A", "Activity", "", Guid.NewGuid(), "ICT", ProcurementCaseStatus.Active, DateTimeOffset.UtcNow, "u")); await db.SaveChangesAsync();
+        var report = await new ReportingApplicationService(db).GetProcurementActivityAsync(new ReportingFilters());
+        Assert.Equal(1, report.Metrics.Single(x => x.Code == "procurementCasesCreated").Value);
+    }
+    [Fact] public async Task Spend_analysis_aggregates_real_values()
+    {
+        await using var db = Db(); db.ProcurementPlanItems.Add(new ProcurementPlanItem(Guid.NewGuid(), "I1", "Item", Guid.NewGuid(), 100, "Q1", "Open", "Approved")); db.PurchaseOrders.Add(new PurchaseOrder("PO-S", Guid.NewGuid(), Guid.NewGuid(), "Supplier", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, "LSL", 40, PurchaseOrderStatus.Issued, "u", DateTimeOffset.UtcNow)); await db.SaveChangesAsync();
+        var report = await new ReportingApplicationService(db).GetSpendAnalysisAsync(new ReportingFilters());
+        Assert.Equal(100, report.Metrics.Single(x => x.Code == "totalPlannedSpend").Value); Assert.Equal(40, report.Metrics.Single(x => x.Code == "totalPoSpend").Value);
+    }
+    [Fact] public async Task Management_kpi_dashboard_returns_seeded_definitions()
+    {
+        await using var db = Db(); var report = await new ReportingApplicationService(db).GetManagementKpisAsync(new ReportingFilters());
+        Assert.Contains(report.Metrics, x => x.Code == "AVERAGE_BIDS_PER_TENDER"); Assert.Contains(report.Rows, x => x.Metric == "Budget utilisation rate");
+    }
+    [Fact] public async Task Rfp_evidence_returns_seeded_coverage()
+    {
+        await using var db = Db(); var report = await new ReportingApplicationService(db).GetRfpEvidenceAsync(new ReportingFilters());
+        Assert.Contains(report.Rows, x => x.Area == "Supplier Management");
+    }
+    [Fact] public async Task Data_quality_flags_missing_publication()
+    {
+        await using var db = Db(); db.Tenders.Add(new Tender("T-Q", "Tender", "", TenderType.RFQ, "Open", TenderStatus.Published, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(7), "u", DateTimeOffset.UtcNow)); await db.SaveChangesAsync();
+        var issues = await new ReportingApplicationService(db).GetDataQualityAsync(new ReportingFilters());
+        Assert.Contains(issues, x => x.Code == "PUBLISHED_TENDER_NO_PUBLICATION");
+    }
+
     [Fact] public async Task CSV_export_works()
     {
         await using var db = Db(); var csv = await new ReportingApplicationService(db).ExportCsvAsync("requisitions", new ReportingFilters());

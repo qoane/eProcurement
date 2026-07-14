@@ -155,6 +155,11 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
     public DbSet<LookupDefinition> LookupDefinitions => Set<LookupDefinition>();
     public DbSet<DocumentTypeDefinition> DocumentTypeDefinitions => Set<DocumentTypeDefinition>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+    public DbSet<KpiDefinition> KpiDefinitions => Set<KpiDefinition>();
+    public DbSet<KpiCalculationResult> KpiCalculationResults => Set<KpiCalculationResult>();
+    public DbSet<RequirementEvidenceItem> RequirementEvidenceItems => Set<RequirementEvidenceItem>();
+    public DbSet<ReportSubscription> ReportSubscriptions => Set<ReportSubscription>();
+    public DbSet<ReportRunHistory> ReportRunHistories => Set<ReportRunHistory>();
 
     public DbSet<DataGovernancePolicy> DataGovernancePolicies => Set<DataGovernancePolicy>();
     public DbSet<DataRetentionRule> DataRetentionRules => Set<DataRetentionRule>();
@@ -383,6 +388,11 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
         modelBuilder.Entity<LookupDefinition>(ConfigureMetadata);
         modelBuilder.Entity<DocumentTypeDefinition>(ConfigureMetadata);
         modelBuilder.Entity<SystemSetting>(ConfigureMetadata);
+        modelBuilder.Entity<KpiDefinition>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Code).IsUnique(); b.Property(x => x.Code).HasMaxLength(128); b.Property(x => x.Name).HasMaxLength(256); b.Property(x => x.TargetValue).HasPrecision(18,2); });
+        modelBuilder.Entity<KpiCalculationResult>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.KpiCode); b.Property(x => x.Value).HasPrecision(18,2); b.Property(x => x.TargetValue).HasPrecision(18,2); b.Property(x => x.FilterJson).HasColumnType("nvarchar(max)"); });
+        modelBuilder.Entity<RequirementEvidenceItem>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Code).IsUnique(); b.Property(x => x.Source).HasConversion<string>().HasMaxLength(64); b.Property(x => x.Status).HasConversion<string>().HasMaxLength(64); b.Property(x => x.RequirementArea).HasMaxLength(256); b.Property(x => x.Route).HasMaxLength(512); b.Property(x => x.ApiEndpoint).HasMaxLength(512); });
+        modelBuilder.Entity<ReportSubscription>(b => { b.HasKey(x => x.Id); b.HasIndex(x => new { x.ReportCode, x.UserId }); b.Property(x => x.ReportCode).HasMaxLength(128); b.Property(x => x.UserId).HasMaxLength(256); b.Property(x => x.FiltersJson).HasColumnType("nvarchar(max)"); });
+        modelBuilder.Entity<ReportRunHistory>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.ReportCode); b.Property(x => x.ReportCode).HasMaxLength(128); b.Property(x => x.UserId).HasMaxLength(256); });
         modelBuilder.Entity<AnnualProcurementPlan>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.PlanNumber).IsUnique(); b.Property(x => x.PlanNumber).HasMaxLength(64); b.Property(x => x.Title).HasMaxLength(256); b.Property(x => x.Department).HasMaxLength(128); b.Property(x => x.Status).HasMaxLength(64); b.Property(x => x.CreatedBy).HasMaxLength(256); b.HasMany(x => x.Items).WithOne().HasForeignKey(x => x.AnnualProcurementPlanId).OnDelete(DeleteBehavior.Cascade); });
         modelBuilder.Entity<ProcurementPlanItem>(b => { b.HasKey(x => x.Id); b.Property(x => x.ItemCode).HasMaxLength(64); b.Property(x => x.Description).HasMaxLength(1000); b.Property(x => x.EstimatedAmount).HasPrecision(18,2); b.Property(x => x.PlannedQuarter).HasMaxLength(32); b.Property(x => x.ProcurementMethod).HasMaxLength(128); b.Property(x => x.Status).HasMaxLength(64); });
         modelBuilder.Entity<Budget>(b => { b.HasKey(x => x.Id); b.Property(x => x.Department).HasMaxLength(128); b.Property(x => x.TotalAmount).HasPrecision(18,2); b.Property(x => x.CommittedAmount).HasPrecision(18,2); b.Property(x => x.AvailableAmount).HasPrecision(18,2); b.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.BudgetId).OnDelete(DeleteBehavior.Cascade); });
