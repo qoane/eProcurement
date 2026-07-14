@@ -212,6 +212,23 @@ public sealed class EProcurementDbContext(DbContextOptions<EProcurementDbContext
     public DbSet<RestoreRun> RestoreRuns => Set<RestoreRun>();
     public DbSet<SupportCase> SupportCases => Set<SupportCase>();
 
+    public DbSet<ComplianceRequirement> ComplianceRequirements => Set<ComplianceRequirement>();
+    public DbSet<ProposalCommitment> ProposalCommitments => Set<ProposalCommitment>();
+    public DbSet<DemoStep> DemoSteps => Set<DemoStep>();
+    public DbSet<UatTestSuite> UatTestSuites => Set<UatTestSuite>();
+    public DbSet<UatTestCase> UatTestCases => Set<UatTestCase>();
+    public DbSet<UatTestRun> UatTestRuns => Set<UatTestRun>();
+    public DbSet<UatTestResult> UatTestResults => Set<UatTestResult>();
+    public DbSet<TrainingModule> TrainingModules => Set<TrainingModule>();
+    public DbSet<TrainingLesson> TrainingLessons => Set<TrainingLesson>();
+    public DbSet<TrainingCompletion> TrainingCompletions => Set<TrainingCompletion>();
+    public DbSet<ImplementationPhase> ImplementationPhases => Set<ImplementationPhase>();
+    public DbSet<ImplementationMilestone> ImplementationMilestones => Set<ImplementationMilestone>();
+    public DbSet<ImplementationTask> ImplementationTasks => Set<ImplementationTask>();
+    public DbSet<SupportServiceLevel> SupportServiceLevels => Set<SupportServiceLevel>();
+    public DbSet<HandoverChecklist> HandoverChecklists => Set<HandoverChecklist>();
+    public DbSet<HandoverChecklistItem> HandoverChecklistItems => Set<HandoverChecklistItem>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ApplicationUser>(b => { b.HasKey(x => x.Id); b.HasIndex(x => x.Email).IsUnique(); b.Property(x => x.Email).HasMaxLength(256); b.Property(x => x.FullName).HasMaxLength(256); b.Property(x => x.PhoneNumber).HasMaxLength(64); b.Property(x => x.UserType).HasConversion<string>().HasMaxLength(64); b.Property(x => x.PasswordHash).HasMaxLength(1024); b.HasMany(x => x.UserRoles).WithOne().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade); b.HasOne(x => x.Profile).WithOne().HasForeignKey<UserProfile>(x => x.UserId).OnDelete(DeleteBehavior.Cascade); b.HasOne(x => x.SupplierLink).WithOne().HasForeignKey<SupplierUserLink>(x => x.UserId).OnDelete(DeleteBehavior.Cascade); });
