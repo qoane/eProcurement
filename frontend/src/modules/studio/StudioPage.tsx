@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   AppWindow,
   Bell,
@@ -35,6 +36,8 @@ import { ApplicationDesignerPage } from "./ApplicationDesignerPage";
 import { EntityDesignerPage } from "./EntityDesignerPage";
 import { PageDesignerPage } from "./PageDesignerPage";
 import { NavigationDesignerPage } from "./NavigationDesignerPage";
+import { getStudioAreas } from "../../services/configurationApi";
+import type { StudioAreaSummary } from "../../types/api";
 
 type StudioModule = {
   title: string;
@@ -97,8 +100,8 @@ export const studioModules: StudioModule[] = [
     group: "Experience",
   },
   {
-    title: "Component Library",
-    slug: "component-library",
+    title: "Components",
+    slug: "components",
     description:
       "Define reusable UI building blocks, renderer keys, configurable properties, events, and validations.",
     emptyState: "No component definitions have been configured.",
@@ -124,8 +127,8 @@ export const studioModules: StudioModule[] = [
     group: "Experience",
   },
   {
-    title: "Dynamic Forms",
-    slug: "dynamic-forms",
+    title: "Forms",
+    slug: "forms",
     description:
       "Build governed forms with sections, fields, validations, and submission behavior.",
     emptyState: "No dynamic forms have been configured.",
@@ -133,8 +136,8 @@ export const studioModules: StudioModule[] = [
     group: "Experience",
   },
   {
-    title: "Workflow Designer",
-    slug: "workflow-designer",
+    title: "Workflows",
+    slug: "workflows",
     description:
       "Create workflow stages, transitions, actions, task routing, and service-level targets.",
     emptyState: "No workflows have been configured.",
@@ -169,11 +172,11 @@ export const studioModules: StudioModule[] = [
     group: "Data & Content",
   },
   {
-    title: "Document Types",
-    slug: "document-types",
+    title: "Document Requirements",
+    slug: "document-requirements",
     description:
-      "Govern document categories, requirements, expiry rules, and evidence metadata.",
-    emptyState: "No document types have been configured.",
+      "Govern document requirement sets, expiry rules, and evidence metadata.",
+    emptyState: "No document requirement sets have been configured.",
     icon: FileStack,
     group: "Data & Content",
   },
@@ -231,9 +234,18 @@ export const studioModules: StudioModule[] = [
     icon: Blocks,
     group: "Operations",
   },
+
   {
-    title: "System Settings",
-    slug: "system-settings",
+    title: "Configuration Packages",
+    slug: "packages",
+    description: "Export and import governed configuration packages without secrets.",
+    emptyState: "No configuration packages have been exported.",
+    icon: FileStack,
+    group: "Operations",
+  },
+  {
+    title: "Settings",
+    slug: "settings",
     description:
       "Control environment settings, feature flags, numbering sequences, and platform defaults.",
     emptyState: "No system settings have been configured.",
@@ -251,9 +263,12 @@ const groupIcons = {
 } as const;
 
 export function StudioPage() {
+  const [areas, setAreas] = useState<StudioAreaSummary[]>([]);
+  useEffect(() => { getStudioAreas().then((response) => setAreas(response.data)).catch(() => setAreas([])); }, []);
   const groups = Array.from(
     new Set(studioModules.map((module) => module.group)),
   );
+  const areaFor = (module: StudioModule) => areas.find((area) => area.slug === module.slug || area.name.toLowerCase() === module.title.toLowerCase());
   return (
     <div className="studio-page">
       <PageHeader
@@ -307,6 +322,13 @@ export function StudioPage() {
                       </span>
                       <strong>{module.title}</strong>
                       <small>{module.description}</small>
+                      {(() => { const area = areaFor(module); return area ? (
+                        <span className="studio-card-metrics">
+                          <b>{area.itemCount}</b> items · <b>{area.draftCount}</b> draft · <b>{area.publishedCount}</b> published
+                          <em>{area.lastUpdatedAt ? `Updated ${new Date(area.lastUpdatedAt).toLocaleDateString()}` : "No updates yet"}</em>
+                        </span>
+                      ) : <span className="studio-card-metrics"><b>0</b> items · loading live counts</span>; })()}
+                      <span className="btn secondary btn-sm">Open</span>
                     </button>
                   );
                 })}
@@ -337,6 +359,9 @@ export function StudioModulePage({ slug }: { slug: string }) {
   if (slug === "entities") return <EntityDesignerPage />;
   if (slug === "pages") return <PageDesignerPage />;
   if (slug === "navigation") return <NavigationDesignerPage />;
+  if (slug === "workflows") { navigate("/app/workflows"); return null; }
+  if (slug === "forms") { navigate("/app/forms"); return null; }
+  if (slug === "business-rules") { navigate("/app/rules"); return null; }
   const Icon = module.icon;
   return (
     <div className="studio-page">
