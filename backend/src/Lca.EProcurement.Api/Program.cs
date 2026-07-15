@@ -102,11 +102,15 @@ async Task EnsureDatabaseSchemaAsync(bool seed)
     var db = scope.ServiceProvider.GetRequiredService<EProcurementDbContext>();
     await RepairMissingRfpEvidenceMigrationAsync(db);
     await db.Database.MigrateAsync();
+    if (await RepairMissingRfpEvidenceMigrationAsync(db))
+    {
+        await db.Database.MigrateAsync();
+    }
     await db.EnsureConfigurablePlatformSchemaAsync();
     if (seed) await SeedData.SeedAsync(db);
 }
 
-static async Task RepairMissingRfpEvidenceMigrationAsync(EProcurementDbContext db)
+static async Task<bool> RepairMissingRfpEvidenceMigrationAsync(EProcurementDbContext db)
 {
     const string migrationId = "20260715000000_RfpEvidencePhase1";
     var connection = db.Database.GetDbConnection();
@@ -121,25 +125,28 @@ static async Task RepairMissingRfpEvidenceMigrationAsync(EProcurementDbContext d
     {
         if (!await ScalarBoolAsync(connection, "SELECT CASE WHEN OBJECT_ID(N'[dbo].[__EFMigrationsHistory]', N'U') IS NOT NULL THEN 1 ELSE 0 END"))
         {
-            return;
+            return false;
         }
 
         var migrationRecorded = await ScalarBoolAsync(connection, $"SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] = N'{migrationId}') THEN 1 ELSE 0 END");
 
         if (!migrationRecorded)
         {
-            return;
+            return false;
         }
 
         var missingRfpTableCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM (VALUES
 (N'ComplianceRequirements'), (N'ProposalCommitments'), (N'DemoSteps'), (N'UatTestSuites'), (N'UatTestCases'), (N'UatTestRuns'), (N'UatTestResults'),
 (N'TrainingModules'), (N'TrainingLessons'), (N'TrainingCompletions'), (N'ImplementationPhases'), (N'ImplementationMilestones'), (N'ImplementationTasks'),
 (N'SupportServiceLevels'), (N'HandoverChecklists'), (N'HandoverChecklistItems')) AS expected(name)
-WHERE OBJECT_ID(N'[dbo].[' + expected.name + N']', N'U') IS NULL");
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM sys.tables t
+    WHERE t.name = expected.name AND t.schema_id = SCHEMA_ID(N'dbo'))");
 
         if (missingRfpTableCount == 0)
         {
-            return;
+            return false;
         }
 
         await using var command = connection.CreateCommand();
@@ -162,6 +169,7 @@ IF OBJECT_ID(N'[dbo].[ProposalCommitments]', N'U') IS NOT NULL DROP TABLE [dbo].
 IF OBJECT_ID(N'[dbo].[ComplianceRequirements]', N'U') IS NOT NULL DROP TABLE [dbo].[ComplianceRequirements];
 DELETE FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] = N'{migrationId}';";
         await command.ExecuteNonQueryAsync();
+        return true;
     }
     finally
     {
