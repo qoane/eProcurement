@@ -106,6 +106,7 @@ async Task EnsureDatabaseSchemaAsync(bool seed)
         await db.Database.MigrateAsync();
     }
     await db.EnsureConfigurablePlatformSchemaAsync();
+    await db.EnsureRfpEvidenceSchemaAsync();
     if (seed) await SeedData.SeedAsync(db);
 }
 
