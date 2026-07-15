@@ -187,6 +187,7 @@ public static class SeedData
 
     public static async Task SeedAsync(EProcurementDbContext db, CancellationToken cancellationToken = default)
     {
+        await db.Database.MigrateAsync(cancellationToken);
         await SeedIdentityAsync(db, cancellationToken);
         await SeedRfpEvidenceAsync(db, cancellationToken);
         if (!await db.IntegrationEndpoints.AnyAsync(x => x.Code == "CMS", cancellationToken)) db.IntegrationEndpoints.Add(new IntegrationEndpoint("CMS", "Existing Contract Management System", IntegrationSystemType.ContractManagement, string.Empty, "ApiKey", false, @"{""mode"":""metadata-only""}", DateTimeOffset.UtcNow));
