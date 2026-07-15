@@ -867,33 +867,136 @@ public static class SeedData
 
     private static async Task SeedProcurementCaseTraceAsync(EProcurementDbContext db, CancellationToken ct)
     {
-        if (await db.ProcurementCases.AnyAsync(x => x.CaseNumber == "PCASE-LCA-2026-ICT-001", ct)) return;
+        const string caseNumber = "PCASE-LCA-2026-ICT-001";
+        const string planNumber = "APP-LCA-2026-ICT";
+        const string requisitionNumber = "REQ-LCA-2026-0042";
+        const string tenderNumber = "RFP-LCA-2026-ICT-007";
+        const string publicationReference = "PUB-LCA-2026-ICT-007";
+        const string bidOpeningNumber = "BOS-LCA-2026-ICT-007";
+        const string evaluationNumber = "EV-LCA-2026-ICT-007";
+        const string awardNumber = "AWD-LCA-2026-ICT-007";
+        const string purchaseOrderNumber = "PO-LCA-2026-ICT-007";
+        const string contractNumber = "CON-LCA-2026-ICT-007";
+
+        if (await db.ProcurementCases.AnyAsync(x => x.CaseNumber == caseNumber, ct)) return;
+
         var main = await db.NavigationDefinitions.FirstOrDefaultAsync(ct);
         if (main is not null && !await db.NavigationItems.AnyAsync(x => x.Code == "procurement-cases", ct)) db.NavigationItems.Add(new NavigationItem(main.Id, "procurement-cases", "Procurement Cases", "Link", "/app/procurement-cases", "Diagram3", 80));
+
         var now = new DateTimeOffset(2026, 7, 10, 8, 0, 0, TimeSpan.Zero);
         var fy = await db.FinancialYears.FirstAsync(ct);
         var category = await db.ProcurementCategories.FirstAsync(x => x.Code == "ICT", ct);
         var costCentre = await db.CostCentres.FirstAsync(ct);
-        var plan = new AnnualProcurementPlan("APP-LCA-2026-ICT", "LCA ICT Equipment Annual Procurement Plan", fy.Id, "Technical Services", "Approved", "procurement@lca.org.ls", now.AddDays(-90), now.AddDays(-88), now.AddDays(-85));
-        var planItem = new ProcurementPlanItem(plan.Id, "ICT-REG-MON-001", "Supply and delivery of ICT equipment for LCA regional monitoring offices", category.Id, 1250000m, "Q2", "Open Tender", "Approved"); plan.Items.Add(planItem); db.AnnualProcurementPlans.Add(plan);
-        var budget = new Budget(fy.Id, "Technical Services", 2500000m, 1180000m, 1320000m); var line = new BudgetLine(budget.Id, costCentre.Id, category.Id, 1500000m, 1180000m, 320000m); budget.Lines.Add(line); db.Budgets.Add(budget);
-        var req = new Requisition("REQ-LCA-2026-0042", "ICT equipment for regional monitoring offices", "Laptops, spectrum monitoring workstations, networking equipment and UPS units.", "Technical Services", costCentre.Id, fy.Id, "monitoring.manager@lca.org.ls", now.AddDays(-20), "High", 1250000m, RequisitionStatus.Approved, now.AddDays(-70), now.AddDays(-69), now.AddDays(-62)); req.Items.Add(new RequisitionItem(req.Id, planItem.Description, 1, "Lot", 1250000m, 1250000m, category.Id, planItem.Id)); db.Requisitions.Add(req);
-        var tender = new Tender("RFP-LCA-2026-ICT-007", "Supply and Delivery of ICT Equipment for LCA Regional Monitoring Offices", "Open tender for regional monitoring office ICT equipment, installation and warranty support.", TenderType.RFP, "Open Tender", TenderStatus.Closed, now.AddDays(-55), now.AddDays(-25), "procurement@lca.org.ls", now.AddDays(-60), now.AddDays(-55), "approver@lca.org.ls", "ICT Equipment"); tender.Documents.Add(new TenderDocument(tender.Id,"TermsOfReference","lca-ict-equipment-tor.pdf","Technical requirements and delivery schedule",true,now.AddDays(-58),"procurement@lca.org.ls",true,"/public/documents/lca-ict-equipment-tor.pdf")); db.Tenders.Add(tender);
-        var pub = new PublicTenderPublication(tender.Id, tender.TenderNumber, "PUB-LCA-2026-ICT-007", tender.Title, tender.Description, tender.TenderType, tender.ProcurementMethod, tender.Category, now.AddDays(-55), tender.ClosingDate, TenderStatus.Closed, true, "rfp-lca-2026-ict-007", now.AddDays(-55), now.AddDays(-25)); db.PublicTenderPublications.Add(pub);
-        var suppliers = new[] { new Supplier("SUP-LCA-2026-0101","Maseru ICT Supplies Pty Ltd",SupplierStatus.Approved), new Supplier("SUP-LCA-2026-0102","Maluti Digital Systems",SupplierStatus.Approved), new Supplier("SUP-LCA-2026-0103","Pioneer Office Technologies",SupplierStatus.Approved)}; db.Suppliers.AddRange(suppliers);
-        var bids = suppliers.Select((sp,i) => { var b = new BidSubmission($"BID-LCA-2026-ICT-00{i+1}", tender.Id, sp.Id, i==0?BidSubmissionStatus.Awarded:BidSubmissionStatus.Evaluated, now.AddDays(-30+i), $"bid@{sp.LegalName.Split(' ')[0].ToLower()}.co.ls", SubmittedAt: now.AddDays(-30+i), LockedAt: now.AddDays(-25), OpenedAt: now.AddDays(-24)); b.Documents.Add(new BidSubmissionDocument(b.Id,"Technical Proposal",$"{b.SubmissionNumber}-technical.pdf",$"/vault/{b.SubmissionNumber}/technical.pdf","supplier",now.AddDays(-30+i))); b.Items.Add(new BidSubmissionItem(b.Id,null,"ICT equipment lot",1,i==0?1180000m: (i==1?1245000m:1290000m),i==0?1180000m:(i==1?1245000m:1290000m))); return b; }).ToArray(); db.BidSubmissions.AddRange(bids);
-        var opening = new BidOpeningSession("BOS-LCA-2026-ICT-007", tender.Id, "Opening: ICT equipment regional offices", now.AddDays(-24), BidOpeningSessionStatus.ReferredToEvaluation, "procurement@lca.org.ls", now.AddDays(-26), "procurement@lca.org.ls", CompletedAt: now.AddDays(-24)); foreach (var b in bids) opening.Submissions.Add(new BidOpeningSubmission(opening.Id,b.Id,b.SupplierId,suppliers.Single(su=>su.Id==b.SupplierId).LegalName,b.SubmissionNumber,b.SubmittedAt,BidOpeningSubmissionStatus.ReferredToEvaluation,now.AddDays(-24),"opening.committee@lca.org.ls")); db.BidOpeningSessions.Add(opening);
-        var eval = new EvaluationSession("EV-LCA-2026-ICT-007", tender.Id, opening.Id, "Evaluation: ICT equipment regional offices", EvaluationSessionStatus.ReferredToAward, EvaluationStage.Consensus, "procurement@lca.org.ls", now.AddDays(-23), "evaluator@lca.org.ls", CompletedAt: now.AddDays(-14)); foreach (var (b,i) in bids.Select((b,i)=>(b,i))) eval.Submissions.Add(new EvaluationSubmission(eval.Id,b.Id,b.SupplierId,suppliers[i].LegalName,b.SubmissionNumber,i==0?EvaluationSubmissionStatus.Recommended:EvaluationSubmissionStatus.Evaluated,true,88-i*4,95-i*3,91-i*3,i+1)); eval.Recommendations.Add(new EvaluationRecommendation(eval.Id,bids[0].Id,suppliers[0].Id,suppliers[0].LegalName,"Recommend award to the highest ranked compliant bidder.",1180000m,"evaluator@lca.org.ls",now.AddDays(-14),"Recommended")); db.EvaluationSessions.Add(eval);
-        var award = new Award("AWD-LCA-2026-ICT-007", tender.Id, eval.Id, bids[0].Id, suppliers[0].Id, suppliers[0].LegalName, 1180000m, AwardStatus.Published, "procurement@lca.org.ls", now.AddDays(-13), now.AddDays(-12), now.AddDays(-10), now.AddDays(-9)); db.Awards.Add(award);
-        var po = new PurchaseOrder("PO-LCA-2026-ICT-007", award.Id, suppliers[0].Id, suppliers[0].LegalName, now.AddDays(-8), now.AddDays(22), "LSL", 1180000m, PurchaseOrderStatus.Issued, "procurement@lca.org.ls", now.AddDays(-8), now.AddDays(-8)); db.PurchaseOrders.Add(po);
-        var contract = new Contract("CON-LCA-2026-ICT-007", award.Id, po.Id, suppliers[0].Id, suppliers[0].LegalName, tender.Title, "Supply contract covering delivery, installation and warranty support.", ContractType.SupplyContract, now.AddDays(-7), now.AddMonths(12), 1180000m, 1180000m, ContractStatus.Active, "contracts@lca.org.ls", now.AddDays(-7), now.AddDays(-7)); contract.Documents.Add(new ContractDocument(contract.Id,"Signed Contract","con-lca-2026-ict-007.pdf","/contracts/con-lca-2026-ict-007.pdf","contracts@lca.org.ls",now.AddDays(-7))); db.Contracts.Add(contract);
+
+        var plan = await db.AnnualProcurementPlans.Include(x => x.Items).FirstOrDefaultAsync(x => x.PlanNumber == planNumber, ct);
+        if (plan is null)
+        {
+            plan = new AnnualProcurementPlan(planNumber, "LCA ICT Equipment Annual Procurement Plan", fy.Id, "Technical Services", "Approved", "procurement@lca.org.ls", now.AddDays(-90), now.AddDays(-88), now.AddDays(-85));
+            plan.Items.Add(new ProcurementPlanItem(plan.Id, "ICT-REG-MON-001", "Supply and delivery of ICT equipment for LCA regional monitoring offices", category.Id, 1250000m, "Q2", "Open Tender", "Approved"));
+            db.AnnualProcurementPlans.Add(plan);
+        }
+        var planItem = plan.Items.FirstOrDefault(x => x.ItemCode == "ICT-REG-MON-001");
+        if (planItem is null)
+        {
+            planItem = new ProcurementPlanItem(plan.Id, "ICT-REG-MON-001", "Supply and delivery of ICT equipment for LCA regional monitoring offices", category.Id, 1250000m, "Q2", "Open Tender", "Approved");
+            plan.Items.Add(planItem);
+        }
+
+        var budget = await db.Budgets.FirstOrDefaultAsync(x => x.FinancialYearId == fy.Id && x.Department == "Technical Services" && x.TotalAmount == 2500000m, ct);
+        if (budget is null)
+        {
+            budget = new Budget(fy.Id, "Technical Services", 2500000m, 1180000m, 1320000m);
+            budget.Lines.Add(new BudgetLine(budget.Id, costCentre.Id, category.Id, 1500000m, 1180000m, 320000m));
+            db.Budgets.Add(budget);
+        }
+
+        var req = await db.Requisitions.FirstOrDefaultAsync(x => x.RequisitionNumber == requisitionNumber, ct);
+        if (req is null)
+        {
+            req = new Requisition(requisitionNumber, "ICT equipment for regional monitoring offices", "Laptops, spectrum monitoring workstations, networking equipment and UPS units.", "Technical Services", costCentre.Id, fy.Id, "monitoring.manager@lca.org.ls", now.AddDays(-20), "High", 1250000m, RequisitionStatus.Approved, now.AddDays(-70), now.AddDays(-69), now.AddDays(-62));
+            req.Items.Add(new RequisitionItem(req.Id, planItem.Description, 1, "Lot", 1250000m, 1250000m, category.Id, planItem.Id));
+            db.Requisitions.Add(req);
+        }
+
+        var tender = await db.Tenders.FirstOrDefaultAsync(x => x.TenderNumber == tenderNumber, ct);
+        if (tender is null)
+        {
+            tender = new Tender(tenderNumber, "Supply and Delivery of ICT Equipment for LCA Regional Monitoring Offices", "Open tender for regional monitoring office ICT equipment, installation and warranty support.", TenderType.RFP, "Open Tender", TenderStatus.Closed, now.AddDays(-55), now.AddDays(-25), "procurement@lca.org.ls", now.AddDays(-60), now.AddDays(-55), "approver@lca.org.ls", "ICT Equipment");
+            tender.Documents.Add(new TenderDocument(tender.Id,"TermsOfReference","lca-ict-equipment-tor.pdf","Technical requirements and delivery schedule",true,now.AddDays(-58),"procurement@lca.org.ls",true,"/public/documents/lca-ict-equipment-tor.pdf"));
+            db.Tenders.Add(tender);
+        }
+
+        var pub = await db.PublicTenderPublications.FirstOrDefaultAsync(x => x.Reference == publicationReference, ct);
+        if (pub is null)
+        {
+            pub = new PublicTenderPublication(tender.Id, tender.TenderNumber, publicationReference, tender.Title, tender.Description, tender.TenderType, tender.ProcurementMethod, tender.Category, now.AddDays(-55), tender.ClosingDate, TenderStatus.Closed, true, "rfp-lca-2026-ict-007", now.AddDays(-55), now.AddDays(-25));
+            db.PublicTenderPublications.Add(pub);
+        }
+
+        var suppliers = new[]
+        {
+            await EnsureSupplierAsync("SUP-LCA-2026-0101", "Maseru ICT Supplies Pty Ltd"),
+            await EnsureSupplierAsync("SUP-LCA-2026-0102", "Maluti Digital Systems"),
+            await EnsureSupplierAsync("SUP-LCA-2026-0103", "Pioneer Office Technologies")
+        };
+
+        var bids = new BidSubmission[suppliers.Length];
+        for (var i = 0; i < suppliers.Length; i++)
+        {
+            var submissionNumber = $"BID-LCA-2026-ICT-00{i + 1}";
+            var bid = await db.BidSubmissions.FirstOrDefaultAsync(x => x.SubmissionNumber == submissionNumber, ct);
+            if (bid is null)
+            {
+                bid = new BidSubmission(submissionNumber, tender.Id, suppliers[i].Id, i == 0 ? BidSubmissionStatus.Awarded : BidSubmissionStatus.Evaluated, now.AddDays(-30 + i), $"bid@{suppliers[i].LegalName.Split(' ')[0].ToLower()}.co.ls", SubmittedAt: now.AddDays(-30 + i), LockedAt: now.AddDays(-25), OpenedAt: now.AddDays(-24));
+                bid.Documents.Add(new BidSubmissionDocument(bid.Id,"Technical Proposal",$"{bid.SubmissionNumber}-technical.pdf",$"/vault/{bid.SubmissionNumber}/technical.pdf","supplier",now.AddDays(-30+i)));
+                bid.Items.Add(new BidSubmissionItem(bid.Id,null,"ICT equipment lot",1,i==0?1180000m: (i==1?1245000m:1290000m),i==0?1180000m:(i==1?1245000m:1290000m)));
+                db.BidSubmissions.Add(bid);
+            }
+            bids[i] = bid;
+        }
+
+        var opening = await db.BidOpeningSessions.FirstOrDefaultAsync(x => x.SessionNumber == bidOpeningNumber, ct);
+        if (opening is null)
+        {
+            opening = new BidOpeningSession(bidOpeningNumber, tender.Id, "Opening: ICT equipment regional offices", now.AddDays(-24), BidOpeningSessionStatus.ReferredToEvaluation, "procurement@lca.org.ls", now.AddDays(-26), "procurement@lca.org.ls", CompletedAt: now.AddDays(-24));
+            foreach (var b in bids) opening.Submissions.Add(new BidOpeningSubmission(opening.Id,b.Id,b.SupplierId,suppliers.Single(su=>su.Id==b.SupplierId).LegalName,b.SubmissionNumber,b.SubmittedAt,BidOpeningSubmissionStatus.ReferredToEvaluation,now.AddDays(-24),"opening.committee@lca.org.ls"));
+            db.BidOpeningSessions.Add(opening);
+        }
+
+        var eval = await db.EvaluationSessions.FirstOrDefaultAsync(x => x.SessionNumber == evaluationNumber, ct);
+        if (eval is null)
+        {
+            eval = new EvaluationSession(evaluationNumber, tender.Id, opening.Id, "Evaluation: ICT equipment regional offices", EvaluationSessionStatus.ReferredToAward, EvaluationStage.Consensus, "procurement@lca.org.ls", now.AddDays(-23), "evaluator@lca.org.ls", CompletedAt: now.AddDays(-14));
+            foreach (var (b,i) in bids.Select((b,i)=>(b,i))) eval.Submissions.Add(new EvaluationSubmission(eval.Id,b.Id,b.SupplierId,suppliers[i].LegalName,b.SubmissionNumber,i==0?EvaluationSubmissionStatus.Recommended:EvaluationSubmissionStatus.Evaluated,true,88-i*4,95-i*3,91-i*3,i+1));
+            eval.Recommendations.Add(new EvaluationRecommendation(eval.Id,bids[0].Id,suppliers[0].Id,suppliers[0].LegalName,"Recommend award to the highest ranked compliant bidder.",1180000m,"evaluator@lca.org.ls",now.AddDays(-14),"Recommended"));
+            db.EvaluationSessions.Add(eval);
+        }
+
+        var award = await db.Awards.FirstOrDefaultAsync(x => x.AwardNumber == awardNumber, ct);
+        if (award is null) { award = new Award(awardNumber, tender.Id, eval.Id, bids[0].Id, suppliers[0].Id, suppliers[0].LegalName, 1180000m, AwardStatus.Published, "procurement@lca.org.ls", now.AddDays(-13), now.AddDays(-12), now.AddDays(-10), now.AddDays(-9)); db.Awards.Add(award); }
+        var po = await db.PurchaseOrders.FirstOrDefaultAsync(x => x.PurchaseOrderNumber == purchaseOrderNumber, ct);
+        if (po is null) { po = new PurchaseOrder(purchaseOrderNumber, award.Id, suppliers[0].Id, suppliers[0].LegalName, now.AddDays(-8), now.AddDays(22), "LSL", 1180000m, PurchaseOrderStatus.Issued, "procurement@lca.org.ls", now.AddDays(-8), now.AddDays(-8)); db.PurchaseOrders.Add(po); }
+        var contract = await db.Contracts.FirstOrDefaultAsync(x => x.ContractNumber == contractNumber, ct);
+        if (contract is null) { contract = new Contract(contractNumber, award.Id, po.Id, suppliers[0].Id, suppliers[0].LegalName, tender.Title, "Supply contract covering delivery, installation and warranty support.", ContractType.SupplyContract, now.AddDays(-7), now.AddMonths(12), 1180000m, 1180000m, ContractStatus.Active, "contracts@lca.org.ls", now.AddDays(-7), now.AddDays(-7)); contract.Documents.Add(new ContractDocument(contract.Id,"Signed Contract","con-lca-2026-ict-007.pdf","/contracts/con-lca-2026-ict-007.pdf","contracts@lca.org.ls",now.AddDays(-7))); db.Contracts.Add(contract); }
+
         await db.SaveChangesAsync(ct);
-        var pc = new ProcurementCase("PCASE-LCA-2026-ICT-001", tender.Title, "End-to-end trace from annual planning through contract management for LCA regional monitoring office ICT equipment.", fy.Id, "Technical Services", ProcurementCaseStatus.Active, now.AddDays(-90), "system");
+
+        var pc = new ProcurementCase(caseNumber, tender.Title, "End-to-end trace from annual planning through contract management for LCA regional monitoring office ICT equipment.", fy.Id, "Technical Services", ProcurementCaseStatus.Active, now.AddDays(-90), "system");
         void Link(string t, Guid id, string r, ProcurementCaseRelationshipType rt, int day) => pc.Links.Add(new ProcurementCaseLink(pc.Id,t,id,r,rt,now.AddDays(day)));
         Link(nameof(AnnualProcurementPlan),plan.Id,plan.PlanNumber,ProcurementCaseRelationshipType.AnnualPlan,-90); Link(nameof(Budget),budget.Id,"BUD-TECH-2026",ProcurementCaseRelationshipType.Budget,-89); Link(nameof(Requisition),req.Id,req.RequisitionNumber,ProcurementCaseRelationshipType.Requisition,-70); Link(nameof(Tender),tender.Id,tender.TenderNumber,ProcurementCaseRelationshipType.Tender,-60); Link(nameof(PublicTenderPublication),pub.Id,pub.Reference,ProcurementCaseRelationshipType.PublicPublication,-55); foreach (var b in bids) Link(nameof(BidSubmission),b.Id,b.SubmissionNumber,ProcurementCaseRelationshipType.BidSubmission,-30); Link(nameof(BidOpeningSession),opening.Id,opening.SessionNumber,ProcurementCaseRelationshipType.BidOpening,-24); Link(nameof(EvaluationSession),eval.Id,eval.SessionNumber,ProcurementCaseRelationshipType.Evaluation,-23); Link(nameof(Award),award.Id,award.AwardNumber,ProcurementCaseRelationshipType.Award,-13); Link(nameof(PurchaseOrder),po.Id,po.PurchaseOrderNumber,ProcurementCaseRelationshipType.PurchaseOrder,-8); Link(nameof(Contract),contract.Id,contract.ContractNumber,ProcurementCaseRelationshipType.Contract,-7);
         db.ProcurementCases.Add(pc);
         foreach (var e in pc.Links.Where(l => l.RelationshipType is not ProcurementCaseRelationshipType.Document and not ProcurementCaseRelationshipType.Notification)) db.AuditEvents.Add(new AuditEvent($"Case linked {e.RelationshipType}", e.EntityType, e.EntityId, e.EntityReference, "system", $"Linked to procurement case {pc.CaseNumber}", e.CreatedAt));
-        db.NotificationMessages.Add(new NotificationMessage("AwardSuccessful", nameof(Award), award.Id, NotificationChannel.Email, "Award successful", $"Award {award.AwardNumber} issued to {award.SupplierName}.", NotificationPriority.Normal, NotificationStatus.Sent, now.AddDays(-9), now.AddDays(-9), RelatedUrl:$"/app/awards/{award.Id}"));
+        if (!await db.NotificationMessages.AnyAsync(x => x.EventCode == "AwardSuccessful" && x.EntityId == award.Id, ct)) db.NotificationMessages.Add(new NotificationMessage("AwardSuccessful", nameof(Award), award.Id, NotificationChannel.Email, "Award successful", $"Award {award.AwardNumber} issued to {award.SupplierName}.", NotificationPriority.Normal, NotificationStatus.Sent, now.AddDays(-9), now.AddDays(-9), RelatedUrl:$"/app/awards/{award.Id}"));
+
+        async Task<Supplier> EnsureSupplierAsync(string referenceNumber, string legalName)
+        {
+            var supplier = await db.Suppliers.FirstOrDefaultAsync(x => x.ReferenceNumber == referenceNumber, ct);
+            if (supplier is not null) return supplier;
+            supplier = new Supplier(referenceNumber, legalName, SupplierStatus.Approved);
+            db.Suppliers.Add(supplier);
+            return supplier;
+        }
     }
+
 
 }
