@@ -736,6 +736,87 @@ IF OBJECT_ID(N'[dbo].[BidSubmissionStatusHistories]', N'U') IS NOT NULL AND NOT 
         }
     }
 
+    public static async Task<bool> RepairMissingRfpEvidenceMigrationAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
+    {
+        const string migrationId = "20260715000000_RfpEvidencePhase1";
+        const string legacyMigrationId = "RfpEvidencePhase1";
+        var connection = db.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State == System.Data.ConnectionState.Closed;
+
+        if (shouldCloseConnection)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            if (!await ScalarBoolAsync(connection, "SELECT CASE WHEN OBJECT_ID(N'[dbo].[__EFMigrationsHistory]', N'U') IS NOT NULL THEN 1 ELSE 0 END", cancellationToken))
+            {
+                return false;
+            }
+
+            var migrationRecorded = await ScalarBoolAsync(connection, $"SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'{migrationId}', N'{legacyMigrationId}') OR [MigrationId] LIKE N'%RfpEvidencePhase1') THEN 1 ELSE 0 END", cancellationToken);
+
+            if (!migrationRecorded)
+            {
+                return false;
+            }
+
+            var missingRfpTableCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM (VALUES
+(N'ComplianceRequirements'), (N'ProposalCommitments'), (N'DemoSteps'), (N'UatTestSuites'), (N'UatTestCases'), (N'UatTestRuns'), (N'UatTestResults'),
+(N'TrainingModules'), (N'TrainingLessons'), (N'TrainingCompletions'), (N'ImplementationPhases'), (N'ImplementationMilestones'), (N'ImplementationTasks'),
+(N'SupportServiceLevels'), (N'HandoverChecklists'), (N'HandoverChecklistItems')) AS expected(name)
+WHERE OBJECT_ID(N'[dbo].[' + expected.name + N']', N'U') IS NULL", cancellationToken);
+
+            if (missingRfpTableCount == 0)
+            {
+                return false;
+            }
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = $@"
+IF OBJECT_ID(N'[dbo].[ImplementationTasks]', N'U') IS NOT NULL DROP TABLE [dbo].[ImplementationTasks];
+IF OBJECT_ID(N'[dbo].[UatTestResults]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestResults];
+IF OBJECT_ID(N'[dbo].[HandoverChecklistItems]', N'U') IS NOT NULL DROP TABLE [dbo].[HandoverChecklistItems];
+IF OBJECT_ID(N'[dbo].[TrainingCompletions]', N'U') IS NOT NULL DROP TABLE [dbo].[TrainingCompletions];
+IF OBJECT_ID(N'[dbo].[TrainingLessons]', N'U') IS NOT NULL DROP TABLE [dbo].[TrainingLessons];
+IF OBJECT_ID(N'[dbo].[UatTestCases]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestCases];
+IF OBJECT_ID(N'[dbo].[ImplementationMilestones]', N'U') IS NOT NULL DROP TABLE [dbo].[ImplementationMilestones];
+IF OBJECT_ID(N'[dbo].[UatTestRuns]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestRuns];
+IF OBJECT_ID(N'[dbo].[HandoverChecklists]', N'U') IS NOT NULL DROP TABLE [dbo].[HandoverChecklists];
+IF OBJECT_ID(N'[dbo].[TrainingModules]', N'U') IS NOT NULL DROP TABLE [dbo].[TrainingModules];
+IF OBJECT_ID(N'[dbo].[UatTestSuites]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestSuites];
+IF OBJECT_ID(N'[dbo].[ImplementationPhases]', N'U') IS NOT NULL DROP TABLE [dbo].[ImplementationPhases];
+IF OBJECT_ID(N'[dbo].[SupportServiceLevels]', N'U') IS NOT NULL DROP TABLE [dbo].[SupportServiceLevels];
+IF OBJECT_ID(N'[dbo].[DemoSteps]', N'U') IS NOT NULL DROP TABLE [dbo].[DemoSteps];
+IF OBJECT_ID(N'[dbo].[ProposalCommitments]', N'U') IS NOT NULL DROP TABLE [dbo].[ProposalCommitments];
+IF OBJECT_ID(N'[dbo].[ComplianceRequirements]', N'U') IS NOT NULL DROP TABLE [dbo].[ComplianceRequirements];
+DELETE FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'{migrationId}', N'{legacyMigrationId}') OR [MigrationId] LIKE N'%RfpEvidencePhase1';";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            return true;
+        }
+        finally
+        {
+            if (shouldCloseConnection)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static async Task<bool> ScalarBoolAsync(System.Data.Common.DbConnection connection, string sql, CancellationToken cancellationToken)
+        => Convert.ToInt32(await ScalarAsync(connection, sql, cancellationToken)) == 1;
+
+    private static async Task<int> ScalarIntAsync(System.Data.Common.DbConnection connection, string sql, CancellationToken cancellationToken)
+        => Convert.ToInt32(await ScalarAsync(connection, sql, cancellationToken));
+
+    private static async Task<object> ScalarAsync(System.Data.Common.DbConnection connection, string sql, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        return await command.ExecuteScalarAsync(cancellationToken) ?? 0;
+    }
+
     public const string DemoSqlServerConnectionString = "Server=(localdb)\\MSSQLLocalDB;Database=LcaEProcurement;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true";
     public static DbContextOptionsBuilder UseConfiguredProvider(this DbContextOptionsBuilder builder, string provider, string? connectionString = null)
         => provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase)

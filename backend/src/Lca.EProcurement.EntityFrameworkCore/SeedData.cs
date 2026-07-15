@@ -187,6 +187,11 @@ public static class SeedData
 
     public static async Task SeedAsync(EProcurementDbContext db, CancellationToken cancellationToken = default)
     {
+        if (await db.RepairMissingRfpEvidenceMigrationAsync(cancellationToken))
+        {
+            await db.Database.MigrateAsync(cancellationToken);
+        }
+
         await db.Database.MigrateAsync(cancellationToken);
         await SeedIdentityAsync(db, cancellationToken);
         await SeedRfpEvidenceAsync(db, cancellationToken);

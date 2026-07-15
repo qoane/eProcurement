@@ -7,7 +7,6 @@ using Lca.EProcurement.Application;
 using Lca.EProcurement.EntityFrameworkCore;
 using Lca.EProcurement.Api.Middleware;
 using Microsoft.EntityFrameworkCore;
-using System.Data;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -100,118 +99,14 @@ async Task EnsureDatabaseSchemaAsync(bool seed)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<EProcurementDbContext>();
-    await RepairMissingRfpEvidenceMigrationAsync(db);
+    await db.RepairMissingRfpEvidenceMigrationAsync();
     await db.Database.MigrateAsync();
-    if (await RepairMissingRfpEvidenceMigrationAsync(db))
+    if (await db.RepairMissingRfpEvidenceMigrationAsync())
     {
         await db.Database.MigrateAsync();
     }
     await db.EnsureConfigurablePlatformSchemaAsync();
     if (seed) await SeedData.SeedAsync(db);
-}
-
-static async Task<bool> RepairMissingRfpEvidenceMigrationAsync(EProcurementDbContext db)
-{
-    const string migrationId = "20260715000000_RfpEvidencePhase1";
-    const string legacyMigrationId = "RfpEvidencePhase1";
-    var connection = db.Database.GetDbConnection();
-    var shouldCloseConnection = connection.State == ConnectionState.Closed;
-
-    if (shouldCloseConnection)
-    {
-        await connection.OpenAsync();
-    }
-
-    try
-    {
-        if (!await ScalarBoolAsync(connection, "SELECT CASE WHEN OBJECT_ID(N'[dbo].[__EFMigrationsHistory]', N'U') IS NOT NULL THEN 1 ELSE 0 END"))
-        {
-            return false;
-        }
-
-        var migrationRecorded = await ScalarBoolAsync(connection, $"SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'{migrationId}', N'{legacyMigrationId}') OR [MigrationId] LIKE N'%RfpEvidencePhase1') THEN 1 ELSE 0 END");
-
-        var existingRfpTableCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM (VALUES
-(N'ComplianceRequirements'), (N'ProposalCommitments'), (N'DemoSteps'), (N'UatTestSuites'), (N'UatTestCases'), (N'UatTestRuns'), (N'UatTestResults'),
-(N'TrainingModules'), (N'TrainingLessons'), (N'TrainingCompletions'), (N'ImplementationPhases'), (N'ImplementationMilestones'), (N'ImplementationTasks'),
-(N'SupportServiceLevels'), (N'HandoverChecklists'), (N'HandoverChecklistItems')) AS expected(name)
-WHERE EXISTS (
-    SELECT 1
-    FROM sys.tables t
-    WHERE t.name = expected.name AND t.schema_id = SCHEMA_ID(N'dbo'))");
-
-        var missingRfpTableCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM (VALUES
-(N'ComplianceRequirements'), (N'ProposalCommitments'), (N'DemoSteps'), (N'UatTestSuites'), (N'UatTestCases'), (N'UatTestRuns'), (N'UatTestResults'),
-(N'TrainingModules'), (N'TrainingLessons'), (N'TrainingCompletions'), (N'ImplementationPhases'), (N'ImplementationMilestones'), (N'ImplementationTasks'),
-(N'SupportServiceLevels'), (N'HandoverChecklists'), (N'HandoverChecklistItems')) AS expected(name)
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM sys.tables t
-    WHERE t.name = expected.name AND t.schema_id = SCHEMA_ID(N'dbo'))");
-
-        var missingRfpColumnCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM (VALUES
-(N'ComplianceRequirements', N'RequirementCode'), (N'ComplianceRequirements', N'Source'), (N'ComplianceRequirements', N'RequirementType'), (N'ComplianceRequirements', N'Status'),
-(N'ProposalCommitments', N'CommitmentCode'), (N'DemoSteps', N'StepNumber'), (N'UatTestSuites', N'Code'), (N'UatTestCases', N'SuiteId'),
-(N'TrainingModules', N'Code'), (N'TrainingLessons', N'TrainingModuleId'), (N'ImplementationPhases', N'Code'), (N'ImplementationMilestones', N'PhaseId'),
-(N'ImplementationTasks', N'MilestoneId'), (N'SupportServiceLevels', N'Code'), (N'HandoverChecklists', N'Code'), (N'HandoverChecklistItems', N'ChecklistId')) AS expected(tableName, columnName)
-WHERE EXISTS (
-    SELECT 1
-    FROM sys.tables t
-    WHERE t.name = expected.tableName AND t.schema_id = SCHEMA_ID(N'dbo'))
-AND COL_LENGTH(QUOTENAME(N'dbo') + N'.' + QUOTENAME(expected.tableName), expected.columnName) IS NULL");
-
-        if (missingRfpTableCount == 0 && missingRfpColumnCount == 0)
-        {
-            return false;
-        }
-
-        if (!migrationRecorded && existingRfpTableCount == 0)
-        {
-            return false;
-        }
-
-        await using var command = connection.CreateCommand();
-        command.CommandText = $@"
-IF OBJECT_ID(N'[dbo].[ImplementationTasks]', N'U') IS NOT NULL DROP TABLE [dbo].[ImplementationTasks];
-IF OBJECT_ID(N'[dbo].[UatTestResults]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestResults];
-IF OBJECT_ID(N'[dbo].[HandoverChecklistItems]', N'U') IS NOT NULL DROP TABLE [dbo].[HandoverChecklistItems];
-IF OBJECT_ID(N'[dbo].[TrainingCompletions]', N'U') IS NOT NULL DROP TABLE [dbo].[TrainingCompletions];
-IF OBJECT_ID(N'[dbo].[TrainingLessons]', N'U') IS NOT NULL DROP TABLE [dbo].[TrainingLessons];
-IF OBJECT_ID(N'[dbo].[UatTestCases]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestCases];
-IF OBJECT_ID(N'[dbo].[ImplementationMilestones]', N'U') IS NOT NULL DROP TABLE [dbo].[ImplementationMilestones];
-IF OBJECT_ID(N'[dbo].[UatTestRuns]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestRuns];
-IF OBJECT_ID(N'[dbo].[HandoverChecklists]', N'U') IS NOT NULL DROP TABLE [dbo].[HandoverChecklists];
-IF OBJECT_ID(N'[dbo].[TrainingModules]', N'U') IS NOT NULL DROP TABLE [dbo].[TrainingModules];
-IF OBJECT_ID(N'[dbo].[UatTestSuites]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestSuites];
-IF OBJECT_ID(N'[dbo].[ImplementationPhases]', N'U') IS NOT NULL DROP TABLE [dbo].[ImplementationPhases];
-IF OBJECT_ID(N'[dbo].[SupportServiceLevels]', N'U') IS NOT NULL DROP TABLE [dbo].[SupportServiceLevels];
-IF OBJECT_ID(N'[dbo].[DemoSteps]', N'U') IS NOT NULL DROP TABLE [dbo].[DemoSteps];
-IF OBJECT_ID(N'[dbo].[ProposalCommitments]', N'U') IS NOT NULL DROP TABLE [dbo].[ProposalCommitments];
-IF OBJECT_ID(N'[dbo].[ComplianceRequirements]', N'U') IS NOT NULL DROP TABLE [dbo].[ComplianceRequirements];
-DELETE FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'{migrationId}', N'{legacyMigrationId}') OR [MigrationId] LIKE N'%RfpEvidencePhase1';";
-        await command.ExecuteNonQueryAsync();
-        return true;
-    }
-    finally
-    {
-        if (shouldCloseConnection)
-        {
-            await connection.CloseAsync();
-        }
-    }
-}
-
-static async Task<bool> ScalarBoolAsync(System.Data.Common.DbConnection connection, string sql)
-    => Convert.ToInt32(await ScalarAsync(connection, sql)) == 1;
-
-static async Task<int> ScalarIntAsync(System.Data.Common.DbConnection connection, string sql)
-    => Convert.ToInt32(await ScalarAsync(connection, sql));
-
-static async Task<object> ScalarAsync(System.Data.Common.DbConnection connection, string sql)
-{
-    await using var command = connection.CreateCommand();
-    command.CommandText = sql;
-    return await command.ExecuteScalarAsync() ?? 0;
 }
 
 if (args.Contains("--seed"))
