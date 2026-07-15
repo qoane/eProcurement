@@ -129,12 +129,16 @@ static async Task<bool> RepairMissingRfpEvidenceMigrationAsync(EProcurementDbCon
             return false;
         }
 
-        var migrationRecorded = await ScalarBoolAsync(connection, $"SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'{migrationId}', N'{legacyMigrationId}')) THEN 1 ELSE 0 END");
+        var migrationRecorded = await ScalarBoolAsync(connection, $"SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'{migrationId}', N'{legacyMigrationId}') OR [MigrationId] LIKE N'%RfpEvidencePhase1') THEN 1 ELSE 0 END");
 
-        if (!migrationRecorded)
-        {
-            return false;
-        }
+        var existingRfpTableCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM (VALUES
+(N'ComplianceRequirements'), (N'ProposalCommitments'), (N'DemoSteps'), (N'UatTestSuites'), (N'UatTestCases'), (N'UatTestRuns'), (N'UatTestResults'),
+(N'TrainingModules'), (N'TrainingLessons'), (N'TrainingCompletions'), (N'ImplementationPhases'), (N'ImplementationMilestones'), (N'ImplementationTasks'),
+(N'SupportServiceLevels'), (N'HandoverChecklists'), (N'HandoverChecklistItems')) AS expected(name)
+WHERE EXISTS (
+    SELECT 1
+    FROM sys.tables t
+    WHERE t.name = expected.name AND t.schema_id = SCHEMA_ID(N'dbo'))");
 
         var missingRfpTableCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM (VALUES
 (N'ComplianceRequirements'), (N'ProposalCommitments'), (N'DemoSteps'), (N'UatTestSuites'), (N'UatTestCases'), (N'UatTestRuns'), (N'UatTestResults'),
@@ -145,7 +149,7 @@ WHERE NOT EXISTS (
     FROM sys.tables t
     WHERE t.name = expected.name AND t.schema_id = SCHEMA_ID(N'dbo'))");
 
-        if (missingRfpTableCount == 0)
+        if (missingRfpTableCount == 0 || (!migrationRecorded && existingRfpTableCount == 0))
         {
             return false;
         }
@@ -168,7 +172,7 @@ IF OBJECT_ID(N'[dbo].[SupportServiceLevels]', N'U') IS NOT NULL DROP TABLE [dbo]
 IF OBJECT_ID(N'[dbo].[DemoSteps]', N'U') IS NOT NULL DROP TABLE [dbo].[DemoSteps];
 IF OBJECT_ID(N'[dbo].[ProposalCommitments]', N'U') IS NOT NULL DROP TABLE [dbo].[ProposalCommitments];
 IF OBJECT_ID(N'[dbo].[ComplianceRequirements]', N'U') IS NOT NULL DROP TABLE [dbo].[ComplianceRequirements];
-DELETE FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'{migrationId}', N'{legacyMigrationId}');";
+DELETE FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'{migrationId}', N'{legacyMigrationId}') OR [MigrationId] LIKE N'%RfpEvidencePhase1';";
         await command.ExecuteNonQueryAsync();
         return true;
     }
