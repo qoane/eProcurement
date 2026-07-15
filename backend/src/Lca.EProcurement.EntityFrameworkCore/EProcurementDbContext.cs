@@ -1090,6 +1090,15 @@ IF OBJECT_ID(N'[dbo].[SupportCases]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1
 
 
 
+
+    public static Task EnsureSealedBidSecuritySchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
+        => db.Database.ExecuteSqlRawAsync(@"
+IF OBJECT_ID(N'[dbo].[SealedBidEnvelopes]', N'U') IS NULL CREATE TABLE [dbo].[SealedBidEnvelopes]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_SealedBidEnvelopes] PRIMARY KEY,[BidSubmissionId] uniqueidentifier NOT NULL,[TenderId] uniqueidentifier NOT NULL,[SupplierId] uniqueidentifier NOT NULL,[EnvelopeNumber] nvarchar(64) NOT NULL,[Status] nvarchar(64) NOT NULL,[SealedAt] datetimeoffset NULL,[SealedBy] nvarchar(256) NULL,[OpenedAt] datetimeoffset NULL,[OpenedBy] nvarchar(256) NULL,[OpeningSessionId] uniqueidentifier NULL,[SubmissionHash] nvarchar(128) NOT NULL,[DocumentManifestHash] nvarchar(128) NOT NULL,[TimestampReference] nvarchar(128) NOT NULL,[DigitalSignatureReference] nvarchar(512) NULL,[SecureVaultReference] nvarchar(512) NULL,[OpeningKeyReference] nvarchar(512) NULL,[CreatedAt] datetimeoffset NOT NULL);
+IF OBJECT_ID(N'[dbo].[SealedBidEnvelopes]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_SealedBidEnvelopes_BidSubmissionId' AND object_id = OBJECT_ID(N'[dbo].[SealedBidEnvelopes]')) CREATE UNIQUE INDEX [IX_SealedBidEnvelopes_BidSubmissionId] ON [dbo].[SealedBidEnvelopes]([BidSubmissionId]);
+IF OBJECT_ID(N'[dbo].[SealedBidDocumentEvidence]', N'U') IS NULL CREATE TABLE [dbo].[SealedBidDocumentEvidence]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_SealedBidDocumentEvidence] PRIMARY KEY,[BidSubmissionDocumentId] uniqueidentifier NOT NULL,[BidSubmissionId] uniqueidentifier NOT NULL,[FileName] nvarchar(256) NOT NULL,[DocumentType] nvarchar(128) NOT NULL,[StorageReference] nvarchar(512) NOT NULL,[FileSize] bigint NOT NULL,[ContentHash] nvarchar(128) NOT NULL,[HashAlgorithm] nvarchar(32) NOT NULL,[UploadedAt] datetimeoffset NOT NULL,[SealedAt] datetimeoffset NULL,[IsPublicBeforeOpening] bit NOT NULL,[CreatedAt] datetimeoffset NOT NULL);
+IF OBJECT_ID(N'[dbo].[SealedBidDocumentEvidence]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_SealedBidDocumentEvidence_BidSubmissionDocumentId' AND object_id = OBJECT_ID(N'[dbo].[SealedBidDocumentEvidence]')) CREATE UNIQUE INDEX [IX_SealedBidDocumentEvidence_BidSubmissionDocumentId] ON [dbo].[SealedBidDocumentEvidence]([BidSubmissionDocumentId]);
+", cancellationToken);
+
     public static async Task EnsureBidOpeningSchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
     {
         var connection = db.Database.GetDbConnection();
