@@ -196,6 +196,7 @@ public static class SeedData
 
             await db.Database.MigrateAsync(cancellationToken);
             await db.EnsureIntegrationSchemaAsync(cancellationToken);
+            await db.EnsureBidOpeningSchemaAsync(cancellationToken);
             await db.EnsureOperationalReadinessSchemaAsync(cancellationToken);
         }
         await SeedIdentityAsync(db, cancellationToken);
