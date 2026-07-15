@@ -1970,9 +1970,6 @@ public interface ISealedBidApplicationService : ISealedBidAccessService
     Task<SealedBidDocumentEvidence> RecordDocumentEvidenceAsync(BidSubmission bid, BidSubmissionDocument doc, CancellationToken ct = default);
     Task<SealedBidEnvelope> SealAsync(BidSubmission bid, string actor, CancellationToken ct = default);
     Task<BidOpeningEvidence> RecordOpeningAsync(BidOpeningSession session, BidSubmission bid, string actor, string reason, CancellationToken ct = default);
-    Task<bool> CanViewBidPricing(string userEmail, Guid bidSubmissionId, CancellationToken ct = default);
-    Task<bool> CanViewBidDocument(string userEmail, Guid bidSubmissionId, Guid documentId, CancellationToken ct = default);
-    Task LogAccessAttempt(Guid bidSubmissionId, string userEmail, BidAccessType accessType, bool allowed, string? deniedReason, string? ip = null, string? userAgent = null, CancellationToken ct = default);
 }
 public sealed record BidSubmissionReceiptDto(string SubmissionNumber, string TenderNumber, string TenderTitle, string SupplierName, string SubmittedBy, DateTimeOffset? SubmittedAt, string EnvelopeNumber, string SubmissionHash, string DocumentManifestHash, List<SealedBidDocumentEvidence> Documents, List<BidSubmissionDeclaration> Declarations, DateTimeOffset SystemTimestamp, string ReceiptReference);
 public sealed record IntegrityCheckDto(Guid BidSubmissionId, string SubmissionHash, string DocumentManifestHash, bool Passed, string ResultJson);
