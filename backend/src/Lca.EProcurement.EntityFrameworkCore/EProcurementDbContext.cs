@@ -960,6 +960,44 @@ IF OBJECT_ID(N'[dbo].[SupportCases]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1
         }
     }
 
+
+    public static async Task EnsureProcurementCaseTraceSchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
+    {
+        var connection = db.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State == ConnectionState.Closed;
+
+        if (shouldCloseConnection)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            const string sql = @"
+IF OBJECT_ID(N'[dbo].[ProcurementCases]', N'U') IS NULL CREATE TABLE [dbo].[ProcurementCases]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ProcurementCases] PRIMARY KEY,[CaseNumber] nvarchar(64) NOT NULL,[Title] nvarchar(256) NOT NULL,[Description] nvarchar(4000) NOT NULL,[FinancialYearId] uniqueidentifier NOT NULL,[Department] nvarchar(128) NOT NULL,[Status] nvarchar(64) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[CreatedBy] nvarchar(256) NOT NULL);
+IF OBJECT_ID(N'[dbo].[ProcurementCaseLinks]', N'U') IS NULL CREATE TABLE [dbo].[ProcurementCaseLinks]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ProcurementCaseLinks] PRIMARY KEY,[ProcurementCaseId] uniqueidentifier NOT NULL,[EntityType] nvarchar(128) NOT NULL,[EntityId] uniqueidentifier NOT NULL,[EntityReference] nvarchar(256) NOT NULL,[RelationshipType] nvarchar(64) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,CONSTRAINT [FK_ProcurementCaseLinks_ProcurementCases_ProcurementCaseId] FOREIGN KEY([ProcurementCaseId]) REFERENCES [dbo].[ProcurementCases]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[ProcurementCases]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ProcurementCases_CaseNumber' AND object_id = OBJECT_ID(N'[dbo].[ProcurementCases]')) CREATE UNIQUE INDEX [IX_ProcurementCases_CaseNumber] ON [dbo].[ProcurementCases]([CaseNumber]);
+IF OBJECT_ID(N'[dbo].[ProcurementCaseLinks]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ProcurementCaseLinks_ProcurementCaseId_RelationshipType_EntityId' AND object_id = OBJECT_ID(N'[dbo].[ProcurementCaseLinks]')) CREATE UNIQUE INDEX [IX_ProcurementCaseLinks_ProcurementCaseId_RelationshipType_EntityId] ON [dbo].[ProcurementCaseLinks]([ProcurementCaseId],[RelationshipType],[EntityId]);";
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (db.Database.CurrentTransaction is not null)
+            {
+                command.Transaction = db.Database.CurrentTransaction.GetDbTransaction();
+            }
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            if (shouldCloseConnection)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     private static async Task<bool> ScalarBoolAsync(System.Data.Common.DbConnection connection, string sql, CancellationToken cancellationToken)
         => Convert.ToInt32(await ScalarAsync(connection, sql, cancellationToken)) == 1;
 
