@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Lca.EProcurement.EntityFrameworkCore.Migrations
 {
+    [Migration("20260715006000_IdentitySecurityTables")]
     public partial class IdentitySecurityTables : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

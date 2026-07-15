@@ -202,6 +202,7 @@ public static class SeedData
             await db.EnsureOperationalReadinessSchemaAsync(cancellationToken);
             await db.EnsurePublicTenderPublicationSchemaAsync(cancellationToken);
             await db.EnsureProcurementCaseTraceSchemaAsync(cancellationToken);
+            await db.EnsureIdentitySecuritySchemaAsync(cancellationToken);
         }
         await SeedIdentityAsync(db, cancellationToken);
         await SeedRfpEvidenceAsync(db, cancellationToken);
