@@ -921,6 +921,47 @@ IF OBJECT_ID(N'[dbo].[ExternalSystemReferences]', N'U') IS NOT NULL AND NOT EXIS
 
 
 
+    public static async Task EnsurePurchaseOrderManagementSchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
+    {
+        var connection = db.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State == ConnectionState.Closed;
+
+        if (shouldCloseConnection)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            const string sql = @"
+IF OBJECT_ID(N'[dbo].[PurchaseOrders]', N'U') IS NULL CREATE TABLE [dbo].[PurchaseOrders]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_PurchaseOrders] PRIMARY KEY,[PurchaseOrderNumber] nvarchar(64) NOT NULL UNIQUE,[AwardId] uniqueidentifier NOT NULL,[SupplierId] uniqueidentifier NOT NULL,[SupplierName] nvarchar(256) NOT NULL,[IssueDate] datetimeoffset NULL,[ExpectedDeliveryDate] datetimeoffset NOT NULL,[Currency] nvarchar(8) NOT NULL,[TotalAmount] decimal(18,2) NOT NULL,[Status] nvarchar(64) NOT NULL,[CreatedBy] nvarchar(256) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[IssuedAt] datetimeoffset NULL,[ClosedAt] datetimeoffset NULL,[CancelledAt] datetimeoffset NULL);
+IF OBJECT_ID(N'[dbo].[PurchaseOrderLines]', N'U') IS NULL CREATE TABLE [dbo].[PurchaseOrderLines]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_PurchaseOrderLines] PRIMARY KEY,[PurchaseOrderId] uniqueidentifier NOT NULL,[ItemNumber] int NOT NULL,[Description] nvarchar(1000) NOT NULL,[Quantity] decimal(18,2) NOT NULL,[UnitPrice] decimal(18,2) NOT NULL,[Total] decimal(18,2) NOT NULL,[DeliveredQuantity] decimal(18,2) NOT NULL,[OutstandingQuantity] decimal(18,2) NOT NULL,CONSTRAINT [FK_PurchaseOrderLines_PurchaseOrders] FOREIGN KEY([PurchaseOrderId]) REFERENCES [dbo].[PurchaseOrders]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[PurchaseOrderAmendments]', N'U') IS NULL CREATE TABLE [dbo].[PurchaseOrderAmendments]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_PurchaseOrderAmendments] PRIMARY KEY,[PurchaseOrderId] uniqueidentifier NOT NULL,[Reason] nvarchar(1000) NOT NULL,[OldValue] nvarchar(max) NOT NULL,[NewValue] nvarchar(max) NOT NULL,[ApprovedBy] nvarchar(256) NOT NULL,[ApprovedAt] datetimeoffset NOT NULL,CONSTRAINT [FK_PurchaseOrderAmendments_PurchaseOrders] FOREIGN KEY([PurchaseOrderId]) REFERENCES [dbo].[PurchaseOrders]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[PurchaseOrderDeliveries]', N'U') IS NULL CREATE TABLE [dbo].[PurchaseOrderDeliveries]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_PurchaseOrderDeliveries] PRIMARY KEY,[PurchaseOrderId] uniqueidentifier NOT NULL,[DeliveryDate] datetimeoffset NOT NULL,[DeliveredBy] nvarchar(256) NOT NULL,[ReceivedBy] nvarchar(256) NOT NULL,[Notes] nvarchar(2000) NOT NULL,CONSTRAINT [FK_PurchaseOrderDeliveries_PurchaseOrders] FOREIGN KEY([PurchaseOrderId]) REFERENCES [dbo].[PurchaseOrders]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[GoodsReceipts]', N'U') IS NULL CREATE TABLE [dbo].[GoodsReceipts]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_GoodsReceipts] PRIMARY KEY,[PurchaseOrderId] uniqueidentifier NOT NULL,[ReceiptNumber] nvarchar(64) NOT NULL UNIQUE,[ReceivedAt] datetimeoffset NOT NULL,[ReceivedBy] nvarchar(256) NOT NULL,[Status] nvarchar(64) NOT NULL,CONSTRAINT [FK_GoodsReceipts_PurchaseOrders] FOREIGN KEY([PurchaseOrderId]) REFERENCES [dbo].[PurchaseOrders]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[PurchaseOrderHistories]', N'U') IS NULL CREATE TABLE [dbo].[PurchaseOrderHistories]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_PurchaseOrderHistories] PRIMARY KEY,[PurchaseOrderId] uniqueidentifier NOT NULL,[EventType] nvarchar(128) NOT NULL,[Actor] nvarchar(256) NOT NULL,[Details] nvarchar(2000) NOT NULL,[OccurredAt] datetimeoffset NOT NULL,CONSTRAINT [FK_PurchaseOrderHistories_PurchaseOrders] FOREIGN KEY([PurchaseOrderId]) REFERENCES [dbo].[PurchaseOrders]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[PurchaseOrderStatusHistories]', N'U') IS NULL CREATE TABLE [dbo].[PurchaseOrderStatusHistories]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_PurchaseOrderStatusHistories] PRIMARY KEY,[PurchaseOrderId] uniqueidentifier NOT NULL,[FromStatus] nvarchar(64) NOT NULL,[ToStatus] nvarchar(64) NOT NULL,[Actor] nvarchar(256) NOT NULL,[ChangedAt] datetimeoffset NOT NULL,[Notes] nvarchar(1000) NOT NULL,CONSTRAINT [FK_PurchaseOrderStatusHistories_PurchaseOrders] FOREIGN KEY([PurchaseOrderId]) REFERENCES [dbo].[PurchaseOrders]([Id]) ON DELETE CASCADE);";
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (db.Database.CurrentTransaction is not null)
+            {
+                command.Transaction = db.Database.CurrentTransaction.GetDbTransaction();
+            }
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            if (shouldCloseConnection)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+
     public static async Task EnsureContractManagementSchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
     {
         var connection = db.Database.GetDbConnection();

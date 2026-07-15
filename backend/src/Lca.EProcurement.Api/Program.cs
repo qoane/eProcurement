@@ -110,6 +110,7 @@ async Task EnsureDatabaseSchemaAsync(bool seed)
     await db.EnsureRfpEvidenceSchemaAsync();
     await db.EnsureBidOpeningSchemaAsync();
     await db.EnsureEvaluationManagementSchemaAsync();
+    await db.EnsurePurchaseOrderManagementSchemaAsync();
     await db.EnsureContractManagementSchemaAsync();
     await db.EnsureOperationalReadinessSchemaAsync();
     await db.EnsurePublicTenderPublicationSchemaAsync();
