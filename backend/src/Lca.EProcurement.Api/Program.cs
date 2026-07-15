@@ -7,6 +7,7 @@ using Lca.EProcurement.Application;
 using Lca.EProcurement.EntityFrameworkCore;
 using Lca.EProcurement.Api.Middleware;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -99,9 +100,72 @@ async Task EnsureDatabaseSchemaAsync(bool seed)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<EProcurementDbContext>();
+    await RepairMissingRfpEvidenceMigrationAsync(db);
     await db.Database.MigrateAsync();
     await db.EnsureConfigurablePlatformSchemaAsync();
     if (seed) await SeedData.SeedAsync(db);
+}
+
+static async Task RepairMissingRfpEvidenceMigrationAsync(EProcurementDbContext db)
+{
+    const string migrationId = "20260715000000_RfpEvidencePhase1";
+    var connection = db.Database.GetDbConnection();
+    var shouldCloseConnection = connection.State == ConnectionState.Closed;
+
+    if (shouldCloseConnection)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        if (!await ScalarBoolAsync(connection, "SELECT CASE WHEN OBJECT_ID(N'[dbo].[__EFMigrationsHistory]', N'U') IS NOT NULL THEN 1 ELSE 0 END"))
+        {
+            return;
+        }
+
+        var migrationRecorded = await ScalarBoolAsync(connection, $"SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] = N'{migrationId}') THEN 1 ELSE 0 END");
+        var complianceRequirementsExists = await ScalarBoolAsync(connection, "SELECT CASE WHEN OBJECT_ID(N'[dbo].[ComplianceRequirements]', N'U') IS NOT NULL THEN 1 ELSE 0 END");
+
+        if (!migrationRecorded || complianceRequirementsExists)
+        {
+            return;
+        }
+
+        var rfpTableCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM sys.tables WHERE name IN (
+N'ComplianceRequirements', N'ProposalCommitments', N'DemoSteps', N'UatTestSuites', N'UatTestCases', N'UatTestRuns', N'UatTestResults',
+N'TrainingModules', N'TrainingLessons', N'TrainingCompletions', N'ImplementationPhases', N'ImplementationMilestones', N'ImplementationTasks',
+N'SupportServiceLevels', N'HandoverChecklists', N'HandoverChecklistItems')");
+
+        if (rfpTableCount != 0)
+        {
+            return;
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"DELETE FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] = N'{migrationId}'";
+        await command.ExecuteNonQueryAsync();
+    }
+    finally
+    {
+        if (shouldCloseConnection)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
+
+static async Task<bool> ScalarBoolAsync(System.Data.Common.DbConnection connection, string sql)
+    => Convert.ToInt32(await ScalarAsync(connection, sql)) == 1;
+
+static async Task<int> ScalarIntAsync(System.Data.Common.DbConnection connection, string sql)
+    => Convert.ToInt32(await ScalarAsync(connection, sql));
+
+static async Task<object> ScalarAsync(System.Data.Common.DbConnection connection, string sql)
+{
+    await using var command = connection.CreateCommand();
+    command.CommandText = sql;
+    return await command.ExecuteScalarAsync() ?? 0;
 }
 
 if (args.Contains("--seed"))
