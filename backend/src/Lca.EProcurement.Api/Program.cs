@@ -149,7 +149,23 @@ WHERE NOT EXISTS (
     FROM sys.tables t
     WHERE t.name = expected.name AND t.schema_id = SCHEMA_ID(N'dbo'))");
 
-        if (missingRfpTableCount == 0 || (!migrationRecorded && existingRfpTableCount == 0))
+        var missingRfpColumnCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM (VALUES
+(N'ComplianceRequirements', N'RequirementCode'), (N'ComplianceRequirements', N'Source'), (N'ComplianceRequirements', N'RequirementType'), (N'ComplianceRequirements', N'Status'),
+(N'ProposalCommitments', N'CommitmentCode'), (N'DemoSteps', N'StepNumber'), (N'UatTestSuites', N'Code'), (N'UatTestCases', N'SuiteId'),
+(N'TrainingModules', N'Code'), (N'TrainingLessons', N'TrainingModuleId'), (N'ImplementationPhases', N'Code'), (N'ImplementationMilestones', N'PhaseId'),
+(N'ImplementationTasks', N'MilestoneId'), (N'SupportServiceLevels', N'Code'), (N'HandoverChecklists', N'Code'), (N'HandoverChecklistItems', N'ChecklistId')) AS expected(tableName, columnName)
+WHERE EXISTS (
+    SELECT 1
+    FROM sys.tables t
+    WHERE t.name = expected.tableName AND t.schema_id = SCHEMA_ID(N'dbo'))
+AND COL_LENGTH(QUOTENAME(N'dbo') + N'.' + QUOTENAME(expected.tableName), expected.columnName) IS NULL");
+
+        if (missingRfpTableCount == 0 && missingRfpColumnCount == 0)
+        {
+            return false;
+        }
+
+        if (!migrationRecorded && existingRfpTableCount == 0)
         {
             return false;
         }
