@@ -804,6 +804,76 @@ DELETE FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'{migrationId
         }
     }
 
+    public static async Task EnsureRfpEvidenceSchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
+    {
+        var connection = db.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State == ConnectionState.Closed;
+
+        if (shouldCloseConnection)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            var missingRfpTableCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM (VALUES
+(N'ComplianceRequirements'), (N'ProposalCommitments'), (N'DemoSteps'), (N'UatTestSuites'), (N'UatTestCases'), (N'UatTestRuns'), (N'UatTestResults'),
+(N'TrainingModules'), (N'TrainingLessons'), (N'TrainingCompletions'), (N'ImplementationPhases'), (N'ImplementationMilestones'), (N'ImplementationTasks'),
+(N'SupportServiceLevels'), (N'HandoverChecklists'), (N'HandoverChecklistItems')) AS expected(name)
+WHERE OBJECT_ID(N'[dbo].[' + expected.name + N']', N'U') IS NULL", cancellationToken);
+
+            if (missingRfpTableCount == 0)
+            {
+                return;
+            }
+
+            const string sql = @"
+IF OBJECT_ID(N'[dbo].[ComplianceRequirements]', N'U') IS NULL CREATE TABLE [dbo].[ComplianceRequirements]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ComplianceRequirements] PRIMARY KEY,[RequirementCode] nvarchar(64) NOT NULL,[Source] nvarchar(64) NOT NULL,[Section] nvarchar(256) NOT NULL,[RequirementArea] nvarchar(256) NOT NULL,[RequirementText] nvarchar(2000) NOT NULL,[RequirementType] nvarchar(64) NOT NULL,[Priority] nvarchar(64) NOT NULL,[Status] nvarchar(64) NOT NULL,[SystemModule] nvarchar(256) NOT NULL,[Route] nvarchar(512) NOT NULL,[ApiEndpoint] nvarchar(512) NOT NULL,[EvidenceNotes] nvarchar(4000) NOT NULL,[Owner] nvarchar(256) NOT NULL,[LastVerifiedAt] datetimeoffset NULL,[VerifiedBy] nvarchar(256) NULL,[CreatedAt] datetimeoffset NOT NULL,[UpdatedAt] datetimeoffset NULL);
+IF OBJECT_ID(N'[dbo].[ProposalCommitments]', N'U') IS NULL CREATE TABLE [dbo].[ProposalCommitments]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ProposalCommitments] PRIMARY KEY,[CommitmentCode] nvarchar(64) NOT NULL,[Section] nvarchar(256) NOT NULL,[CommitmentText] nvarchar(2000) NOT NULL,[SystemFeature] nvarchar(512) NOT NULL,[Module] nvarchar(256) NOT NULL,[Route] nvarchar(512) NOT NULL,[ApiEndpoint] nvarchar(512) NOT NULL,[Status] nvarchar(64) NOT NULL,[EvidenceNotes] nvarchar(4000) NOT NULL,[LastVerifiedAt] datetimeoffset NULL);
+IF OBJECT_ID(N'[dbo].[DemoSteps]', N'U') IS NULL CREATE TABLE [dbo].[DemoSteps]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_DemoSteps] PRIMARY KEY,[StepNumber] int NOT NULL,[Title] nvarchar(256) NOT NULL,[Description] nvarchar(2000) NOT NULL,[Role] nvarchar(128) NOT NULL,[Route] nvarchar(512) NOT NULL,[EntityReference] nvarchar(128) NOT NULL,[TalkingPoints] nvarchar(2000) NOT NULL,[ExpectedOutcome] nvarchar(2000) NOT NULL,[Status] nvarchar(64) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[UpdatedAt] datetimeoffset NULL);
+IF OBJECT_ID(N'[dbo].[UatTestSuites]', N'U') IS NULL CREATE TABLE [dbo].[UatTestSuites]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_UatTestSuites] PRIMARY KEY,[Code] nvarchar(64) NOT NULL,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(2000) NOT NULL,[Module] nvarchar(256) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[CreatedBy] nvarchar(256) NOT NULL);
+IF OBJECT_ID(N'[dbo].[TrainingModules]', N'U') IS NULL CREATE TABLE [dbo].[TrainingModules]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_TrainingModules] PRIMARY KEY,[Code] nvarchar(64) NOT NULL,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(2000) NOT NULL,[Audience] nvarchar(64) NOT NULL,[ModuleArea] nvarchar(256) NOT NULL,[EstimatedMinutes] int NOT NULL,[Status] nvarchar(64) NOT NULL,[CreatedAt] datetimeoffset NOT NULL);
+IF OBJECT_ID(N'[dbo].[ImplementationPhases]', N'U') IS NULL CREATE TABLE [dbo].[ImplementationPhases]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ImplementationPhases] PRIMARY KEY,[Code] nvarchar(64) NOT NULL,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(2000) NOT NULL,[StartDate] datetimeoffset NOT NULL,[EndDate] datetimeoffset NOT NULL,[Status] nvarchar(64) NOT NULL);
+IF OBJECT_ID(N'[dbo].[SupportServiceLevels]', N'U') IS NULL CREATE TABLE [dbo].[SupportServiceLevels]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_SupportServiceLevels] PRIMARY KEY,[Code] nvarchar(64) NOT NULL,[Severity] nvarchar(64) NOT NULL,[ResponseTimeHours] int NOT NULL,[ResolutionTargetHours] int NOT NULL,[EscalationRole] nvarchar(128) NOT NULL,[IsActive] bit NOT NULL);
+IF OBJECT_ID(N'[dbo].[HandoverChecklists]', N'U') IS NULL CREATE TABLE [dbo].[HandoverChecklists]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_HandoverChecklists] PRIMARY KEY,[Code] nvarchar(64) NOT NULL,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(2000) NOT NULL,[Status] nvarchar(64) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[CompletedAt] datetimeoffset NULL);
+IF OBJECT_ID(N'[dbo].[UatTestCases]', N'U') IS NULL CREATE TABLE [dbo].[UatTestCases]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_UatTestCases] PRIMARY KEY,[SuiteId] uniqueidentifier NOT NULL,[TestCaseNumber] nvarchar(64) NOT NULL,[Title] nvarchar(256) NOT NULL,[Preconditions] nvarchar(2000) NOT NULL,[Steps] nvarchar(4000) NOT NULL,[ExpectedResult] nvarchar(2000) NOT NULL,[RequirementCode] nvarchar(64) NOT NULL,[Priority] nvarchar(64) NOT NULL,[Status] nvarchar(64) NOT NULL);
+IF OBJECT_ID(N'[dbo].[UatTestRuns]', N'U') IS NULL CREATE TABLE [dbo].[UatTestRuns]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_UatTestRuns] PRIMARY KEY,[RunNumber] nvarchar(64) NOT NULL,[SuiteId] uniqueidentifier NOT NULL,[StartedAt] datetimeoffset NOT NULL,[CompletedAt] datetimeoffset NULL,[Status] nvarchar(64) NOT NULL,[ExecutedBy] nvarchar(256) NOT NULL,[Notes] nvarchar(2000) NOT NULL);
+IF OBJECT_ID(N'[dbo].[TrainingLessons]', N'U') IS NULL CREATE TABLE [dbo].[TrainingLessons]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_TrainingLessons] PRIMARY KEY,[TrainingModuleId] uniqueidentifier NOT NULL,[Title] nvarchar(256) NOT NULL,[Content] nvarchar(4000) NOT NULL,[Route] nvarchar(512) NOT NULL,[VideoUrl] nvarchar(512) NULL,[DocumentUrl] nvarchar(512) NULL,[DisplayOrder] int NOT NULL);
+IF OBJECT_ID(N'[dbo].[TrainingCompletions]', N'U') IS NULL CREATE TABLE [dbo].[TrainingCompletions]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_TrainingCompletions] PRIMARY KEY,[TrainingModuleId] uniqueidentifier NOT NULL,[UserId] nvarchar(256) NOT NULL,[CompletedAt] datetimeoffset NOT NULL);
+IF OBJECT_ID(N'[dbo].[ImplementationMilestones]', N'U') IS NULL CREATE TABLE [dbo].[ImplementationMilestones]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ImplementationMilestones] PRIMARY KEY,[PhaseId] uniqueidentifier NOT NULL,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(2000) NOT NULL,[DueDate] datetimeoffset NOT NULL,[Status] nvarchar(64) NOT NULL,[Owner] nvarchar(256) NOT NULL,[CompletedAt] datetimeoffset NULL);
+IF OBJECT_ID(N'[dbo].[HandoverChecklistItems]', N'U') IS NULL CREATE TABLE [dbo].[HandoverChecklistItems]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_HandoverChecklistItems] PRIMARY KEY,[ChecklistId] uniqueidentifier NOT NULL,[Category] nvarchar(256) NOT NULL,[Description] nvarchar(2000) NOT NULL,[Required] bit NOT NULL,[Status] nvarchar(64) NOT NULL,[EvidenceRoute] nvarchar(512) NOT NULL,[EvidenceNotes] nvarchar(2000) NOT NULL,[CompletedBy] nvarchar(256) NULL,[CompletedAt] datetimeoffset NULL);
+IF OBJECT_ID(N'[dbo].[UatTestResults]', N'U') IS NULL CREATE TABLE [dbo].[UatTestResults]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_UatTestResults] PRIMARY KEY,[RunId] uniqueidentifier NOT NULL,[TestCaseId] uniqueidentifier NOT NULL,[Result] nvarchar(64) NOT NULL,[ActualResult] nvarchar(2000) NOT NULL,[EvidenceNotes] nvarchar(4000) NOT NULL,[DefectReference] nvarchar(128) NULL,[ExecutedAt] datetimeoffset NOT NULL,[ExecutedBy] nvarchar(256) NOT NULL);
+IF OBJECT_ID(N'[dbo].[ImplementationTasks]', N'U') IS NULL CREATE TABLE [dbo].[ImplementationTasks]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ImplementationTasks] PRIMARY KEY,[MilestoneId] uniqueidentifier NOT NULL,[Title] nvarchar(256) NOT NULL,[Description] nvarchar(2000) NOT NULL,[Owner] nvarchar(256) NOT NULL,[Status] nvarchar(64) NOT NULL,[DueDate] datetimeoffset NOT NULL,[CompletedAt] datetimeoffset NULL);
+IF OBJECT_ID(N'[dbo].[ComplianceRequirements]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ComplianceRequirements_RequirementCode' AND object_id = OBJECT_ID(N'[dbo].[ComplianceRequirements]')) CREATE UNIQUE INDEX [IX_ComplianceRequirements_RequirementCode] ON [dbo].[ComplianceRequirements]([RequirementCode]);
+IF OBJECT_ID(N'[dbo].[ProposalCommitments]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ProposalCommitments_CommitmentCode' AND object_id = OBJECT_ID(N'[dbo].[ProposalCommitments]')) CREATE UNIQUE INDEX [IX_ProposalCommitments_CommitmentCode] ON [dbo].[ProposalCommitments]([CommitmentCode]);
+IF OBJECT_ID(N'[dbo].[DemoSteps]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_DemoSteps_StepNumber' AND object_id = OBJECT_ID(N'[dbo].[DemoSteps]')) CREATE UNIQUE INDEX [IX_DemoSteps_StepNumber] ON [dbo].[DemoSteps]([StepNumber]);
+IF OBJECT_ID(N'[dbo].[UatTestSuites]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_UatTestSuites_Code' AND object_id = OBJECT_ID(N'[dbo].[UatTestSuites]')) CREATE UNIQUE INDEX [IX_UatTestSuites_Code] ON [dbo].[UatTestSuites]([Code]);
+IF OBJECT_ID(N'[dbo].[TrainingModules]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TrainingModules_Code' AND object_id = OBJECT_ID(N'[dbo].[TrainingModules]')) CREATE UNIQUE INDEX [IX_TrainingModules_Code] ON [dbo].[TrainingModules]([Code]);
+IF OBJECT_ID(N'[dbo].[ImplementationPhases]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ImplementationPhases_Code' AND object_id = OBJECT_ID(N'[dbo].[ImplementationPhases]')) CREATE UNIQUE INDEX [IX_ImplementationPhases_Code] ON [dbo].[ImplementationPhases]([Code]);
+IF OBJECT_ID(N'[dbo].[SupportServiceLevels]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_SupportServiceLevels_Code' AND object_id = OBJECT_ID(N'[dbo].[SupportServiceLevels]')) CREATE UNIQUE INDEX [IX_SupportServiceLevels_Code] ON [dbo].[SupportServiceLevels]([Code]);
+IF OBJECT_ID(N'[dbo].[HandoverChecklists]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_HandoverChecklists_Code' AND object_id = OBJECT_ID(N'[dbo].[HandoverChecklists]')) CREATE UNIQUE INDEX [IX_HandoverChecklists_Code] ON [dbo].[HandoverChecklists]([Code]);
+IF OBJECT_ID(N'[dbo].[UatTestCases]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_UatTestCases_SuiteId_TestCaseNumber' AND object_id = OBJECT_ID(N'[dbo].[UatTestCases]')) CREATE UNIQUE INDEX [IX_UatTestCases_SuiteId_TestCaseNumber] ON [dbo].[UatTestCases]([SuiteId],[TestCaseNumber]);
+IF OBJECT_ID(N'[dbo].[UatTestRuns]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_UatTestRuns_RunNumber' AND object_id = OBJECT_ID(N'[dbo].[UatTestRuns]')) CREATE UNIQUE INDEX [IX_UatTestRuns_RunNumber] ON [dbo].[UatTestRuns]([RunNumber]);";
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (db.Database.CurrentTransaction is not null)
+            {
+                command.Transaction = db.Database.CurrentTransaction.GetDbTransaction();
+            }
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            if (shouldCloseConnection)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     private static async Task<bool> ScalarBoolAsync(System.Data.Common.DbConnection connection, string sql, CancellationToken cancellationToken)
         => Convert.ToInt32(await ScalarAsync(connection, sql, cancellationToken)) == 1;
 
