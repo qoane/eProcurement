@@ -112,6 +112,7 @@ async Task EnsureDatabaseSchemaAsync(bool seed)
     await db.EnsureEvaluationManagementSchemaAsync();
     await db.EnsureContractManagementSchemaAsync();
     await db.EnsureOperationalReadinessSchemaAsync();
+    await db.EnsurePublicTenderPublicationSchemaAsync();
     await db.EnsureProcurementCaseTraceSchemaAsync();
     if (seed) await SeedData.SeedAsync(db);
 }
