@@ -920,6 +920,51 @@ IF OBJECT_ID(N'[dbo].[ExternalSystemReferences]', N'U') IS NOT NULL AND NOT EXIS
     }
 
 
+
+    public static async Task EnsureContractManagementSchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
+    {
+        var connection = db.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State == ConnectionState.Closed;
+
+        if (shouldCloseConnection)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            const string sql = @"
+IF OBJECT_ID(N'[dbo].[Contracts]', N'U') IS NULL CREATE TABLE [dbo].[Contracts]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_Contracts] PRIMARY KEY,[ContractNumber] nvarchar(64) NOT NULL,[AwardId] uniqueidentifier NULL,[PurchaseOrderId] uniqueidentifier NULL,[SupplierId] uniqueidentifier NOT NULL,[SupplierName] nvarchar(256) NOT NULL,[Title] nvarchar(256) NOT NULL,[Description] nvarchar(4000) NOT NULL,[ContractType] nvarchar(64) NOT NULL,[StartDate] datetimeoffset NOT NULL,[EndDate] datetimeoffset NOT NULL,[OriginalValue] decimal(18,2) NOT NULL,[CurrentValue] decimal(18,2) NOT NULL,[Status] nvarchar(64) NOT NULL,[CreatedBy] nvarchar(256) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[ActivatedAt] datetimeoffset NULL,[CompletedAt] datetimeoffset NULL);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_Contracts_ContractNumber' AND object_id = OBJECT_ID(N'[dbo].[Contracts]')) CREATE UNIQUE INDEX [IX_Contracts_ContractNumber] ON [dbo].[Contracts]([ContractNumber]);
+IF OBJECT_ID(N'[dbo].[ContractLines]', N'U') IS NULL CREATE TABLE [dbo].[ContractLines]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ContractLines] PRIMARY KEY,[ContractId] uniqueidentifier NOT NULL,[ItemNumber] int NOT NULL,[Description] nvarchar(1000) NOT NULL,[Quantity] decimal(18,2) NOT NULL,[UnitPrice] decimal(18,2) NOT NULL,[Total] decimal(18,2) NOT NULL,CONSTRAINT [FK_ContractLines_Contracts_ContractId] FOREIGN KEY([ContractId]) REFERENCES [dbo].[Contracts]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[ContractDocuments]', N'U') IS NULL CREATE TABLE [dbo].[ContractDocuments]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ContractDocuments] PRIMARY KEY,[ContractId] uniqueidentifier NOT NULL,[DocumentType] nvarchar(128) NOT NULL,[FileName] nvarchar(256) NOT NULL,[StorageReference] nvarchar(512) NOT NULL,[UploadedBy] nvarchar(256) NOT NULL,[UploadedAt] datetimeoffset NOT NULL,CONSTRAINT [FK_ContractDocuments_Contracts_ContractId] FOREIGN KEY([ContractId]) REFERENCES [dbo].[Contracts]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[ContractMilestones]', N'U') IS NULL CREATE TABLE [dbo].[ContractMilestones]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ContractMilestones] PRIMARY KEY,[ContractId] uniqueidentifier NOT NULL,[Name] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[DueDate] datetimeoffset NOT NULL,[CompletedDate] datetimeoffset NULL,[Status] nvarchar(64) NOT NULL,CONSTRAINT [FK_ContractMilestones_Contracts_ContractId] FOREIGN KEY([ContractId]) REFERENCES [dbo].[Contracts]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[ContractDeliverables]', N'U') IS NULL CREATE TABLE [dbo].[ContractDeliverables]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ContractDeliverables] PRIMARY KEY,[ContractId] uniqueidentifier NOT NULL,[Title] nvarchar(256) NOT NULL,[Description] nvarchar(1000) NOT NULL,[DueDate] datetimeoffset NOT NULL,[AcceptedBy] nvarchar(256) NULL,[AcceptedAt] datetimeoffset NULL,[Status] nvarchar(64) NOT NULL,CONSTRAINT [FK_ContractDeliverables_Contracts_ContractId] FOREIGN KEY([ContractId]) REFERENCES [dbo].[Contracts]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[ContractVariations]', N'U') IS NULL CREATE TABLE [dbo].[ContractVariations]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ContractVariations] PRIMARY KEY,[ContractId] uniqueidentifier NOT NULL,[VariationNumber] nvarchar(64) NOT NULL,[Description] nvarchar(1000) NOT NULL,[Reason] nvarchar(1000) NOT NULL,[AmountAdjustment] decimal(18,2) NOT NULL,[ApprovedBy] nvarchar(256) NOT NULL,[ApprovedAt] datetimeoffset NOT NULL,[NewEndDate] datetimeoffset NULL,CONSTRAINT [FK_ContractVariations_Contracts_ContractId] FOREIGN KEY([ContractId]) REFERENCES [dbo].[Contracts]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[ContractRenewals]', N'U') IS NULL CREATE TABLE [dbo].[ContractRenewals]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ContractRenewals] PRIMARY KEY,[ContractId] uniqueidentifier NOT NULL,[RenewalNumber] nvarchar(64) NOT NULL,[OldEndDate] datetimeoffset NOT NULL,[NewEndDate] datetimeoffset NOT NULL,[Reason] nvarchar(1000) NOT NULL,[ApprovedBy] nvarchar(256) NOT NULL,[ApprovedAt] datetimeoffset NOT NULL,CONSTRAINT [FK_ContractRenewals_Contracts_ContractId] FOREIGN KEY([ContractId]) REFERENCES [dbo].[Contracts]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[ContractPerformanceReviews]', N'U') IS NULL CREATE TABLE [dbo].[ContractPerformanceReviews]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ContractPerformanceReviews] PRIMARY KEY,[ContractId] uniqueidentifier NOT NULL,[ReviewDate] datetimeoffset NOT NULL,[Reviewer] nvarchar(256) NOT NULL,[SupplierScore] int NOT NULL,[QualityScore] int NOT NULL,[DeliveryScore] int NOT NULL,[Comments] nvarchar(2000) NOT NULL,CONSTRAINT [FK_ContractPerformanceReviews_Contracts_ContractId] FOREIGN KEY([ContractId]) REFERENCES [dbo].[Contracts]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[ContractHistories]', N'U') IS NULL CREATE TABLE [dbo].[ContractHistories]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ContractHistories] PRIMARY KEY,[ContractId] uniqueidentifier NOT NULL,[EventType] nvarchar(128) NOT NULL,[Actor] nvarchar(256) NOT NULL,[Details] nvarchar(2000) NOT NULL,[OccurredAt] datetimeoffset NOT NULL,CONSTRAINT [FK_ContractHistories_Contracts_ContractId] FOREIGN KEY([ContractId]) REFERENCES [dbo].[Contracts]([Id]) ON DELETE CASCADE);
+IF OBJECT_ID(N'[dbo].[ContractStatusHistories]', N'U') IS NULL CREATE TABLE [dbo].[ContractStatusHistories]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ContractStatusHistories] PRIMARY KEY,[ContractId] uniqueidentifier NOT NULL,[FromStatus] nvarchar(64) NOT NULL,[ToStatus] nvarchar(64) NOT NULL,[Actor] nvarchar(256) NOT NULL,[ChangedAt] datetimeoffset NOT NULL,[Notes] nvarchar(1000) NOT NULL,CONSTRAINT [FK_ContractStatusHistories_Contracts_ContractId] FOREIGN KEY([ContractId]) REFERENCES [dbo].[Contracts]([Id]) ON DELETE CASCADE);";
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (db.Database.CurrentTransaction is not null)
+            {
+                command.Transaction = db.Database.CurrentTransaction.GetDbTransaction();
+            }
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            if (shouldCloseConnection)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public static async Task EnsureOperationalReadinessSchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
     {
         var connection = db.Database.GetDbConnection();
