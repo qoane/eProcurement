@@ -187,13 +187,17 @@ public static class SeedData
 
     public static async Task SeedAsync(EProcurementDbContext db, CancellationToken cancellationToken = default)
     {
-        if (await db.RepairMissingRfpEvidenceMigrationAsync(cancellationToken))
+        if (db.Database.IsRelational())
         {
-            await db.Database.MigrateAsync(cancellationToken);
-        }
+            if (await db.RepairMissingRfpEvidenceMigrationAsync(cancellationToken))
+            {
+                await db.Database.MigrateAsync(cancellationToken);
+            }
 
-        await db.Database.MigrateAsync(cancellationToken);
-        await db.EnsureIntegrationSchemaAsync(cancellationToken);
+            await db.Database.MigrateAsync(cancellationToken);
+            await db.EnsureIntegrationSchemaAsync(cancellationToken);
+            await db.EnsureOperationalReadinessSchemaAsync(cancellationToken);
+        }
         await SeedIdentityAsync(db, cancellationToken);
         await SeedRfpEvidenceAsync(db, cancellationToken);
         if (!await db.IntegrationEndpoints.AnyAsync(x => x.Code == "CMS", cancellationToken)) db.IntegrationEndpoints.Add(new IntegrationEndpoint("CMS", "Existing Contract Management System", IntegrationSystemType.ContractManagement, string.Empty, "ApiKey", false, @"{""mode"":""metadata-only""}", DateTimeOffset.UtcNow));
@@ -281,15 +285,29 @@ public static class SeedData
 
         var publishedAt = supplierVersion.PublishedAt ?? DateTimeOffset.UtcNow;
         var publishedBy = string.IsNullOrWhiteSpace(supplierVersion.PublishedBy) ? "system" : supplierVersion.PublishedBy;
-        await db.WorkflowDefinitions
-            .Where(x => x.Id == supplierWorkflow.Id)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.PublishedVersionId, supplierVersion.Id), cancellationToken);
-        await db.WorkflowVersions
-            .Where(x => x.Id == supplierVersion.Id)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.Status, WorkflowVersionStatus.Published)
-                .SetProperty(x => x.PublishedAt, publishedAt)
-                .SetProperty(x => x.PublishedBy, publishedBy), cancellationToken);
+        if (db.Database.IsRelational())
+        {
+            await db.WorkflowDefinitions
+                .Where(x => x.Id == supplierWorkflow.Id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.PublishedVersionId, supplierVersion.Id), cancellationToken);
+            await db.WorkflowVersions
+                .Where(x => x.Id == supplierVersion.Id)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(x => x.Status, WorkflowVersionStatus.Published)
+                    .SetProperty(x => x.PublishedAt, publishedAt)
+                    .SetProperty(x => x.PublishedBy, publishedBy), cancellationToken);
+        }
+        else
+        {
+            var workflowToPublish = await db.WorkflowDefinitions.SingleAsync(x => x.Id == supplierWorkflow.Id, cancellationToken);
+            db.Entry(workflowToPublish).CurrentValues[nameof(WorkflowDefinition.PublishedVersionId)] = supplierVersion.Id;
+
+            var versionToPublish = await db.WorkflowVersions.SingleAsync(x => x.Id == supplierVersion.Id, cancellationToken);
+            db.Entry(versionToPublish).CurrentValues[nameof(WorkflowVersion.Status)] = WorkflowVersionStatus.Published;
+            db.Entry(versionToPublish).CurrentValues[nameof(WorkflowVersion.PublishedAt)] = publishedAt;
+            db.Entry(versionToPublish).CurrentValues[nameof(WorkflowVersion.PublishedBy)] = publishedBy;
+            await db.SaveChangesAsync(cancellationToken);
+        }
         if (!await db.FormDefinitions.AnyAsync(x => x.Code == "SUPPLIER-REGISTRATION-FORM", cancellationToken))
         {
             var form = new FormDefinition("SUPPLIER-REGISTRATION-FORM", "Supplier Registration", nameof(Supplier));

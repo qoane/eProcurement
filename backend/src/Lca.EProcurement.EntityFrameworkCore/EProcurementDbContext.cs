@@ -914,6 +914,52 @@ IF OBJECT_ID(N'[dbo].[ExternalSystemReferences]', N'U') IS NOT NULL AND NOT EXIS
         }
     }
 
+
+    public static async Task EnsureOperationalReadinessSchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
+    {
+        var connection = db.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State == ConnectionState.Closed;
+
+        if (shouldCloseConnection)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            const string sql = @"
+IF OBJECT_ID(N'[dbo].[ApiPerformanceSamples]', N'U') IS NULL CREATE TABLE [dbo].[ApiPerformanceSamples]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ApiPerformanceSamples] PRIMARY KEY,[CorrelationId] nvarchar(128) NOT NULL,[Path] nvarchar(512) NOT NULL,[Method] nvarchar(16) NOT NULL,[StatusCode] int NOT NULL,[DurationMs] bigint NOT NULL,[UserId] nvarchar(256) NULL,[OccurredAt] datetimeoffset NOT NULL);
+IF OBJECT_ID(N'[dbo].[BackupPlans]', N'U') IS NULL CREATE TABLE [dbo].[BackupPlans]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_BackupPlans] PRIMARY KEY,[Code] nvarchar(128) NOT NULL,[Name] nvarchar(256) NOT NULL,[BackupType] nvarchar(64) NOT NULL,[ScheduleDescription] nvarchar(512) NOT NULL,[StorageLocation] nvarchar(512) NOT NULL,[IsEnabled] bit NOT NULL,[RetentionDays] int NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[CreatedBy] nvarchar(256) NOT NULL);
+IF OBJECT_ID(N'[dbo].[BackupRuns]', N'U') IS NULL CREATE TABLE [dbo].[BackupRuns]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_BackupRuns] PRIMARY KEY,[BackupPlanId] uniqueidentifier NOT NULL,[StartedAt] datetimeoffset NOT NULL,[CompletedAt] datetimeoffset NULL,[Status] nvarchar(64) NOT NULL,[BackupReference] nvarchar(512) NOT NULL,[SizeBytes] bigint NULL,[ErrorMessage] nvarchar(2000) NULL,[TriggeredBy] nvarchar(256) NOT NULL);
+IF OBJECT_ID(N'[dbo].[RestoreRuns]', N'U') IS NULL CREATE TABLE [dbo].[RestoreRuns]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_RestoreRuns] PRIMARY KEY,[BackupRunId] uniqueidentifier NOT NULL,[StartedAt] datetimeoffset NOT NULL,[CompletedAt] datetimeoffset NULL,[Status] nvarchar(64) NOT NULL,[RestoreTarget] nvarchar(512) NOT NULL,[ErrorMessage] nvarchar(2000) NULL,[TriggeredBy] nvarchar(256) NOT NULL);
+IF OBJECT_ID(N'[dbo].[SupportCases]', N'U') IS NULL CREATE TABLE [dbo].[SupportCases]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_SupportCases] PRIMARY KEY,[CaseNumber] nvarchar(64) NOT NULL,[Title] nvarchar(256) NOT NULL,[Description] nvarchar(4000) NOT NULL,[Severity] nvarchar(64) NOT NULL,[Status] nvarchar(64) NOT NULL,[Module] nvarchar(128) NOT NULL,[ReportedBy] nvarchar(256) NOT NULL,[AssignedTo] nvarchar(256) NULL,[CreatedAt] datetimeoffset NOT NULL,[UpdatedAt] datetimeoffset NOT NULL,[ResolvedAt] datetimeoffset NULL,[ResolutionNotes] nvarchar(4000) NULL,[CorrelationId] nvarchar(128) NULL);
+IF OBJECT_ID(N'[dbo].[ApiPerformanceSamples]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ApiPerformanceSamples_OccurredAt' AND object_id = OBJECT_ID(N'[dbo].[ApiPerformanceSamples]')) CREATE INDEX [IX_ApiPerformanceSamples_OccurredAt] ON [dbo].[ApiPerformanceSamples]([OccurredAt]);
+IF OBJECT_ID(N'[dbo].[ApiPerformanceSamples]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ApiPerformanceSamples_StatusCode' AND object_id = OBJECT_ID(N'[dbo].[ApiPerformanceSamples]')) CREATE INDEX [IX_ApiPerformanceSamples_StatusCode] ON [dbo].[ApiPerformanceSamples]([StatusCode]);
+IF OBJECT_ID(N'[dbo].[BackupPlans]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_BackupPlans_Code' AND object_id = OBJECT_ID(N'[dbo].[BackupPlans]')) CREATE UNIQUE INDEX [IX_BackupPlans_Code] ON [dbo].[BackupPlans]([Code]);
+IF OBJECT_ID(N'[dbo].[BackupRuns]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_BackupRuns_StartedAt' AND object_id = OBJECT_ID(N'[dbo].[BackupRuns]')) CREATE INDEX [IX_BackupRuns_StartedAt] ON [dbo].[BackupRuns]([StartedAt]);
+IF OBJECT_ID(N'[dbo].[RestoreRuns]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_RestoreRuns_StartedAt' AND object_id = OBJECT_ID(N'[dbo].[RestoreRuns]')) CREATE INDEX [IX_RestoreRuns_StartedAt] ON [dbo].[RestoreRuns]([StartedAt]);
+IF OBJECT_ID(N'[dbo].[SupportCases]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_SupportCases_CaseNumber' AND object_id = OBJECT_ID(N'[dbo].[SupportCases]')) CREATE UNIQUE INDEX [IX_SupportCases_CaseNumber] ON [dbo].[SupportCases]([CaseNumber]);
+IF OBJECT_ID(N'[dbo].[SupportCases]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_SupportCases_Status' AND object_id = OBJECT_ID(N'[dbo].[SupportCases]')) CREATE INDEX [IX_SupportCases_Status] ON [dbo].[SupportCases]([Status]);";
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (db.Database.CurrentTransaction is not null)
+            {
+                command.Transaction = db.Database.CurrentTransaction.GetDbTransaction();
+            }
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            if (shouldCloseConnection)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     private static async Task<bool> ScalarBoolAsync(System.Data.Common.DbConnection connection, string sql, CancellationToken cancellationToken)
         => Convert.ToInt32(await ScalarAsync(connection, sql, cancellationToken)) == 1;
 

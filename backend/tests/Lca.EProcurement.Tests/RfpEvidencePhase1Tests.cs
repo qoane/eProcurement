@@ -22,7 +22,7 @@ public sealed class RfpEvidencePhase1Tests
         Assert.True(coverage.Total > 0); Assert.True(coverage.CoveragePercentage > 0);
         var req = await db.ComplianceRequirements.FirstAsync();
         var verified = await service.VerifyRequirementAsync(req.Id, "uat-user");
-        Assert.NotNull(verified); Assert.Contains(await db.AuditEvents.ToListAsync(), x => x.Action == "Compliance requirement verified");
+        Assert.NotNull(verified); Assert.Contains(await db.AuditEvents.ToListAsync(), x => x.EventType == "Compliance requirement verified");
     }
 
     [Fact] public async Task Evidence_pack_export_excludes_secrets_and_creates_audit_event()
@@ -31,7 +31,7 @@ public sealed class RfpEvidencePhase1Tests
         var pack = await new RfpEvidenceApplicationService(db, new ReadinessAssessmentService(db)).ExportPackAsync();
         var json = System.Text.Json.JsonSerializer.Serialize(pack);
         Assert.DoesNotContain("PasswordHash", json); Assert.DoesNotContain("SigningKey", json);
-        Assert.Contains(await db.AuditEvents.ToListAsync(), x => x.Action == "Evidence pack exported");
+        Assert.Contains(await db.AuditEvents.ToListAsync(), x => x.EventType == "Evidence pack exported");
     }
 
     [Fact] public async Task Demo_verification_identifies_records_and_reset_is_blocked_without_setting()
@@ -41,7 +41,7 @@ public sealed class RfpEvidencePhase1Tests
         var status = await service.GetStatusAsync();
         Assert.Contains(status.Checks, x => x.Name == "At least three suppliers exist");
         Assert.False(await service.ResetAsync(false));
-        Assert.Contains(await db.AuditEvents.ToListAsync(), x => x.Action == "Demo reset attempted");
+        Assert.Contains(await db.AuditEvents.ToListAsync(), x => x.EventType == "Demo reset attempted");
     }
 
     [Fact] public async Task Uat_run_records_result_and_pass_percentage_can_be_calculated()
