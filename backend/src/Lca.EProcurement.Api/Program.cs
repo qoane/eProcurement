@@ -108,6 +108,7 @@ async Task EnsureDatabaseSchemaAsync(bool seed)
     await db.EnsureConfigurablePlatformSchemaAsync();
     await db.EnsureIntegrationSchemaAsync();
     await db.EnsureRfpEvidenceSchemaAsync();
+    await db.EnsureOperationalReadinessSchemaAsync();
     if (seed) await SeedData.SeedAsync(db);
 }
 
@@ -117,7 +118,10 @@ if (args.Contains("--seed"))
     return;
 }
 
-await EnsureDatabaseSchemaAsync(seed: app.Environment.IsDevelopment());
+if (builder.Configuration.GetValue("Database:ApplySchemaOnStartup", true))
+{
+    await EnsureDatabaseSchemaAsync(seed: app.Environment.IsDevelopment());
+}
 
 if (app.Environment.IsDevelopment())
 {

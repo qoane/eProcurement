@@ -41,10 +41,10 @@ public class BidSubmissionTests
     [Fact]
     public void Bid_submission_uses_platform_configuration_not_hardcoded_workflow_logic()
     {
-        var process = new BusinessProcessDefinition("BID-SUBMISSION", "Bid Submission", "Configurable process", nameof(BidSubmission), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), BusinessProcessStatus.Published);
         var workflow = new WorkflowDefinition("BID-SUBMISSION-WORKFLOW", "Bid Submission Workflow", nameof(BidSubmission));
         var form = new FormDefinition("BID-SUBMISSION-FORM", "Bid Submission Form", nameof(BidSubmission));
         var documents = new DocumentRequirementSet("Bid Submission Documents", "Document-driven bid package", nameof(BidSubmission));
+        var process = new BusinessProcessDefinition("BID-SUBMISSION", "Bid Submission", "Configurable process", nameof(BidSubmission), workflow.Id, form.Id, documents.Id, Guid.NewGuid(), BusinessProcessStatus.Published);
         var rule = new BusinessRuleDefinition("BID-BEFORE-CLOSING", "Submission before closing", nameof(BidSubmission), "BidSubmission.SubmissionBeforeClosingDate()", true, "Bid Submission", BusinessRuleStatus.Published);
         Assert.Equal(workflow.Id, process.ActiveWorkflowDefinitionId);
         Assert.Equal(nameof(BidSubmission), form.EntityType);
