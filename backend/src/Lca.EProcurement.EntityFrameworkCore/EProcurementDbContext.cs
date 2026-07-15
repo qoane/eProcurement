@@ -874,6 +874,46 @@ IF OBJECT_ID(N'[dbo].[UatTestRuns]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 
         }
     }
 
+    public static async Task EnsureIntegrationSchemaAsync(this EProcurementDbContext db, CancellationToken cancellationToken = default)
+    {
+        var connection = db.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State == ConnectionState.Closed;
+
+        if (shouldCloseConnection)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            const string sql = @"
+IF OBJECT_ID(N'[dbo].[IntegrationEndpoints]', N'U') IS NULL CREATE TABLE [dbo].[IntegrationEndpoints]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_IntegrationEndpoints] PRIMARY KEY,[Code] nvarchar(128) NOT NULL,[Name] nvarchar(256) NOT NULL,[SystemType] nvarchar(64) NOT NULL,[BaseUrl] nvarchar(512) NOT NULL,[AuthType] nvarchar(64) NOT NULL,[IsEnabled] bit NOT NULL,[SettingsJson] nvarchar(max) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[UpdatedAt] datetimeoffset NULL);
+IF OBJECT_ID(N'[dbo].[IntegrationMessages]', N'U') IS NULL CREATE TABLE [dbo].[IntegrationMessages]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_IntegrationMessages] PRIMARY KEY,[EndpointId] uniqueidentifier NULL,[EntityType] nvarchar(128) NOT NULL,[EntityId] uniqueidentifier NOT NULL,[Direction] nvarchar(32) NOT NULL,[PayloadJson] nvarchar(max) NOT NULL,[Status] nvarchar(64) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[ProcessedAt] datetimeoffset NULL,[ErrorMessage] nvarchar(2000) NULL);
+IF OBJECT_ID(N'[dbo].[IntegrationLogs]', N'U') IS NULL CREATE TABLE [dbo].[IntegrationLogs]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_IntegrationLogs] PRIMARY KEY,[EndpointId] uniqueidentifier NULL,[MessageId] uniqueidentifier NULL,[EntityType] nvarchar(128) NOT NULL,[EntityId] uniqueidentifier NULL,[ExternalSystemCode] nvarchar(128) NOT NULL,[Direction] nvarchar(32) NOT NULL,[Status] nvarchar(64) NOT NULL,[Error] nvarchar(2000) NULL,[Timestamp] datetimeoffset NOT NULL);
+IF OBJECT_ID(N'[dbo].[ExternalSystemReferences]', N'U') IS NULL CREATE TABLE [dbo].[ExternalSystemReferences]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_ExternalSystemReferences] PRIMARY KEY,[EntityType] nvarchar(128) NOT NULL,[EntityId] uniqueidentifier NOT NULL,[ExternalSystemCode] nvarchar(128) NOT NULL,[ExternalReference] nvarchar(256) NOT NULL,[Status] nvarchar(64) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[UpdatedAt] datetimeoffset NULL);
+IF OBJECT_ID(N'[dbo].[DocumentIntegrationReferences]', N'U') IS NULL CREATE TABLE [dbo].[DocumentIntegrationReferences]([Id] uniqueidentifier NOT NULL CONSTRAINT [PK_DocumentIntegrationReferences] PRIMARY KEY,[DocumentId] uniqueidentifier NOT NULL,[EntityType] nvarchar(128) NOT NULL,[EntityId] uniqueidentifier NOT NULL,[StorageReference] nvarchar(512) NOT NULL,[ExternalDocumentId] nvarchar(256) NULL,[SyncStatus] nvarchar(64) NOT NULL,[CreatedAt] datetimeoffset NOT NULL,[UpdatedAt] datetimeoffset NULL);
+IF OBJECT_ID(N'[dbo].[IntegrationEndpoints]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_IntegrationEndpoints_Code' AND object_id = OBJECT_ID(N'[dbo].[IntegrationEndpoints]')) CREATE UNIQUE INDEX [IX_IntegrationEndpoints_Code] ON [dbo].[IntegrationEndpoints]([Code]);
+IF OBJECT_ID(N'[dbo].[ExternalSystemReferences]', N'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ExternalSystemReferences_EntityType_EntityId_ExternalSystemCode' AND object_id = OBJECT_ID(N'[dbo].[ExternalSystemReferences]')) CREATE UNIQUE INDEX [IX_ExternalSystemReferences_EntityType_EntityId_ExternalSystemCode] ON [dbo].[ExternalSystemReferences]([EntityType],[EntityId],[ExternalSystemCode]);";
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (db.Database.CurrentTransaction is not null)
+            {
+                command.Transaction = db.Database.CurrentTransaction.GetDbTransaction();
+            }
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            if (shouldCloseConnection)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     private static async Task<bool> ScalarBoolAsync(System.Data.Common.DbConnection connection, string sql, CancellationToken cancellationToken)
         => Convert.ToInt32(await ScalarAsync(connection, sql, cancellationToken)) == 1;
 
