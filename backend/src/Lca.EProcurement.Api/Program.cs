@@ -125,25 +125,42 @@ static async Task RepairMissingRfpEvidenceMigrationAsync(EProcurementDbContext d
         }
 
         var migrationRecorded = await ScalarBoolAsync(connection, $"SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] = N'{migrationId}') THEN 1 ELSE 0 END");
-        var complianceRequirementsExists = await ScalarBoolAsync(connection, "SELECT CASE WHEN OBJECT_ID(N'[dbo].[ComplianceRequirements]', N'U') IS NOT NULL THEN 1 ELSE 0 END");
 
-        if (!migrationRecorded || complianceRequirementsExists)
+        if (!migrationRecorded)
         {
             return;
         }
 
-        var rfpTableCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM sys.tables WHERE name IN (
-N'ComplianceRequirements', N'ProposalCommitments', N'DemoSteps', N'UatTestSuites', N'UatTestCases', N'UatTestRuns', N'UatTestResults',
-N'TrainingModules', N'TrainingLessons', N'TrainingCompletions', N'ImplementationPhases', N'ImplementationMilestones', N'ImplementationTasks',
-N'SupportServiceLevels', N'HandoverChecklists', N'HandoverChecklistItems')");
+        var missingRfpTableCount = await ScalarIntAsync(connection, @"SELECT COUNT(*) FROM (VALUES
+(N'ComplianceRequirements'), (N'ProposalCommitments'), (N'DemoSteps'), (N'UatTestSuites'), (N'UatTestCases'), (N'UatTestRuns'), (N'UatTestResults'),
+(N'TrainingModules'), (N'TrainingLessons'), (N'TrainingCompletions'), (N'ImplementationPhases'), (N'ImplementationMilestones'), (N'ImplementationTasks'),
+(N'SupportServiceLevels'), (N'HandoverChecklists'), (N'HandoverChecklistItems')) AS expected(name)
+WHERE OBJECT_ID(N'[dbo].[' + expected.name + N']', N'U') IS NULL");
 
-        if (rfpTableCount != 0)
+        if (missingRfpTableCount == 0)
         {
             return;
         }
 
         await using var command = connection.CreateCommand();
-        command.CommandText = $"DELETE FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] = N'{migrationId}'";
+        command.CommandText = $@"
+IF OBJECT_ID(N'[dbo].[ImplementationTasks]', N'U') IS NOT NULL DROP TABLE [dbo].[ImplementationTasks];
+IF OBJECT_ID(N'[dbo].[UatTestResults]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestResults];
+IF OBJECT_ID(N'[dbo].[HandoverChecklistItems]', N'U') IS NOT NULL DROP TABLE [dbo].[HandoverChecklistItems];
+IF OBJECT_ID(N'[dbo].[TrainingCompletions]', N'U') IS NOT NULL DROP TABLE [dbo].[TrainingCompletions];
+IF OBJECT_ID(N'[dbo].[TrainingLessons]', N'U') IS NOT NULL DROP TABLE [dbo].[TrainingLessons];
+IF OBJECT_ID(N'[dbo].[UatTestCases]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestCases];
+IF OBJECT_ID(N'[dbo].[ImplementationMilestones]', N'U') IS NOT NULL DROP TABLE [dbo].[ImplementationMilestones];
+IF OBJECT_ID(N'[dbo].[UatTestRuns]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestRuns];
+IF OBJECT_ID(N'[dbo].[HandoverChecklists]', N'U') IS NOT NULL DROP TABLE [dbo].[HandoverChecklists];
+IF OBJECT_ID(N'[dbo].[TrainingModules]', N'U') IS NOT NULL DROP TABLE [dbo].[TrainingModules];
+IF OBJECT_ID(N'[dbo].[UatTestSuites]', N'U') IS NOT NULL DROP TABLE [dbo].[UatTestSuites];
+IF OBJECT_ID(N'[dbo].[ImplementationPhases]', N'U') IS NOT NULL DROP TABLE [dbo].[ImplementationPhases];
+IF OBJECT_ID(N'[dbo].[SupportServiceLevels]', N'U') IS NOT NULL DROP TABLE [dbo].[SupportServiceLevels];
+IF OBJECT_ID(N'[dbo].[DemoSteps]', N'U') IS NOT NULL DROP TABLE [dbo].[DemoSteps];
+IF OBJECT_ID(N'[dbo].[ProposalCommitments]', N'U') IS NOT NULL DROP TABLE [dbo].[ProposalCommitments];
+IF OBJECT_ID(N'[dbo].[ComplianceRequirements]', N'U') IS NOT NULL DROP TABLE [dbo].[ComplianceRequirements];
+DELETE FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] = N'{migrationId}';";
         await command.ExecuteNonQueryAsync();
     }
     finally
