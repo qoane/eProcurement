@@ -113,6 +113,7 @@ async Task EnsureDatabaseSchemaAsync(bool seed)
 static async Task<bool> RepairMissingRfpEvidenceMigrationAsync(EProcurementDbContext db)
 {
     const string migrationId = "20260715000000_RfpEvidencePhase1";
+    const string legacyMigrationId = "RfpEvidencePhase1";
     var connection = db.Database.GetDbConnection();
     var shouldCloseConnection = connection.State == ConnectionState.Closed;
 
@@ -128,7 +129,7 @@ static async Task<bool> RepairMissingRfpEvidenceMigrationAsync(EProcurementDbCon
             return false;
         }
 
-        var migrationRecorded = await ScalarBoolAsync(connection, $"SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] = N'{migrationId}') THEN 1 ELSE 0 END");
+        var migrationRecorded = await ScalarBoolAsync(connection, $"SELECT CASE WHEN EXISTS (SELECT 1 FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'{migrationId}', N'{legacyMigrationId}')) THEN 1 ELSE 0 END");
 
         if (!migrationRecorded)
         {
@@ -167,7 +168,7 @@ IF OBJECT_ID(N'[dbo].[SupportServiceLevels]', N'U') IS NOT NULL DROP TABLE [dbo]
 IF OBJECT_ID(N'[dbo].[DemoSteps]', N'U') IS NOT NULL DROP TABLE [dbo].[DemoSteps];
 IF OBJECT_ID(N'[dbo].[ProposalCommitments]', N'U') IS NOT NULL DROP TABLE [dbo].[ProposalCommitments];
 IF OBJECT_ID(N'[dbo].[ComplianceRequirements]', N'U') IS NOT NULL DROP TABLE [dbo].[ComplianceRequirements];
-DELETE FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] = N'{migrationId}';";
+DELETE FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] IN (N'{migrationId}', N'{legacyMigrationId}');";
         await command.ExecuteNonQueryAsync();
         return true;
     }

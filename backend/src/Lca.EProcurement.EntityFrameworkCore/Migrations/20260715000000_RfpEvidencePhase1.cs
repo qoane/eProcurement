@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Lca.EProcurement.EntityFrameworkCore.Migrations
 {
+    [Migration("20260715000000_RfpEvidencePhase1")]
     public partial class RfpEvidencePhase1 : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
